@@ -1,0 +1,27 @@
+{
+  "name": "@texts/platform-telegram",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc",
+    "lint": "eslint src --cache"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "dependencies": {
+    "@textshq/eslint-config": "^1",
+    "@textshq/platform-sdk": "^0.1.4",
+    "airgram": "^3.1.1",
+    "bluebird": "^3.7.2",
+    "lodash": "^4.17.19",
+    "react": "^16.13.1",
+    "react-icons": "^3.10.0"
+  },
+  "devDependencies": {
+    "@types/react": "^16.9.43",
+    "eslint": "^7.4.0",
+    "typescript": "^3.9.6"
+  }
+}
