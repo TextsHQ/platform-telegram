@@ -7,10 +7,9 @@ const info: Platform = {
   displayName: 'Telegram',
   icon: FaTelegram as any,
   loginMode: 'manual',
-  supportedReactions: {},
+  supportedReactions: [],
   deletionMode: MessageDeletionMode.UNSUPPORTED,
   attributes: new Set(),
-  getUserLink: () => null,
 }
 
 export default info
