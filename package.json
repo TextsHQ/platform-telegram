@@ -3,20 +3,20 @@
   "version": "0.1.0",
   "main": "dist/index.js",
   "scripts": {
-    "prepare": "npm run build",
+    "prepare": "tsc",
+    "postinstall": "tsc",
     "build": "tsc",
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "husky": {
     "hooks": {
-      "pre-commit": "npm run lint -- --fix || true; git add ."
+      "pre-commit": "yarn lint --fix || true; git add ."
     }
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@textshq/platform-sdk": "^0.1.4",
     "airgram": "^3.1.1",
     "bluebird": "^3.7.2",
     "lodash": "^4.17.19",
@@ -24,11 +24,11 @@
     "react-icons": "^3.10.0"
   },
   "peerDependencies": {
-    "@textshq/platform-sdk": "github:textshq/platform-sdk"
+    "@textshq/platform-sdk": "https://github.com/textshq/platform-sdk"
   },
   "devDependencies": {
-    "@textshq/eslint-config": "github:textshq/eslint-config",
-    "@textshq/platform-sdk": "github:textshq/platform-sdk",
+    "@textshq/eslint-config": "https://github.com/textshq/eslint-config",
+    "@textshq/platform-sdk": "https://github.com/textshq/platform-sdk",
     "eslint": "^7.6.0",
     "husky": "^4.2.5",
     "typescript": "^3.9.7"
