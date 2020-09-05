@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "main": "dist/index.js",
   "scripts": {
-    "prepare": "tsc",
-    "postinstall": "tsc",
-    "build": "tsc",
+    "prepare": "yarn tsc",
+    "postinstall": "yarn tsc || true",
+    "build": "yarn tsc",
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "husky": {
