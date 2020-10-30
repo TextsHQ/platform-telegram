@@ -1,5 +1,6 @@
 _*
 dist
+*.dylib
 
 .DS_Store
 node_modules

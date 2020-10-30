@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "main": "dist/index.js",
   "scripts": {
-    "prepare": "yarn tsc",
     "postinstall": "yarn tsc || true",
     "build": "yarn tsc",
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
@@ -14,20 +13,20 @@
     }
   },
   "dependencies": {
+    "@airgram/constants": "^3.0.0",
     "airgram": "^3.1.1",
     "bluebird": "^3.7.2",
-    "lodash": "^4.17.19",
-    "react": "^16.13.1",
-    "react-icons": "^3.10.0"
+    "lodash": "^4.17.20",
+    "react-phone-number-input": "^3.1.0"
   },
   "peerDependencies": {
-    "@textshq/platform-sdk": "https://github.com/textshq/platform-sdk"
+    "react": ">=16"
   },
   "devDependencies": {
     "@textshq/eslint-config": "https://github.com/textshq/eslint-config",
-    "@textshq/platform-sdk": "https://github.com/textshq/platform-sdk",
-    "eslint": "^7.6.0",
-    "husky": "^4.2.5",
-    "typescript": "^3.9.7"
+    "@textshq/platform-sdk": "link:../platform-sdk",
+    "eslint": "^7.10.0",
+    "husky": "^4.3.0",
+    "typescript": "^4.0.3"
   }
 }
