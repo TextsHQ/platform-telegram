@@ -8,7 +8,7 @@ export function mapMessage(msg: TGMessage) {
     _original: [JSON.stringify(msg)],
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
-    editedTimestamp: editDate ? new Date(msg.editDate * 1000) : undefined,
+    editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
     senderID: String(msg.senderUserId),
     isSender: msg.isOutgoing,
@@ -106,7 +106,7 @@ export function mapThread(thread: Chat, members: ChatMember[]): Thread {
   const t: Thread = {
     id: String(thread.id),
     type: ([CHAT_TYPE.chatTypePrivate, CHAT_TYPE.chatTypeSecret] as string[]).includes(thread.type._) ? 'single' : 'group',
-    timestamp: messages[0]?.timestamp || new Date(),
+    timestamp: messages[0]?.timestamp || new Date('2000-01-01'),
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: thread.permissions.canSendMessages,
     title: thread.title,
