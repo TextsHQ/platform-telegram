@@ -14,18 +14,18 @@
   },
   "dependencies": {
     "@airgram/constants": "^3.0.0",
-    "airgram": "^3.1.1",
+    "airgram": "^3.2.3",
     "bluebird": "^3.7.2",
     "lodash": "^4.17.20",
-    "react-phone-number-input": "^3.1.0"
+    "react-phone-number-input": "^3.1.6"
   },
   "peerDependencies": {
-    "react": ">=16"
+    "react": ">=17"
   },
   "devDependencies": {
     "@textshq/eslint-config": "https://github.com/textshq/eslint-config",
     "@textshq/platform-sdk": "link:../platform-sdk",
-    "eslint": "^7.10.0",
+    "eslint": "^7.14.0",
     "husky": "^4.3.0",
     "typescript": "^4.1.2"
   }
