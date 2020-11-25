@@ -95,7 +95,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = () =>
-    this.airgram.destroy()
+    this.airgram?.destroy()
 
   getCurrentUser = async (): Promise<CurrentUser> => {
     const me = await this.airgram.api.getMe()
