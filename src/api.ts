@@ -80,7 +80,7 @@ export default class TelegramAPI implements PlatformAPI {
       const thread = mapThread(update.chat, [])
       const event: ServerEvent = {
         type: ServerEventType.STATE_SYNC,
-        mutationType: 'created',
+        mutationType: 'upsert',
         objectName: 'thread',
         objectID: [thread.id],
         data: thread,
@@ -126,9 +126,12 @@ export default class TelegramAPI implements PlatformAPI {
       offsetChatId: 0,
       offsetOrder: MAX_SIGNED_64BIT_NUMBER,
     })
-    const chats = toObject(chatsResponse)
+    const chatArr = await Promise.all(toObject(chatsResponse).chatIds.map(async chatId => {
+      const chatResponse = await this.airgram.api.getChat({ chatId })
+      return toObject(chatResponse)
+    }))
     return {
-      items: [],
+      items: chatArr.map(chat => mapThread(chat, [])),
       hasMore: false,
     }
   }
