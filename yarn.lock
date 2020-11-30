@@ -7,10 +7,15 @@
   resolved "https://registry.yarnpkg.com/@airgram/constants/-/constants-3.0.0.tgz#9190e9a27eee085a3ac3a91ceb09626bb1bffadc"
   integrity sha512-xm/hhvs6gnN+zuqeuQ+wk+qQd7A7pdVtziyV09eyWtRM7J7IUD4uDZoP9I3gQxbO3g23W/j4/2J+1Fvc8LEP7w==
 
-"@airgram/core@^3.2.1":
-  version "3.2.1"
-  resolved "https://registry.yarnpkg.com/@airgram/core/-/core-3.2.1.tgz#12d64cd3e4f71b2f6007c1ddf9b4eceac47fd17a"
-  integrity sha512-WkEOOV2hQwTJZkLgf2K650et/OI20K5Y58D5cnPexyiIn8zpA/npWq0iCzFSrTYQOUKb8IvBhbfd2xiuPUGf8w==
+"@airgram/constants@^3.1.0":
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/@airgram/constants/-/constants-3.1.0.tgz#9129358975814bd8e73515ce2552547a900f9dcd"
+  integrity sha512-6PmgACxQ/sxvNLKpJLLSpQFEIIUqWOXLhOOiTn5xJr1VA4t7b3/aYRDWf1gZTuU/ufQwtb2URX1Fbkpmnziudg==
+
+"@airgram/core@^3.3.0":
+  version "3.3.0"
+  resolved "https://registry.yarnpkg.com/@airgram/core/-/core-3.3.0.tgz#b488166a731e47e98cf9c9b06ea78856b6ab5213"
+  integrity sha512-OC+nH93ALYw3eErNltDfIj0VOSb1BtrfUxGdeNGdLHd9A2AHsXelvRjUBkJNbHl8kO05diirNHP1cAfA3kFVUQ==
 
 "@babel/code-frame@^7.0.0", "@babel/code-frame@^7.10.4":
   version "7.10.4"
@@ -326,13 +331,13 @@ acorn@^7.4.0:
   resolved "https://registry.yarnpkg.com/acorn/-/acorn-7.4.1.tgz#feaed255973d2e77555b83dbc08851a6c63520fa"
   integrity sha512-nQyp0o1/mNdbTO1PO6kHkwSrmgZ0MT/jCCpNiwbUjGoRN4dlBhqJtoQuCnEOKzgTVwg0ZWiCoQy6SxMebQVh8A==
 
-airgram@^3.2.3:
-  version "3.2.3"
-  resolved "https://registry.yarnpkg.com/airgram/-/airgram-3.2.3.tgz#f9ae7f353aec4e6e2b62449796e1d0c81564a9c2"
-  integrity sha512-PuuXKBYQfH+iRzqAW9k8DPajIqCqOfJI9qReOXv2VkmS6CSIiThausa//vyA7ps+q8XRovmUjNZWZvFSkXSErg==
+airgram@^3.3.0:
+  version "3.3.0"
+  resolved "https://registry.yarnpkg.com/airgram/-/airgram-3.3.0.tgz#1ae890ec98fd0354c8154d4ce0956d1e31e1a784"
+  integrity sha512-s3RfLhBUv5Y/tKBE+yAxAUZtp3N88i4QnuBpQ3ox+wzT0NLoplp/hKseWA6ue+j6jliNkisNImBIog0I7T1npQ==
   dependencies:
-    "@airgram/constants" "^3.0.0"
-    "@airgram/core" "^3.2.1"
+    "@airgram/constants" "^3.1.0"
+    "@airgram/core" "^3.3.0"
     ffi-napi "^3.0.0"
 
 ajv@^6.10.0, ajv@^6.10.2, ajv@^6.12.4:
@@ -566,9 +571,9 @@ contains-path@^0.1.0:
   integrity sha1-/ozxhP9mcLa67wGp1IYaXL7EEgo=
 
 core-js-pure@^3.0.0:
-  version "3.7.0"
-  resolved "https://registry.yarnpkg.com/core-js-pure/-/core-js-pure-3.7.0.tgz#28a57c861d5698e053f0ff36905f7a3301b4191e"
-  integrity sha512-EZD2ckZysv8MMt4J6HSvS9K2GdtlZtdBncKAmF9lr2n0c9dJUaUN88PSTjvgwCgQPWKTkERXITgS6JJRAnljtg==
+  version "3.8.0"
+  resolved "https://registry.yarnpkg.com/core-js-pure/-/core-js-pure-3.8.0.tgz#4cdd2eca37d49cda206b66e26204818dba77884a"
+  integrity sha512-fRjhg3NeouotRoIV0L1FdchA6CK7ZD+lyINyMoz19SyV+ROpC4noS1xItWHFtwZdlqfMfVPJEyEGdfri2bD1pA==
 
 cosmiconfig@^7.0.0:
   version "7.0.0"

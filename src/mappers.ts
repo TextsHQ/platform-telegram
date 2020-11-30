@@ -4,13 +4,19 @@ import { Chat, Message as TGMessage, ChatMember } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 export function mapMessage(msg: TGMessage) {
+  let senderID
+  if (msg.sender._ === 'messageSenderUser') {
+    senderID = msg.sender.userId
+  } else {
+    senderID = msg.sender.chatId
+  }
   const mapped: Message = {
     _original: [JSON.stringify(msg)],
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
-    senderID: String(msg.senderUserId),
+    senderID,
     isSender: msg.isOutgoing,
     attachments: [],
     reactions: [],
