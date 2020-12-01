@@ -82,8 +82,25 @@ export default class TelegramAPI implements PlatformAPI {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'upsert',
         objectName: 'thread',
-        objectID: [thread.id],
-        data: thread,
+        objectIDs: {
+          threadID: thread.id
+        },
+        entries: [thread],
+      }
+      this.onEvent([event])
+      return next()
+    })
+    this.airgram.on(UPDATE.updateNewMessage, async ({update},next) => {
+      const message = mapMessage(update.message)
+      const event: ServerEvent = {
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'upsert',
+        objectName: 'message',
+        objectIDs: {
+          threadID: update.message.chatId.toString(),
+          messageID: message.id
+        },
+        entries: [message],
       }
       this.onEvent([event])
       return next()
