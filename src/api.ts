@@ -83,14 +83,14 @@ export default class TelegramAPI implements PlatformAPI {
         mutationType: 'upsert',
         objectName: 'thread',
         objectIDs: {
-          threadID: thread.id
+          threadID: thread.id,
         },
         entries: [thread],
       }
       this.onEvent([event])
       return next()
     })
-    this.airgram.on(UPDATE.updateNewMessage, async ({update},next) => {
+    this.airgram.on(UPDATE.updateNewMessage, async ({ update }, next) => {
       const message = mapMessage(update.message)
       const event: ServerEvent = {
         type: ServerEventType.STATE_SYNC,
@@ -98,7 +98,7 @@ export default class TelegramAPI implements PlatformAPI {
         objectName: 'message',
         objectIDs: {
           threadID: update.message.chatId.toString(),
-          messageID: message.id
+          messageID: message.id,
         },
         entries: [message],
       }
@@ -170,18 +170,18 @@ export default class TelegramAPI implements PlatformAPI {
     let content
     if (text) {
       content = {
-        _: "inputMessageText",
+        _: 'inputMessageText',
         text: {
-          _: "formattedText",
-          text
-        }
+          _: 'formattedText',
+          text,
+        },
       }
     }
     if (content) {
       await this.airgram.api.sendMessage({
         chatId: Number(threadID),
         messageThreadId: 0,
-        inputMessageContent: content
+        inputMessageContent: content,
       })
       return true
     }
