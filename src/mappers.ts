@@ -106,7 +106,7 @@ function mapParticipant(member: ChatMember) {
   return p
 }
 
-export function mapThread(thread: Chat, members: ChatMember[]): Thread {
+export function mapThread(thread: Chat, members: Participant[]): Thread {
   // console.log(thread, JSON.stringify(thread))
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage)] : []
   const t: Thread = {
@@ -123,7 +123,7 @@ export function mapThread(thread: Chat, members: ChatMember[]): Thread {
     },
     participants: {
       hasMore: false,
-      items: members.map(mapParticipant),
+      items: members,
     },
   }
   return t

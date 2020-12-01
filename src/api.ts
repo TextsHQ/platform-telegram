@@ -1,6 +1,6 @@
 import path from 'path'
 import bluebird from 'bluebird'
-import { Airgram, Auth, isError, toObject } from 'airgram'
+import { Airgram, Auth, ChatUnion, isError, toObject } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -136,6 +136,35 @@ export default class TelegramAPI implements PlatformAPI {
 
   createThread = (userIDs: string[]) => null
 
+  private getParticipant = async (userId: number): Promise<Participant> => {
+    const res = await this.airgram.api.getUser({ userId })
+    const user = toObject(res)
+    return {
+      id: user.id.toString(),
+      username: user.username,
+      fullName: `${user.firstName} ${user.lastName}`,
+    }
+  }
+
+  private _getParticipants = async (chat: ChatUnion): Promise<Participant[]> => {
+    switch (chat.type._) {
+      case 'chatTypePrivate': {
+        const participant = await this.getParticipant(chat.type.userId)
+        return [participant]
+      }
+      case 'chatTypeBasicGroup': {
+        const chatFullInfo = await this.airgram.api.getBasicGroupFullInfo({
+          basicGroupId: chat.id,
+        })
+        return []
+      }
+      case 'chatTypeSupergroup':
+      case 'chatTypeSecret':
+      default:
+        return []
+    }
+  }
+
   getThreads = async (inboxName: InboxName, { cursor, direction }: PaginationArg = { cursor: null, direction: null }): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     const chatsResponse = await this.airgram.api.getChats({
@@ -145,10 +174,12 @@ export default class TelegramAPI implements PlatformAPI {
     })
     const chatArr = await Promise.all(toObject(chatsResponse).chatIds.map(async chatId => {
       const chatResponse = await this.airgram.api.getChat({ chatId })
-      return toObject(chatResponse)
+      const chat = toObject(chatResponse)
+      const participants = await this._getParticipants(chat)
+      return { chat, participants }
     }))
     return {
-      items: chatArr.map(chat => mapThread(chat, [])),
+      items: chatArr.map(({ chat, participants }) => mapThread(chat, participants)),
       hasMore: false,
     }
   }
