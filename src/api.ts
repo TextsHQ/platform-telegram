@@ -162,7 +162,9 @@ export default class TelegramAPI implements PlatformAPI {
     const messages = toObject(messagesResponse)
     return {
       items: mapMessages(messages.messages).reverse(),
-      hasMore: messages.messages.length === 20,
+      // When fromMessageId is 0, getChatHistory returns only one message.
+      // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
+      hasMore: !cursor || messages.messages.length === 20,
     }
   }
 
