@@ -114,7 +114,7 @@ export function mapThread(thread: Chat, members: ChatMember[]): Thread {
     type: ([CHAT_TYPE.chatTypePrivate, CHAT_TYPE.chatTypeSecret] as string[]).includes(thread.type._) ? 'single' : 'group',
     timestamp: messages[0]?.timestamp || new Date('2000-01-01'),
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
-    isReadOnly: thread.permissions.canSendMessages,
+    isReadOnly: !thread.permissions.canSendMessages,
     title: thread.title,
     messages: {
       hasMore: true,

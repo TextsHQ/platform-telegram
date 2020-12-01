@@ -149,7 +149,27 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  sendMessage = async (threadID: string, msgContent: MessageContent) => false
+  sendMessage = async (threadID: string, { text }: MessageContent) => {
+    let content
+    if (text) {
+      content = {
+        _: "inputMessageText",
+        text: {
+          _: "formattedText",
+          text
+        }
+      }
+    }
+    if (content) {
+      await this.airgram.api.sendMessage({
+        chatId: Number(threadID),
+        messageThreadId: 0,
+        inputMessageContent: content
+      })
+      return true
+    }
+    return false
+  }
 
   sendTypingIndicator = (threadID: string) => {}
 
