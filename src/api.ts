@@ -3,7 +3,7 @@ import bluebird from 'bluebird'
 import { Airgram, Auth, isError, toObject } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
 import { mapThread, mapMessage, mapMessages } from './mappers'
@@ -168,7 +168,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  sendMessage = async (threadID: string, { text }: MessageContent) => {
+  sendMessage = async (threadID: string, { text }: MessageContent, { quotedMessageID }: MessageSendOptions) => {
     let content
     if (text) {
       content = {
@@ -183,6 +183,7 @@ export default class TelegramAPI implements PlatformAPI {
       await this.airgram.api.sendMessage({
         chatId: Number(threadID),
         messageThreadId: 0,
+        replyToMessageId: +quotedMessageID || 0,
         inputMessageContent: content,
       })
       return true
