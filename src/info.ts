@@ -1,4 +1,4 @@
-import { MessageDeletionMode, PlatformInfo, Attribute } from '@textshq/platform-sdk'
+import { MessageDeletionMode, PlatformInfo, Attribute, texts } from '@textshq/platform-sdk'
 
 const info: PlatformInfo = {
   name: 'telegram',
@@ -17,7 +17,7 @@ const info: PlatformInfo = {
 </defs>
 </svg>`,
   loginMode: 'custom',
-  auth: globalThis.texts.React?.lazy(() => import('./auth')),
+  auth: texts.React?.lazy(() => import('./auth')),
   deletionMode: MessageDeletionMode.UNSUPPORTED,
   attributes: new Set([
     Attribute.CAN_MESSAGE_USERNAME,
