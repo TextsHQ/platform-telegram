@@ -1,6 +1,6 @@
 import path from 'path'
 import bluebird from 'bluebird'
-import { Airgram, Auth, ChatUnion, isError, toObject } from 'airgram'
+import { Airgram, Auth, ChatUnion, isError, toObject, Message as TGMessage } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -70,6 +70,21 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
+  private handleMessageUpdate = (tgMessage: TGMessage) => {
+    const message = mapMessage(tgMessage)
+    const event: ServerEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'upsert',
+      objectName: 'message',
+      objectIDs: {
+        threadID: tgMessage.chatId.toString(),
+        messageID: message.id,
+      },
+      entries: [message],
+    }
+    this.onEvent([event])
+  }
+
   private afterLogin = () => {
     this.airgram.on(UPDATE.updateNewChat, async ({ update }, next) => {
       // const chatMemberResponse = await this.airgram.api.getChatMember({ chatId: update.chat.id })
@@ -91,18 +106,24 @@ export default class TelegramAPI implements PlatformAPI {
       return next()
     })
     this.airgram.on(UPDATE.updateNewMessage, async ({ update }, next) => {
-      const message = mapMessage(update.message)
-      const event: ServerEvent = {
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'upsert',
-        objectName: 'message',
-        objectIDs: {
-          threadID: update.message.chatId.toString(),
-          messageID: message.id,
+      this.handleMessageUpdate(update.message)
+      return next()
+    })
+    this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }, next) => {
+      // The oldMessageId is a tmp id, delete the tmp message.
+      this.onEvent([
+        {
+          type: ServerEventType.STATE_SYNC,
+          objectIDs: {
+            threadID: update.message.chatId.toString(),
+            messageID: update.oldMessageId.toString(),
+          },
+          mutationType: 'delete',
+          objectName: 'message',
+          entries: [update.oldMessageId.toString()],
         },
-        entries: [message],
-      }
-      this.onEvent([event])
+      ])
+      this.handleMessageUpdate(update.message)
       return next()
     })
   }
