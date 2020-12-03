@@ -236,7 +236,7 @@ export default class TelegramAPI implements PlatformAPI {
     const { messages } = toObject(messagesResponse)
     // When fromMessageId is 0, getChatHistory returns only one message.
     // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
-    if (!cursor && messages.length) {
+    if (!cursor && messages.length === 1) {
       const messagesResponse = await this.airgram.api.getChatHistory({
         limit: 20,
         chatId: +threadID,
