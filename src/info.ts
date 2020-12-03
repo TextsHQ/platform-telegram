@@ -18,7 +18,7 @@ const info: PlatformInfo = {
 </svg>`,
   loginMode: 'custom',
   auth: texts.React?.lazy(() => import('./auth')),
-  deletionMode: MessageDeletionMode.UNSUPPORTED,
+  deletionMode: MessageDeletionMode.DELETE_FOR_EVERYONE,
   attributes: new Set([
     Attribute.CAN_MESSAGE_USERNAME,
     Attribute.SUPPORTS_QUOTED_MESSAGES,

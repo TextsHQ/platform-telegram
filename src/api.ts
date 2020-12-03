@@ -266,7 +266,14 @@ export default class TelegramAPI implements PlatformAPI {
 
   removeReaction = async (threadID: string, messageID: string, reactionKey: string) => {}
 
-  deleteMessage = async (threadID: string, messageID: string) => true
+  deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
+    const res = await this.airgram.api.deleteMessages({
+      chatId: +threadID,
+      messageIds: [+messageID],
+      revoke: forEveryone
+    })
+    return toObject(res)._ === 'ok'
+  }
 
   sendReadReceipt = async (threadID: string, messageID: string) => {}
 
