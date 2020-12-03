@@ -86,7 +86,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = () => {
-    this.airgram.on(UPDATE.updateNewChat, async ({ update }, next) => {
+    this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
       const participants = await this._getParticipants(update.chat)
       const thread = mapThread(update.chat, participants)
       const event: ServerEvent = {
@@ -99,13 +99,11 @@ export default class TelegramAPI implements PlatformAPI {
         entries: [thread],
       }
       this.onEvent([event])
-      return next()
     })
-    this.airgram.on(UPDATE.updateNewMessage, async ({ update }, next) => {
+    this.airgram.on(UPDATE.updateNewMessage, async ({ update }) => {
       this.handleMessageUpdate(update.message)
-      return next()
     })
-    this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }, next) => {
+    this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
       // The oldMessageId is a tmp id, delete the tmp message.
       this.onEvent([
         {
@@ -120,7 +118,22 @@ export default class TelegramAPI implements PlatformAPI {
         },
       ])
       this.handleMessageUpdate(update.message)
-      return next()
+    })
+    this.airgram.on(UPDATE.updateDeleteMessages, async ({ update }) => {
+      if (!update.isPermanent) {
+        return
+      }
+      this.onEvent([
+        {
+          type: ServerEventType.STATE_SYNC,
+          objectIDs: {
+            threadID: update.chatId.toString(),
+          },
+          mutationType: 'delete',
+          objectName: 'message',
+          entries: update.messageIds.map(x => x.toString()),
+        },
+      ])
     })
   }
 
@@ -220,12 +233,20 @@ export default class TelegramAPI implements PlatformAPI {
       chatId: +threadID,
       fromMessageId: +cursor || 0,
     })
-    const messages = toObject(messagesResponse)
+    const { messages } = toObject(messagesResponse)
+    // When fromMessageId is 0, getChatHistory returns only one message.
+    // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
+    if (!cursor && messages.length) {
+      const messagesResponse = await this.airgram.api.getChatHistory({
+        limit: 20,
+        chatId: +threadID,
+        fromMessageId: messages[0].id,
+      })
+      messages.push(...toObject(messagesResponse).messages)
+    }
     return {
-      items: mapMessages(messages.messages).reverse(),
-      // When fromMessageId is 0, getChatHistory returns only one message.
-      // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
-      hasMore: !cursor || messages.messages.length === 20,
+      items: mapMessages(messages).reverse(),
+      hasMore: messages.length >= 20,
     }
   }
 
@@ -258,7 +279,14 @@ export default class TelegramAPI implements PlatformAPI {
 
   removeReaction = async (threadID: string, messageID: string, reactionKey: string) => {}
 
-  deleteMessage = async (threadID: string, messageID: string) => true
+  deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
+    const res = await this.airgram.api.deleteMessages({
+      chatId: +threadID,
+      messageIds: [+messageID],
+      revoke: forEveryone,
+    })
+    return toObject(res)._ === 'ok'
+  }
 
   sendReadReceipt = async (threadID: string, messageID: string) => {}
 
