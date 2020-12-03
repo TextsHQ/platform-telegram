@@ -220,12 +220,20 @@ export default class TelegramAPI implements PlatformAPI {
       chatId: +threadID,
       fromMessageId: +cursor || 0,
     })
-    const messages = toObject(messagesResponse)
+    const messages = toObject(messagesResponse).messages
+    // When fromMessageId is 0, getChatHistory returns only one message.
+    // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
+    if (!cursor && messages.length) {
+      const messagesResponse = await this.airgram.api.getChatHistory({
+        limit: 20,
+        chatId: +threadID,
+        fromMessageId: messages[0].id,
+      })
+      messages.push(...toObject(messagesResponse).messages)
+    }
     return {
-      items: mapMessages(messages.messages).reverse(),
-      // When fromMessageId is 0, getChatHistory returns only one message.
-      // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
-      hasMore: !cursor || messages.messages.length === 20,
+      items: mapMessages(messages).reverse(),
+      hasMore: messages.length >= 20,
     }
   }
 
