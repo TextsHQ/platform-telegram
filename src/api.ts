@@ -92,7 +92,8 @@ export default class TelegramAPI implements PlatformAPI {
       // const groupMembers = await this.airgram.api.getSupergroupMembers({ supergroupId: update.chat.id })
       // const member = toObject(chatMemberResponse)
       // const user = await this.airgram.api.getUser({ userId: member.userId })
-      const thread = mapThread(update.chat, [])
+      const participants = await this._getParticipants(update.chat)
+      const thread = mapThread(update.chat, participants)
       const event: ServerEvent = {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'upsert',
