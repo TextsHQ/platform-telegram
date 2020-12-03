@@ -87,11 +87,6 @@ export default class TelegramAPI implements PlatformAPI {
 
   private afterLogin = () => {
     this.airgram.on(UPDATE.updateNewChat, async ({ update }, next) => {
-      // const chatMemberResponse = await this.airgram.api.getChatMember({ chatId: update.chat.id })
-      // const groupResponse = await this.airgram.api.getBasicGroupFullInfo({ basicGroupId: update.chat.id })
-      // const groupMembers = await this.airgram.api.getSupergroupMembers({ supergroupId: update.chat.id })
-      // const member = toObject(chatMemberResponse)
-      // const user = await this.airgram.api.getUser({ userId: member.userId })
       const participants = await this._getParticipants(update.chat)
       const thread = mapThread(update.chat, participants)
       const event: ServerEvent = {
@@ -170,18 +165,31 @@ export default class TelegramAPI implements PlatformAPI {
 
   private _getParticipants = async (chat: ChatUnion): Promise<Participant[]> => {
     switch (chat.type._) {
-      case 'chatTypePrivate': {
+      case 'chatTypePrivate':
+      case 'chatTypeSecret': {
         const participant = await this.getParticipant(chat.type.userId)
         return [participant]
       }
       case 'chatTypeBasicGroup': {
-        const chatFullInfo = await this.airgram.api.getBasicGroupFullInfo({
-          basicGroupId: chat.id,
+        const res = await this.airgram.api.getBasicGroupFullInfo({
+          basicGroupId: chat.type.basicGroupId,
         })
-        return []
+        const { members } = toObject(res)
+        const participants = await Promise.all(members.map(
+          member => this.getParticipant(member.userId),
+        ))
+        return participants
       }
-      case 'chatTypeSupergroup':
-      case 'chatTypeSecret':
+      case 'chatTypeSupergroup': {
+        const res = await this.airgram.api.getSupergroupMembers({
+          supergroupId: chat.type.supergroupId,
+        })
+        const { members } = toObject(res)
+        const participants = await Promise.all(members.map(
+          member => this.getParticipant(member.userId),
+        ))
+        return participants
+      }
       default:
         return []
     }
