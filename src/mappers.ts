@@ -16,7 +16,7 @@ export function mapMessage(msg: TGMessage) {
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
-    senderID,
+    senderID: senderID.toString(),
     isSender: msg.isOutgoing,
     attachments: [],
     reactions: [],
