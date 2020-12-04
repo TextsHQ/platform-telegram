@@ -19,6 +19,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private promptPhoneNumber: { resolve: (value: string) => void, reject: (reason: any) => void }
 
+  private pendingMessages: {[key: number]: Function} = {}
+
   init = async (session: any, { dataDirPath }: AccountInfo) => {
     this.airgram = new Airgram({
       apiId: API_ID,
@@ -71,6 +73,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private handleMessageUpdate = (tgMessage: TGMessage) => {
+    if (tgMessage.sendingState) {
+      // Sent message is handled in updateMessageSendSucceeded.
+      return
+    }
     const message = mapMessage(tgMessage)
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
@@ -104,20 +110,9 @@ export default class TelegramAPI implements PlatformAPI {
       this.handleMessageUpdate(update.message)
     })
     this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
-      // The oldMessageId is a tmp id, delete the tmp message.
-      this.onEvent([
-        {
-          type: ServerEventType.STATE_SYNC,
-          objectIDs: {
-            threadID: update.message.chatId.toString(),
-            messageID: update.oldMessageId.toString(),
-          },
-          mutationType: 'delete',
-          objectName: 'message',
-          entries: [update.oldMessageId.toString()],
-        },
-      ])
-      this.handleMessageUpdate(update.message)
+      if (this.pendingMessages[update.oldMessageId]) {
+        this.pendingMessages[update.oldMessageId](true)
+      }
     })
     this.airgram.on(UPDATE.updateDeleteMessages, async ({ update }) => {
       if (!update.isPermanent) {
@@ -134,6 +129,20 @@ export default class TelegramAPI implements PlatformAPI {
           entries: update.messageIds.map(x => x.toString()),
         },
       ])
+    })
+    this.airgram.on(UPDATE.updateUserChatAction, async ({ update }) => {
+      switch (update.action._) {
+        case 'chatActionTyping': {
+          return this.onEvent([{
+            type: ServerEventType.PARTICIPANT_TYPING,
+            typing: true,
+            threadID: update.chatId.toString(),
+            participantID: update.userId.toString(),
+            durationMs: 3000,
+          }])
+        }
+        default:
+      }
     })
   }
 
@@ -250,7 +259,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  sendMessage = async (threadID: string, { text }: MessageContent, { quotedMessageID }: MessageSendOptions) => {
+  sendMessage = async (threadID: string, { text }: MessageContent, { quotedMessageID }: MessageSendOptions) : Promise<boolean> => {
     let content
     if (text) {
       content = {
@@ -262,18 +271,30 @@ export default class TelegramAPI implements PlatformAPI {
       }
     }
     if (content) {
-      await this.airgram.api.sendMessage({
+      const res = await this.airgram.api.sendMessage({
         chatId: Number(threadID),
         messageThreadId: 0,
         replyToMessageId: +quotedMessageID || 0,
         inputMessageContent: content,
       })
-      return true
+      return new Promise(resolve => {
+        const tmpId = toObject(res).id
+        this.pendingMessages[tmpId] = resolve
+      })
     }
     return false
   }
 
-  sendTypingIndicator = (threadID: string) => {}
+  sendTypingIndicator = (threadID: string, typing: boolean) => {
+    if (!typing) return
+    this.airgram.api.sendChatAction({
+      chatId: +threadID,
+      messageThreadId: 0,
+      action: {
+        _: 'chatActionTyping',
+      },
+    })
+  }
 
   addReaction = async (threadID: string, messageID: string, reactionKey: string) => {}
 
