@@ -11,7 +11,7 @@ export function mapMessage(msg: TGMessage) {
     senderID = msg.sender.chatId
   }
   const mapped: Message = {
-    _original: [JSON.stringify(msg)],
+    _original: JSON.stringify(msg),
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
