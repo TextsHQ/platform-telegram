@@ -271,7 +271,16 @@ export default class TelegramAPI implements PlatformAPI {
     return false
   }
 
-  sendTypingIndicator = (threadID: string) => {}
+  sendTypingIndicator = (threadID: string, typing: boolean) => {
+    if (!typing) return
+    this.airgram.api.sendChatAction({
+      chatId: +threadID,
+      messageThreadId: 0,
+      action: {
+        _: 'chatActionTyping'
+      }
+    })
+  }
 
   addReaction = async (threadID: string, messageID: string, reactionKey: string) => {}
 
