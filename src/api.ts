@@ -130,6 +130,20 @@ export default class TelegramAPI implements PlatformAPI {
         },
       ])
     })
+    this.airgram.on(UPDATE.updateUserChatAction, async ({ update }) => {
+      switch (update.action._) {
+        case 'chatActionTyping': {
+          return this.onEvent([{
+            type: ServerEventType.PARTICIPANT_TYPING,
+            typing: true,
+            threadID: update.chatId.toString(),
+            participantID: update.userId.toString(),
+            durationMs: 3000,
+          }])
+        }
+        default:
+      }
+    })
   }
 
   logout = () => {
@@ -277,8 +291,8 @@ export default class TelegramAPI implements PlatformAPI {
       chatId: +threadID,
       messageThreadId: 0,
       action: {
-        _: 'chatActionTyping'
-      }
+        _: 'chatActionTyping',
+      },
     })
   }
 
