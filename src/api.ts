@@ -21,6 +21,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private promptPhoneNumber: { resolve: (value: string) => void, reject: (reason: any) => void }
 
+  private getThreadsDone = false
+
   private pendingMessages: {[key: number]: Function} = {}
 
   private pendingFiles: {[key: number]: Function} = {}
@@ -98,6 +100,12 @@ export default class TelegramAPI implements PlatformAPI {
 
   private afterLogin = () => {
     this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
+      if (!this.getThreadsDone) {
+        // Existing threads will be handled by getThreads, no need to duplicate
+        // here. And update.chat.lastMessage seems to be always null, which will
+        // mess up thread timestamp.
+        return
+      }
       const participants = await this._getParticipants(update.chat)
       const thread = mapThread(update.chat, participants)
       const event: ServerEvent = {
@@ -243,12 +251,14 @@ export default class TelegramAPI implements PlatformAPI {
       offsetChatId: 0,
       offsetOrder: MAX_SIGNED_64BIT_NUMBER,
     })
-    const chatArr = await Promise.all(toObject(chatsResponse).chatIds.map(async chatId => {
+    const { chatIds } = toObject(chatsResponse)
+    const chatArr = await Promise.all(chatIds.map(async chatId => {
       const chatResponse = await this.airgram.api.getChat({ chatId })
       const chat = toObject(chatResponse)
       const participants = await this._getParticipants(chat)
       return { chat, participants }
     }))
+    this.getThreadsDone = true
     return {
       items: chatArr.map(({ chat, participants }) => mapThread(chat, participants)),
       hasMore: false,
