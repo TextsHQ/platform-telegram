@@ -164,7 +164,9 @@ export function mapUser(user: TGUser, accountID: string): User {
   return {
     id: user.id.toString(),
     username: user.username,
-    fullName: `${user.firstName} ${user.lastName}`,
+    phoneNumber: user.phoneNumber,
+    isVerified: user.isVerified,
+    fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     imgURL,
   }
 }
