@@ -21,6 +21,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private pendingMessages: {[key: number]: Function} = {}
 
+  private pendingFiles: {[key: number]: Function} = {}
+
   init = async (session: any, { dataDirPath }: AccountInfo) => {
     this.airgram = new Airgram({
       apiId: API_ID,
@@ -112,6 +114,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
       if (this.pendingMessages[update.oldMessageId]) {
         this.pendingMessages[update.oldMessageId](true)
+        delete this.pendingMessages[update.oldMessageId]
       }
     })
     this.airgram.on(UPDATE.updateDeleteMessages, async ({ update }) => {
@@ -142,6 +145,12 @@ export default class TelegramAPI implements PlatformAPI {
           }])
         }
         default:
+      }
+    })
+    this.airgram.on(UPDATE.updateFile, async ({ update }) => {
+      if (update.file.local.isDownloadingCompleted && update.file.local.path && this.pendingFiles[update.file.id]) {
+        this.pendingFiles[update.file.id](`file://${update.file.local.path}`)
+        delete this.pendingFiles[update.file.id]
       }
     })
   }
@@ -317,5 +326,14 @@ export default class TelegramAPI implements PlatformAPI {
     if (this.lastChatID) await this.airgram.api.closeChat({ chatId: this.lastChatID })
     this.lastChatID = +threadID
     if (threadID) await this.airgram.api.openChat({ chatId: +threadID })
+  }
+
+  getAsset = async (fileIdStr) : Promise<string> => {
+    const fileId = +fileIdStr
+    const res = await this.airgram.api.downloadFile({
+      fileId,
+      priority: 32,
+    })
+    return new Promise(resolve => this.pendingFiles[fileId] = resolve)
   }
 }

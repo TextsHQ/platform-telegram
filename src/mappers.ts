@@ -34,7 +34,7 @@ export function mapMessage(msg: TGMessage) {
       mapped.attachments.push({
         id: String(file.photo.id),
         type: MessageAttachmentType.IMG,
-        srcURL: file.photo.local.path,
+        srcURL: file.photo.local.path ? `file://${file.photo.local.path}` : `asset://$accountID/${file.photo.id}`,
         size: { width: file.width, height: file.height },
       })
       break
