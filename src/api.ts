@@ -361,10 +361,6 @@ export default class TelegramAPI implements PlatformAPI {
     })
   }
 
-  addReaction = async (threadID: string, messageID: string, reactionKey: string) => {}
-
-  removeReaction = async (threadID: string, messageID: string, reactionKey: string) => {}
-
   deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
     const res = await this.airgram.api.deleteMessages({
       chatId: +threadID,
@@ -384,12 +380,14 @@ export default class TelegramAPI implements PlatformAPI {
     if (threadID) await this.airgram.api.openChat({ chatId: +threadID })
   }
 
-  getAsset = async (fileIdStr) : Promise<string> => {
+  getAsset = async (fileIdStr: string) => {
     const fileId = +fileIdStr
-    const res = await this.airgram.api.downloadFile({
+    await this.airgram.api.downloadFile({
       fileId,
       priority: 32,
     })
-    return new Promise(resolve => this.pendingFiles[fileId] = resolve)
+    return new Promise<string>(resolve => {
+      this.pendingFiles[fileId] = resolve
+    })
   }
 }
