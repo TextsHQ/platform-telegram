@@ -21,6 +21,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private pendingMessages: {[key: number]: Function} = {}
 
+  private pendingFiles: {[key: number]: Function} = {}
+
   init = async (session: any, { dataDirPath }: AccountInfo) => {
     this.airgram = new Airgram({
       apiId: API_ID,
@@ -112,6 +114,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
       if (this.pendingMessages[update.oldMessageId]) {
         this.pendingMessages[update.oldMessageId](true)
+        delete this.pendingMessages[update.oldMessageId]
       }
     })
     this.airgram.on(UPDATE.updateDeleteMessages, async ({ update }) => {
@@ -142,6 +145,12 @@ export default class TelegramAPI implements PlatformAPI {
           }])
         }
         default:
+      }
+    })
+    this.airgram.on(UPDATE.updateFile, async ({ update }) => {
+      if (update.file.local.isDownloadingCompleted && update.file.local.path && this.pendingFiles[update.file.id]) {
+        this.pendingFiles[update.file.id](`file://${update.file.local.path}`)
+        delete this.pendingFiles[update.file.id]
       }
     })
   }
@@ -259,7 +268,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  sendMessage = async (threadID: string, { text }: MessageContent, { quotedMessageID }: MessageSendOptions) : Promise<boolean> => {
+  sendMessage = async (threadID: string, { text, filePath, mimeType }: MessageContent, { quotedMessageID }: MessageSendOptions) : Promise<boolean> => {
     let content
     if (text) {
       content = {
@@ -268,6 +277,37 @@ export default class TelegramAPI implements PlatformAPI {
           _: 'formattedText',
           text,
         },
+      }
+    } else if (filePath) {
+      const fileInput = {
+        _: 'inputFileLocal',
+        path: filePath,
+      }
+      switch (mimeType.split('/')[0]) {
+        case 'image':
+          content = {
+            _: 'inputMessagePhoto',
+            photo: fileInput,
+          }
+          break
+        case 'audio':
+          content = {
+            _: 'inputMessageAudio',
+            audio: fileInput,
+          }
+          break
+        case 'video':
+          content = {
+            _: 'inputMessageVideo',
+            video: fileInput,
+          }
+          break
+        default:
+          content = {
+            _: 'inputMessageDocument',
+            document: fileInput,
+          }
+          break
       }
     }
     if (content) {
@@ -317,5 +357,14 @@ export default class TelegramAPI implements PlatformAPI {
     if (this.lastChatID) await this.airgram.api.closeChat({ chatId: this.lastChatID })
     this.lastChatID = +threadID
     if (threadID) await this.airgram.api.openChat({ chatId: +threadID })
+  }
+
+  getAsset = async (fileIdStr) : Promise<string> => {
+    const fileId = +fileIdStr
+    const res = await this.airgram.api.downloadFile({
+      fileId,
+      priority: 32,
+    })
+    return new Promise(resolve => this.pendingFiles[fileId] = resolve)
   }
 }
