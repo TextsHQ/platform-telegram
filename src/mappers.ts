@@ -1,5 +1,5 @@
-import { Message, Thread, User, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType, TextAttributes, TextEntity } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, ChatMember, TextEntity as TGTextEntity, User as TGUser, FormattedText, File } from 'airgram'
+import { Message, Thread, User, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType, TextAttributes, TextEntity, MessageButton } from '@textshq/platform-sdk'
+import { Chat, Message as TGMessage, ChatMember, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, InlineKeyboardButton } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
@@ -42,6 +42,22 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
   }
 }
 
+function getLinkURL(row: InlineKeyboardButtonTypeUnion) {
+  switch (row._) {
+    case 'inlineKeyboardButtonTypeUrl':
+      return row.url
+  }
+}
+
+function getButtons(replyMarkup: ReplyMarkupUnion) {
+  if (!replyMarkup) return undefined
+  if (replyMarkup._ !== 'replyMarkupInlineKeyboard') return undefined
+  return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => ({
+    label: row.text,
+    linkURL: getLinkURL(row.type),
+  })))
+}
+
 export function mapMessage(msg: TGMessage) {
   const senderID = msg.sender._ === 'messageSenderUser'
     ? msg.sender.userId
@@ -60,6 +76,7 @@ export function mapMessage(msg: TGMessage) {
     isErrored: msg.sendingState?._ === 'messageSendingStateFailed',
     isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
     linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
+    buttons: getButtons(msg.replyMarkup),
   }
   const setFormattedText = (ft: FormattedText) => {
     mapped.text = ft.text
