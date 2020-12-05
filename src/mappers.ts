@@ -34,7 +34,7 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
           return {
             from,
             to,
-            mentionedUser: { id: e.type.userId },
+            mentionedUser: { id: String(e.type.userId) },
           }
       }
       return undefined
@@ -176,7 +176,7 @@ export function mapThread(thread: Chat, members: Participant[]): Thread {
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage)] : []
   const t: Thread = {
     id: String(thread.id),
-    type: ([CHAT_TYPE.chatTypePrivate, CHAT_TYPE.chatTypeSecret] as string[]).includes(thread.type._) ? 'single' : 'group',
+    type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
     timestamp: messages[0]?.timestamp || new Date(),
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: !thread.permissions.canSendMessages,
