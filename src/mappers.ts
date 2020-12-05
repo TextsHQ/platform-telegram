@@ -171,10 +171,12 @@ export function mapMessage(msg: TGMessage) {
   return mapped
 }
 
+const getFileURL = (accountID: string, file: File) =>
+  (file.local.path ? `file://${file.local.path}` : `asset://${accountID}/file/${file.id}`)
+
 export function mapUser(user: TGUser, accountID: string): User {
   const file = user.profilePhoto?.small
-  let imgURL: string
-  if (file) imgURL = file.local.path ? `file://${file.local.path}` : `asset://${accountID}/file/${file.id}`
+  const imgURL = file ? getFileURL(accountID, file) : undefined
   return {
     id: user.id.toString(),
     username: user.username,
@@ -185,8 +187,9 @@ export function mapUser(user: TGUser, accountID: string): User {
   }
 }
 
-export function mapThread(thread: Chat, members: Participant[]): Thread {
+export function mapThread(thread: Chat, members: Participant[], accountID: string): Thread {
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage)] : []
+  const imgFile = thread.photo?.small
   const t: Thread = {
     _original: JSON.stringify([thread, members]),
     id: String(thread.id),
@@ -194,6 +197,7 @@ export function mapThread(thread: Chat, members: Participant[]): Thread {
     timestamp: messages[0]?.timestamp || new Date(),
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: !thread.permissions.canSendMessages,
+    imgURL: imgFile ? getFileURL(accountID, imgFile) : undefined,
     title: thread.title,
     messages: {
       hasMore: true,

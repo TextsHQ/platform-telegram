@@ -107,7 +107,7 @@ export default class TelegramAPI implements PlatformAPI {
         return
       }
       const participants = await this._getParticipants(update.chat)
-      const thread = mapThread(update.chat, participants)
+      const thread = mapThread(update.chat, participants, this.accountInfo.accountID)
       const event: ServerEvent = {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'upsert',
@@ -249,7 +249,7 @@ export default class TelegramAPI implements PlatformAPI {
       const chatResponse = await this.airgram.api.getChat({ chatId })
       const chat = toObject(chatResponse)
       const participants = await this._getParticipants(chat)
-      return mapThread(chat, participants)
+      return mapThread(chat, participants, this.accountInfo.accountID)
     }))
     this.getThreadsDone = true
     return {
