@@ -4,19 +4,16 @@ import { Chat, Message as TGMessage, ChatMember } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 export function mapMessage(msg: TGMessage) {
-  let senderID
-  if (msg.sender._ === 'messageSenderUser') {
-    senderID = msg.sender.userId
-  } else {
-    senderID = msg.sender.chatId
-  }
+  const senderID = msg.sender._ === 'messageSenderUser'
+    ? msg.sender.userId
+    : msg.sender.chatId
   const mapped: Message = {
     _original: JSON.stringify(msg),
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
-    senderID: senderID.toString(),
+    senderID: String(senderID),
     isSender: msg.isOutgoing,
     attachments: [],
     reactions: [],
@@ -86,7 +83,7 @@ export function mapMessage(msg: TGMessage) {
       })
       break
     }
-    case 'messageChatChangeTitle': {
+    case 'messageChatChangeTitle':
       mapped.text = `Chat title changed to ${msg.content.title}`
       mapped.isAction = true
       mapped.action = {
@@ -94,7 +91,12 @@ export function mapMessage(msg: TGMessage) {
         title: msg.content.title,
         actorParticipantID: mapped.senderID,
       }
-    }
+      break
+    case 'messageContactRegistered':
+      mapped.text = '{{sender}} joined Telegram'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      break
   }
   return mapped
 }
