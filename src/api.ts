@@ -13,6 +13,8 @@ const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 export default class TelegramAPI implements PlatformAPI {
   airgram: Airgram
 
+  private accountInfo: AccountInfo
+
   private currentUser = null
 
   private promptCode: { resolve: (value: string) => void, reject: (reason: any) => void }
@@ -23,15 +25,16 @@ export default class TelegramAPI implements PlatformAPI {
 
   private pendingFiles: {[key: number]: Function} = {}
 
-  init = async (session: any, { dataDirPath }: AccountInfo) => {
+  init = async (session: any, accountInfo: AccountInfo) => {
+    this.accountInfo = accountInfo
     this.airgram = new Airgram({
       apiId: API_ID,
       apiHash: API_HASH,
       command: path.resolve(__dirname, '../libtdjson.dylib'),
       logVerbosityLevel: texts.IS_DEV ? 2 : 0,
       useChatInfoDatabase: true,
-      databaseDirectory: path.join(dataDirPath, 'db'),
-      filesDirectory: path.join(dataDirPath, 'files'),
+      databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
+      filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
       // eslint-disable-next-line react-hooks/rules-of-hooks
       // models: useModels({
       //   chat: ChatBaseModel,
@@ -187,10 +190,17 @@ export default class TelegramAPI implements PlatformAPI {
   private getParticipant = async (userId: number): Promise<Participant> => {
     const res = await this.airgram.api.getUser({ userId })
     const user = toObject(res)
+    let imgURL = null
+    const file = user.profilePhoto?.small
+    if (file) {
+      imgURL = file.local.path ? `file://${file.local.path}`
+        : `asset://${this.accountInfo.accountID}/${file.id}`
+    }
     return {
       id: user.id.toString(),
       username: user.username,
       fullName: `${user.firstName} ${user.lastName}`,
+      imgURL,
     }
   }
 
