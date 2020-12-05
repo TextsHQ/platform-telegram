@@ -84,8 +84,9 @@ export function mapMessage(msg: TGMessage) {
       break
     }
     case 'messageChatChangeTitle':
-      mapped.text = `Chat title changed to ${msg.content.title}`
+      mapped.text = `{{sender}} changed the thread title to "${msg.content.title}"`
       mapped.isAction = true
+      mapped.parseTemplate = true
       mapped.action = {
         type: MessageActionType.THREAD_TITLE_UPDATED,
         title: msg.content.title,
@@ -103,7 +104,7 @@ export function mapMessage(msg: TGMessage) {
       mapped.parseTemplate = true
       break
     case 'messageBasicGroupChatCreate':
-      mapped.text = '{{sender}} created this group'
+      mapped.text = `{{sender}} created the group "${msg.content.title}"`
       mapped.isAction = true
       mapped.parseTemplate = true
       mapped.action = {
