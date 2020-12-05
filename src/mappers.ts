@@ -70,74 +70,93 @@ export function mapMessage(msg: TGMessage) {
     case 'messageText':
       setFormattedText(msg.content.text)
       break
+
     case 'messagePhoto': {
       setFormattedText(msg.content.caption)
-      const file = msg.content.photo.sizes.slice(-1)[0]
+      const photo = msg.content.photo.sizes.slice(-1)[0]
       mapped.attachments.push({
-        id: String(file.photo.id),
-        srcURL: getSrcURL(file.photo),
+        id: String(photo.photo.id),
+        srcURL: getSrcURL(photo.photo),
         type: MessageAttachmentType.IMG,
-        size: { width: file.width, height: file.height },
+        size: { width: photo.width, height: photo.height },
       })
       break
     }
     case 'messageVideo': {
       setFormattedText(msg.content.caption)
-      const file = msg.content.video
+      const { video } = msg.content
       mapped.attachments.push({
-        id: String(file.video.id),
-        srcURL: getSrcURL(file.video),
+        id: String(video.video.id),
+        srcURL: getSrcURL(video.video),
         type: MessageAttachmentType.VIDEO,
-        fileName: file.fileName,
-        mimeType: file.mimeType,
-        size: { width: file.width, height: file.height },
+        fileName: video.fileName,
+        mimeType: video.mimeType,
+        size: { width: video.width, height: video.height },
       })
       break
     }
     case 'messageAudio': {
       setFormattedText(msg.content.caption)
-      const file = msg.content.audio
+      const { audio } = msg.content
       mapped.attachments.push({
-        id: String(file.audio.id),
-        srcURL: getSrcURL(file.audio),
+        id: String(audio.audio.id),
+        srcURL: getSrcURL(audio.audio),
         type: MessageAttachmentType.AUDIO,
-        fileName: file.fileName,
-        mimeType: file.mimeType,
+        fileName: audio.fileName,
+        mimeType: audio.mimeType,
       })
       break
     }
     case 'messageDocument': {
       setFormattedText(msg.content.caption)
-      const file = msg.content.document
+      const { document } = msg.content
       mapped.attachments.push({
-        id: String(file.document.id),
+        id: String(document.document.id),
         type: MessageAttachmentType.UNKNOWN,
-        srcURL: getSrcURL(file.document),
-        fileName: file.fileName,
-        mimeType: file.mimeType,
-        fileSize: file.document.size === 0 ? file.document.expectedSize : file.document.size,
+        srcURL: getSrcURL(document.document),
+        fileName: document.fileName,
+        mimeType: document.mimeType,
+        fileSize: document.document.size === 0 ? document.document.expectedSize : document.document.size,
       })
       break
     }
     case 'messageVideoNote': {
-      const file = msg.content.videoNote
+      const { videoNote } = msg.content
       mapped.attachments.push({
-        id: String(file.video.id),
-        srcURL: getSrcURL(file.video),
+        id: String(videoNote.video.id),
+        srcURL: getSrcURL(videoNote.video),
         type: MessageAttachmentType.VIDEO,
       })
       break
     }
     case 'messageVoiceNote': {
       setFormattedText(msg.content.caption)
-      const file = msg.content.voiceNote
+      const { voiceNote } = msg.content
       mapped.attachments.push({
-        id: String(file.voice.id),
-        srcURL: getSrcURL(file.voice),
-        type: MessageAttachmentType.VIDEO,
+        id: String(voiceNote.voice.id),
+        srcURL: getSrcURL(voiceNote.voice),
+        type: MessageAttachmentType.AUDIO,
       })
       break
     }
+    case 'messageAnimation': {
+      setFormattedText(msg.content.caption)
+      const { animation } = msg.content
+      mapped.attachments.push({
+        id: String(animation.animation.id),
+        srcURL: getSrcURL(animation.animation),
+        type: MessageAttachmentType.VIDEO,
+        isGif: true,
+        fileName: animation.fileName,
+        mimeType: animation.mimeType,
+        size: {
+          height: animation.height,
+          width: animation.width,
+        },
+      })
+      break
+    }
+
     case 'messageChatChangeTitle':
       mapped.text = `{{sender}} changed the thread title to "${msg.content.title}"`
       mapped.isAction = true
