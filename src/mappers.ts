@@ -166,10 +166,18 @@ export function mapMessage(msg: TGMessage) {
         isGif: true,
         fileName: animation.fileName,
         mimeType: animation.mimeType,
-        size: {
-          height: animation.height,
-          width: animation.width,
-        },
+        size: { width: animation.width, height: animation.height },
+      })
+      break
+    }
+    case 'messageSticker': {
+      const { sticker } = msg.content
+      mapped.attachments.push({
+        id: String(sticker.sticker.id),
+        srcURL: getSrcURL(sticker.sticker),
+        type: MessageAttachmentType.IMG,
+        isGif: true,
+        size: { width: sticker.width, height: sticker.height },
       })
       break
     }
