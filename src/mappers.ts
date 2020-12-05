@@ -24,7 +24,7 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
         case 'textEntityTypePre':
         case 'textEntityTypeCode':
         case 'textEntityTypePreCode':
-          return { from, to, mono: true }
+          return { from, to, monospace: true }
 
         case 'textEntityTypeTextUrl':
           if (e.type.url) return { from, to, link: e.type.url }
