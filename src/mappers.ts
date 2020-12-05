@@ -102,6 +102,15 @@ export function mapMessage(msg: TGMessage) {
       mapped.isAction = true
       mapped.parseTemplate = true
       break
+    case 'messageBasicGroupChatCreate':
+      mapped.text = '{{sender}} created this group'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.GROUP_THREAD_CREATED,
+        actorParticipantID: mapped.senderID,
+        title: msg.content.title,
+      }
   }
   return mapped
 }
