@@ -220,9 +220,7 @@ export default class TelegramAPI implements PlatformAPI {
         return [participant]
       }
       case 'chatTypeBasicGroup': {
-        const res = await this.airgram.api.getBasicGroupFullInfo({
-          basicGroupId: chat.type.basicGroupId,
-        })
+        const res = await this.airgram.api.getBasicGroupFullInfo({ basicGroupId: chat.type.basicGroupId })
         const { members } = toObject(res)
         const participants = await Promise.all(members.map(
           member => this.getParticipant(member.userId),
@@ -230,14 +228,19 @@ export default class TelegramAPI implements PlatformAPI {
         return participants
       }
       case 'chatTypeSupergroup': {
-        const res = await this.airgram.api.getSupergroupMembers({
-          supergroupId: chat.type.supergroupId,
-        })
-        const { members } = toObject(res)
-        const participants = await Promise.all(members.map(
-          member => this.getParticipant(member.userId),
-        ))
-        return participants
+        const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
+        const supergroup = toObject(supergroupRes)
+        if (!supergroup.canGetMembers) {
+          return []
+        }
+        return []
+        // const membersResponse = await this.airgram.api.getSupergroupMembers({
+        //   supergroupId: chat.id,
+        //   limit: 100,
+        // })
+        // const { members } = toObject(membersResponse)
+        // const participants = await Promise.all(members.map(member => this.getParticipant(member.userId)))
+        // return participants
       }
       default:
         return []
@@ -246,22 +249,24 @@ export default class TelegramAPI implements PlatformAPI {
 
   getThreads = async (inboxName: InboxName, { cursor, direction }: PaginationArg = { cursor: null, direction: null }): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
+    const limit = 25
     const chatsResponse = await this.airgram.api.getChats({
-      limit: 10,
-      offsetChatId: 0,
+      limit,
+      offsetChatId: +cursor,
       offsetOrder: MAX_SIGNED_64BIT_NUMBER,
     })
     const { chatIds } = toObject(chatsResponse)
-    const chatArr = await Promise.all(chatIds.map(async chatId => {
+    const items = await Promise.all(chatIds.map(async chatId => {
       const chatResponse = await this.airgram.api.getChat({ chatId })
       const chat = toObject(chatResponse)
       const participants = await this._getParticipants(chat)
-      return { chat, participants }
+      return mapThread(chat, participants)
     }))
     this.getThreadsDone = true
     return {
-      items: chatArr.map(({ chat, participants }) => mapThread(chat, participants)),
-      hasMore: false,
+      items,
+      oldestCursor: items[items.length - 1]?.id,
+      hasMore: items.length === limit,
     }
   }
 
