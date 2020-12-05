@@ -1,6 +1,46 @@
-import { Message, Thread, User, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, ChatMember, User as TGUser } from 'airgram'
+import { Message, Thread, User, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType, TextAttributes, TextEntity } from '@textshq/platform-sdk'
+import { Chat, Message as TGMessage, ChatMember, TextEntity as TGTextEntity, User as TGUser } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
+
+function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
+  if (!entities || entities.length === 0) return undefined
+  return {
+    entities: entities.map<TextEntity>(e => {
+      const from = e.offset
+      const to = e.offset + e.length
+      switch (e.type._) {
+        case 'textEntityTypeBold':
+          return { from, to, bold: true }
+
+        case 'textEntityTypeItalic':
+          return { from, to, italic: true }
+
+        case 'textEntityTypeStrikethrough':
+          return { from, to, strikethrough: true }
+
+        case 'textEntityTypeUnderline':
+          return { from, to, underline: true }
+
+        case 'textEntityTypePre':
+        case 'textEntityTypeCode':
+        case 'textEntityTypePreCode':
+          return { from, to, mono: true }
+
+        case 'textEntityTypeTextUrl':
+          if (e.type.url) return { from, to, link: e.type.url }
+          break
+
+        case 'textEntityTypeMentionName':
+          return {
+            from,
+            to,
+            mentionedUser: { id: e.type.userId },
+          }
+      }
+      return undefined
+    }).filter(Boolean),
+  }
+}
 
 export function mapMessage(msg: TGMessage) {
   const senderID = msg.sender._ === 'messageSenderUser'
@@ -12,6 +52,7 @@ export function mapMessage(msg: TGMessage) {
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
+    textAttributes: undefined,
     senderID: String(senderID),
     isSender: msg.isOutgoing,
     attachments: [],
@@ -23,6 +64,7 @@ export function mapMessage(msg: TGMessage) {
   switch (msg.content._) {
     case 'messageText':
       mapped.text = msg.content.text.text
+      mapped.textAttributes = mapTextAttributes(msg.content.text.entities)
       break
     case 'messagePhoto': {
       const file = msg.content.photo.sizes[0]
