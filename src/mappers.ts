@@ -97,6 +97,11 @@ export function mapMessage(msg: TGMessage) {
       mapped.isAction = true
       mapped.parseTemplate = true
       break
+    case 'messageChatJoinByLink':
+      mapped.text = '{{sender}} joined the group via invite link'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      break
   }
   return mapped
 }
