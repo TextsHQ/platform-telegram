@@ -164,7 +164,7 @@ export function mapUser(user: TGUser, accountID: string): User {
   return {
     id: user.id.toString(),
     username: user.username,
-    phoneNumber: user.phoneNumber,
+    phoneNumber: '+' + user.phoneNumber,
     isVerified: user.isVerified,
     fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     imgURL,
@@ -172,9 +172,9 @@ export function mapUser(user: TGUser, accountID: string): User {
 }
 
 export function mapThread(thread: Chat, members: Participant[]): Thread {
-  // console.log(thread, JSON.stringify(thread))
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage)] : []
   const t: Thread = {
+    _original: JSON.stringify([thread, members]),
     id: String(thread.id),
     type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
     timestamp: messages[0]?.timestamp || new Date(),
