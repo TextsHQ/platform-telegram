@@ -1,5 +1,5 @@
 import { Message, Thread, User, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType, TextAttributes, TextEntity } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, ChatMember, TextEntity as TGTextEntity, User as TGUser } from 'airgram'
+import { Chat, Message as TGMessage, ChatMember, TextEntity as TGTextEntity, User as TGUser, FormattedText } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
@@ -61,14 +61,17 @@ export function mapMessage(msg: TGMessage) {
     isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
     linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
   }
+  const setFormattedText = (ft: FormattedText) => {
+    mapped.text = ft.text
+    mapped.textAttributes = mapTextAttributes(ft.entities)
+  }
   switch (msg.content._) {
     case 'messageText':
-      mapped.text = msg.content.text.text
-      mapped.textAttributes = mapTextAttributes(msg.content.text.entities)
+      setFormattedText(msg.content.text)
       break
     case 'messagePhoto': {
       const file = msg.content.photo.sizes[0]
-      mapped.text = msg.content.caption.text
+      setFormattedText(msg.content.caption)
       mapped.attachments.push({
         id: String(file.photo.id),
         type: MessageAttachmentType.IMG,
@@ -79,7 +82,7 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageVideo': {
       const file = msg.content.video
-      mapped.text = msg.content.caption.text
+      setFormattedText(msg.content.caption)
       mapped.attachments.push({
         id: String(file.video.id),
         type: MessageAttachmentType.VIDEO,
@@ -101,7 +104,7 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageAudio': {
       const file = msg.content.audio
-      mapped.text = msg.content.caption.text
+      setFormattedText(msg.content.caption)
       mapped.attachments.push({
         id: String(file.audio.id),
         type: MessageAttachmentType.AUDIO,
@@ -113,7 +116,7 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageDocument': {
       const file = msg.content.document
-      mapped.text = msg.content.caption.text
+      setFormattedText(msg.content.caption)
       mapped.attachments.push({
         id: String(file.document.id),
         type: MessageAttachmentType.UNKNOWN,
