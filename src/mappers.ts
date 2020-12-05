@@ -119,7 +119,7 @@ export function mapThread(thread: Chat, members: Participant[]): Thread {
   const t: Thread = {
     id: String(thread.id),
     type: ([CHAT_TYPE.chatTypePrivate, CHAT_TYPE.chatTypeSecret] as string[]).includes(thread.type._) ? 'single' : 'group',
-    timestamp: messages[0]?.timestamp,
+    timestamp: messages[0]?.timestamp || new Date(),
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: !thread.permissions.canSendMessages,
     title: thread.title,
