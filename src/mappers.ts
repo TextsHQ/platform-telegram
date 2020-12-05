@@ -1,6 +1,5 @@
-import { orderBy } from 'lodash'
-import { Message, Thread, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, ChatMember } from 'airgram'
+import { Message, Thread, User, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType } from '@textshq/platform-sdk'
+import { Chat, Message as TGMessage, ChatMember, User as TGUser } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 export function mapMessage(msg: TGMessage) {
@@ -116,11 +115,16 @@ export function mapMessage(msg: TGMessage) {
   return mapped
 }
 
-function mapParticipant(member: ChatMember) {
-  const p: Participant = {
-    id: String(member.userId),
+export function mapUser(user: TGUser, accountID: string): User {
+  const file = user.profilePhoto?.small
+  let imgURL: string
+  if (file) imgURL = file.local.path ? `file://${file.local.path}` : `asset://${accountID}/${file.id}`
+  return {
+    id: user.id.toString(),
+    username: user.username,
+    fullName: `${user.firstName} ${user.lastName}`,
+    imgURL,
   }
-  return p
 }
 
 export function mapThread(thread: Chat, members: Participant[]): Thread {

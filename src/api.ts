@@ -6,7 +6,7 @@ import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
-import { mapThread, mapMessage, mapMessages } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser } from './mappers'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 
@@ -195,35 +195,24 @@ export default class TelegramAPI implements PlatformAPI {
 
   createThread = (userIDs: string[]) => null
 
-  private getParticipant = async (userId: number): Promise<Participant> => {
+  private getUser = async (userId: number) => {
     const res = await this.airgram.api.getUser({ userId })
     const user = toObject(res)
-    let imgURL = null
-    const file = user.profilePhoto?.small
-    if (file) {
-      imgURL = file.local.path ? `file://${file.local.path}`
-        : `asset://${this.accountInfo.accountID}/${file.id}`
-    }
-    return {
-      id: user.id.toString(),
-      username: user.username,
-      fullName: `${user.firstName} ${user.lastName}`,
-      imgURL,
-    }
+    return mapUser(user, this.accountInfo.accountID)
   }
 
   private _getParticipants = async (chat: ChatUnion): Promise<Participant[]> => {
     switch (chat.type._) {
       case 'chatTypePrivate':
       case 'chatTypeSecret': {
-        const participant = await this.getParticipant(chat.type.userId)
+        const participant = await this.getUser(chat.type.userId)
         return [participant]
       }
       case 'chatTypeBasicGroup': {
         const res = await this.airgram.api.getBasicGroupFullInfo({ basicGroupId: chat.type.basicGroupId })
         const { members } = toObject(res)
         const participants = await Promise.all(members.map(
-          member => this.getParticipant(member.userId),
+          member => this.getUser(member.userId),
         ))
         return participants
       }
