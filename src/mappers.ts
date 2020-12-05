@@ -1,5 +1,5 @@
 import { Message, Thread, User, MessageReaction, MessageSeen, ServerEvent, Participant, MessageAttachmentType, ServerEventType, MessageActionType, TextAttributes, TextEntity } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, ChatMember, TextEntity as TGTextEntity, User as TGUser, FormattedText } from 'airgram'
+import { Chat, Message as TGMessage, ChatMember, TextEntity as TGTextEntity, User as TGUser, FormattedText, File } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
@@ -65,31 +65,57 @@ export function mapMessage(msg: TGMessage) {
     mapped.text = ft.text
     mapped.textAttributes = mapTextAttributes(ft.entities)
   }
+  const getSrcURL = (file: File) => (file.local.path ? `file://${file.local.path}` : `asset://$accountID/file/${file.id}`)
   switch (msg.content._) {
     case 'messageText':
       setFormattedText(msg.content.text)
       break
     case 'messagePhoto': {
-      const file = msg.content.photo.sizes[0]
       setFormattedText(msg.content.caption)
+      const file = msg.content.photo.sizes.slice(-1)[0]
       mapped.attachments.push({
         id: String(file.photo.id),
+        srcURL: getSrcURL(file.photo),
         type: MessageAttachmentType.IMG,
-        srcURL: file.photo.local.path ? `file://${file.photo.local.path}` : `asset://$accountID/${file.photo.id}`,
         size: { width: file.width, height: file.height },
       })
       break
     }
     case 'messageVideo': {
-      const file = msg.content.video
       setFormattedText(msg.content.caption)
+      const file = msg.content.video
       mapped.attachments.push({
         id: String(file.video.id),
+        srcURL: getSrcURL(file.video),
         type: MessageAttachmentType.VIDEO,
         fileName: file.fileName,
         mimeType: file.mimeType,
-        srcURL: file.video.local.path,
         size: { width: file.width, height: file.height },
+      })
+      break
+    }
+    case 'messageAudio': {
+      setFormattedText(msg.content.caption)
+      const file = msg.content.audio
+      mapped.attachments.push({
+        id: String(file.audio.id),
+        srcURL: getSrcURL(file.audio),
+        type: MessageAttachmentType.AUDIO,
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+      })
+      break
+    }
+    case 'messageDocument': {
+      setFormattedText(msg.content.caption)
+      const file = msg.content.document
+      mapped.attachments.push({
+        id: String(file.document.id),
+        type: MessageAttachmentType.UNKNOWN,
+        srcURL: getSrcURL(file.document),
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        fileSize: file.document.size === 0 ? file.document.expectedSize : file.document.size,
       })
       break
     }
@@ -97,33 +123,18 @@ export function mapMessage(msg: TGMessage) {
       const file = msg.content.videoNote
       mapped.attachments.push({
         id: String(file.video.id),
+        srcURL: getSrcURL(file.video),
         type: MessageAttachmentType.VIDEO,
-        srcURL: file.video.local.path,
       })
       break
     }
-    case 'messageAudio': {
-      const file = msg.content.audio
+    case 'messageVoiceNote': {
       setFormattedText(msg.content.caption)
+      const file = msg.content.voiceNote
       mapped.attachments.push({
-        id: String(file.audio.id),
-        type: MessageAttachmentType.AUDIO,
-        fileName: file.fileName,
-        mimeType: file.mimeType,
-        srcURL: file.audio.local.path,
-      })
-      break
-    }
-    case 'messageDocument': {
-      const file = msg.content.document
-      setFormattedText(msg.content.caption)
-      mapped.attachments.push({
-        id: String(file.document.id),
-        type: MessageAttachmentType.UNKNOWN,
-        fileName: file.fileName,
-        mimeType: file.mimeType,
-        srcURL: file.document.local.path,
-        fileSize: file.document.size === 0 ? file.document.expectedSize : file.document.size,
+        id: String(file.voice.id),
+        srcURL: getSrcURL(file.voice),
+        type: MessageAttachmentType.VIDEO,
       })
       break
     }
@@ -163,7 +174,7 @@ export function mapMessage(msg: TGMessage) {
 export function mapUser(user: TGUser, accountID: string): User {
   const file = user.profilePhoto?.small
   let imgURL: string
-  if (file) imgURL = file.local.path ? `file://${file.local.path}` : `asset://${accountID}/${file.id}`
+  if (file) imgURL = file.local.path ? `file://${file.local.path}` : `asset://${accountID}/file/${file.id}`
   return {
     id: user.id.toString(),
     username: user.username,

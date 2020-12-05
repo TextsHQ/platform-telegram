@@ -369,7 +369,8 @@ export default class TelegramAPI implements PlatformAPI {
     if (threadID) await this.airgram.api.openChat({ chatId: +threadID })
   }
 
-  getAsset = async (fileIdStr: string) => {
+  getAsset = async (type: string, fileIdStr: string) => {
+    if (type !== 'file') throw new Error('unknown asset type')
     const fileId = +fileIdStr
     await this.airgram.api.downloadFile({
       fileId,
