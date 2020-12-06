@@ -17,7 +17,8 @@
     "airgram": "^3.3.0",
     "bluebird": "^3.7.2",
     "lodash": "^4.17.20",
-    "react-phone-number-input": "^3.1.6"
+    "react-phone-number-input": "^3.1.6",
+    "rimraf": "^3.0.2"
   },
   "peerDependencies": {
     "react": ">=17"

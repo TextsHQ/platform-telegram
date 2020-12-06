@@ -1,5 +1,6 @@
 import path from 'path'
 import bluebird from 'bluebird'
+import rimraf from 'rimraf'
 import { Airgram, Auth, ChatUnion, isError, toObject, Message as TGMessage } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
@@ -166,12 +167,21 @@ export default class TelegramAPI implements PlatformAPI {
     })
   }
 
-  logout = () => {
-
+  // @ts-ignore
+  logout = async (accountInfo: AccountInfo) => {
+    try {
+      await this.airgram.api.logOut()
+    } catch {}
+    return new Promise<void>(resolve => {
+      rimraf(accountInfo.dataDirPath, () => {
+        resolve()
+      })
+    })
   }
 
-  dispose = () =>
-    this.airgram?.destroy()
+  dispose = async () => {
+    await this.airgram.api.close()
+  }
 
   getCurrentUser = async (): Promise<CurrentUser> => {
     const me = await this.airgram.api.getMe()
