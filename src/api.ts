@@ -1,7 +1,6 @@
 import path from 'path'
-import bluebird from 'bluebird'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, isError, toObject, Message as TGMessage } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -171,7 +170,9 @@ export default class TelegramAPI implements PlatformAPI {
   logout = async (accountInfo: AccountInfo) => {
     try {
       await this.airgram.api.logOut()
-    } catch {}
+    } catch {
+      // api is not initialized.
+    }
     return new Promise<void>(resolve => {
       rimraf(accountInfo.dataDirPath, () => {
         resolve()
@@ -279,12 +280,12 @@ export default class TelegramAPI implements PlatformAPI {
     // When fromMessageId is 0, getChatHistory returns only one message.
     // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
     if (!cursor && messages.length === 1) {
-      const messagesResponse = await this.airgram.api.getChatHistory({
+      const res = await this.airgram.api.getChatHistory({
         limit: 20,
         chatId: +threadID,
         fromMessageId: messages[0].id,
       })
-      messages.push(...toObject(messagesResponse).messages)
+      messages.push(...toObject(res).messages)
     }
     return {
       items: mapMessages(messages).reverse(),
