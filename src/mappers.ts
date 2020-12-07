@@ -1,5 +1,5 @@
-import { Message, Thread, User, Participant, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion } from 'airgram'
+import { Message, Thread, User, Participant, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, Size } from '@textshq/platform-sdk'
+import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
@@ -58,6 +58,27 @@ function getButtons(replyMarkup: ReplyMarkupUnion) {
   })))
 }
 
+type Asset = {
+  url: string
+  size: Size
+}
+
+function mapPhotoToAsset(photo: Photo): Asset {
+  if (!photo.sizes[0]) {
+    return
+  }
+  const { width, height } = photo.sizes[0]
+  const size = {
+    width,
+    height,
+  }
+  const file = photo.sizes[0].photo
+  const url = file.local.path
+    ? `file://${file.local.path}`
+    : `asset://$accountID/${file.id}`
+  return { url, size }
+}
+
 export function mapMessage(msg: TGMessage) {
   const senderID = msg.sender._ === 'messageSenderUser'
     ? msg.sender.userId
@@ -86,6 +107,24 @@ export function mapMessage(msg: TGMessage) {
   switch (msg.content._) {
     case 'messageText':
       setFormattedText(msg.content.text)
+      if (msg.content.webPage) {
+        const { url, displayUrl, title, description, photo } = msg.content.webPage
+        const link : MessageLink = {
+          url: displayUrl,
+          originalURL: url,
+          title,
+          summary: description.text,
+        }
+        if (photo) {
+          const asset = mapPhotoToAsset(photo)
+          if (asset) {
+            // FIXME: asset:// is not supported for MessageLink yet.
+            // link.img = asset.url
+            // link.imgSize = asset.size
+          }
+        }
+        mapped.links = [link]
+      }
       break
 
     case 'messagePhoto': {
