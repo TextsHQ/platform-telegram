@@ -83,6 +83,8 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
   return textInput
 }
 
+const tdlibPath = texts.constants.BUILD_DIR_PATH + '/libtdjson.dylib'
+
 export default class TelegramAPI implements PlatformAPI {
   airgram: Airgram
 
@@ -105,7 +107,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.airgram = new Airgram({
       apiId: API_ID,
       apiHash: API_HASH,
-      command: path.resolve(__dirname, '../libtdjson.dylib'),
+      command: tdlibPath,
       logVerbosityLevel: texts.IS_DEV ? 2 : 0,
       useChatInfoDatabase: true,
       databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
