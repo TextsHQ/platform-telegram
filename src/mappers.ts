@@ -250,6 +250,7 @@ export function mapMessage(msg: TGMessage) {
       mapped.parseTemplate = true
       break
     case 'messageBasicGroupChatCreate':
+    case 'messageSupergroupChatCreate':
       mapped.text = `{{sender}} created the group "${msg.content.title}"`
       mapped.isAction = true
       mapped.parseTemplate = true
