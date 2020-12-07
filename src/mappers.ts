@@ -217,6 +217,17 @@ export function mapMessage(msg: TGMessage) {
       })
       break
     }
+    case 'messageDice':
+      mapped.text = msg.content.emoji
+      switch (msg.content.initialState?._) {
+        case 'diceStickersRegular':
+          mapped.textHeading = `Dice: ${msg.content.value}`
+          break
+        case 'diceStickersSlotMachine':
+          mapped.textHeading = `Slot Machine: ${msg.content.value}`
+          break
+      }
+      break
 
     case 'messageChatChangeTitle':
       mapped.text = `{{sender}} changed the thread title to "${msg.content.title}"`
@@ -247,6 +258,7 @@ export function mapMessage(msg: TGMessage) {
         actorParticipantID: mapped.senderID,
         title: msg.content.title,
       }
+      break
   }
   return mapped
 }
