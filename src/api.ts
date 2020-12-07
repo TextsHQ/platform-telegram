@@ -202,7 +202,14 @@ export default class TelegramAPI implements PlatformAPI {
 
   serializeSession = () => true
 
-  searchUsers = async (typed: string) => []
+  searchUsers = async (query: string) => {
+    const res = await this.airgram.api.searchContacts({
+      query,
+      limit: 20
+    })
+    const userIds = toObject(res).userIds
+    return Promise.all(userIds.map(userId => this.getUser(userId)))
+  }
 
   createThread = async (userIDs: string[], title?: string) => {
     const res = await this.airgram.api.createNewBasicGroupChat({
@@ -213,6 +220,9 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   deleteThread = (threadID: string) => {
+    this.airgram.api.leaveChat({
+      chatId: +threadID
+    })
   }
 
   private getUser = async (userId: number) => {
