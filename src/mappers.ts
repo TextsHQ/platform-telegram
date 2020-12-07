@@ -22,9 +22,13 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
           return { from, to, underline: true }
 
         case 'textEntityTypePre':
+          return { from, to, pre: true }
+
         case 'textEntityTypeCode':
+          return { from, to, code: true }
+
         case 'textEntityTypePreCode':
-          return { from, to, monospace: true }
+          return { from, to, codeLanguage: e.type.language }
 
         case 'textEntityTypeTextUrl':
           if (e.type.url) return { from, to, link: e.type.url }
