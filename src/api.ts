@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, InputMessageAnimationInput } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, InputMessageAnimationInput, InputMessageVoiceNoteInput } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -28,6 +28,13 @@ function getFileInput(msgContent: MessageContent, filePath: string, textInput?: 
         caption: textInput,
       } as InputMessagePhotoInput
     case 'audio':
+      if (msgContent.isRecordedAudio) {
+        return {
+          _: 'inputMessageVoiceNote',
+          voiceInput: fileInput,
+          caption: textInput,
+        } as InputMessageVoiceNoteInput
+      }
       return {
         _: 'inputMessageAudio',
         audio: fileInput,
