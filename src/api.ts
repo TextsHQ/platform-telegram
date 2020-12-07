@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, InputMessageAnimationInput } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -15,12 +15,12 @@ const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
 
-function getFileInput(filePath: string, mimeType: string, textInput?: FormattedTextInput): InputMessageContentInputUnion {
+function getFileInput(msgContent: MessageContent, filePath: string, textInput?: FormattedTextInput): InputMessageContentInputUnion {
   const fileInput: InputFileInputUnion = {
     _: 'inputFileLocal',
     path: filePath,
   }
-  switch (mimeType.split('/')[0]) {
+  switch (msgContent.mimeType.split('/')[0]) {
     case 'image':
       return {
         _: 'inputMessagePhoto',
@@ -34,6 +34,13 @@ function getFileInput(filePath: string, mimeType: string, textInput?: FormattedT
         caption: textInput,
       } as InputMessageAudioInput
     case 'video':
+      if (msgContent.isGif) {
+        return {
+          _: 'inputMessageAnimation',
+          animation: fileInput,
+          caption: textInput,
+        } as InputMessageAnimationInput
+      }
       return {
         _: 'inputMessageVideo',
         video: fileInput,
@@ -48,7 +55,8 @@ function getFileInput(filePath: string, mimeType: string, textInput?: FormattedT
   }
 }
 
-async function getInputMessageContent({ text, filePath, mimeType, fileBuffer, fileName }: MessageContent): Promise<InputMessageContentInputUnion> {
+async function getInputMessageContent(msgContent: MessageContent): Promise<InputMessageContentInputUnion> {
+  const { text, filePath, fileBuffer, fileName } = msgContent
   const formattedTextInput: FormattedTextInput = text ? {
     _: 'formattedText',
     text,
@@ -58,12 +66,12 @@ async function getInputMessageContent({ text, filePath, mimeType, fileBuffer, fi
     text: formattedTextInput,
   } : undefined
   if (filePath) {
-    return getFileInput(filePath, mimeType, formattedTextInput)
+    return getFileInput(msgContent, filePath, formattedTextInput)
   }
   if (fileBuffer) {
     const tmpFilePath = path.join(os.tmpdir(), fileName || Math.random().toString(36))
     await fs.writeFile(tmpFilePath, fileBuffer)
-    return getFileInput(filePath, mimeType, formattedTextInput)
+    return getFileInput(msgContent, tmpFilePath, formattedTextInput)
     // TODO fs.unlink(tmpFilePath).catch(() => {})
   }
   return textInput

@@ -26,6 +26,8 @@ const info: PlatformInfo = {
   ]),
   attachments: {
     supportsCaption: true,
+    // recordedAudioMimeType: 'audio/ogg',
+    gifMimeType: 'video/mp4',
   },
 }
 
