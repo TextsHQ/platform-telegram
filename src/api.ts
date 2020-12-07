@@ -2,9 +2,9 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, InputMessageAnimationInput, InputMessageVoiceNoteInput } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, InputMessageAnimationInput, InputMessageVoiceNoteInput, ChatActionInputUnion } from 'airgram'
 import { UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser } from './mappers'
@@ -404,14 +404,17 @@ export default class TelegramAPI implements PlatformAPI {
     })
   }
 
-  sendTypingIndicator = (threadID: string, typing: boolean) => {
-    if (!typing) return
-    this.airgram.api.sendChatAction({
+  sendActivityIndicator = async (type: ActivityType, threadID: string) => {
+    const _ = {
+      [ActivityType.NONE]: 'chatActionCancel', // todo review
+      [ActivityType.TYPING]: 'chatActionTyping',
+      [ActivityType.RECORDING_VOICE]: 'ChatActionRecordingVoiceNoteInput',
+    }[type]
+    if (!_) return
+    await this.airgram.api.sendChatAction({
       chatId: +threadID,
       messageThreadId: 0,
-      action: {
-        _: 'chatActionTyping',
-      },
+      action: { _ },
     })
   }
 
