@@ -1,9 +1,9 @@
 import { Message, Thread, User, Participant, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, Size } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo } from 'airgram'
+import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
 function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
-  if (!entities || entities.length === 0) return undefined
+  if (!entities || entities.length === 0) return
   return {
     entities: entities.map<TextEntity>(e => {
       const from = e.offset
@@ -46,7 +46,7 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
   }
 }
 
-function getLinkURL(row: InlineKeyboardButtonTypeUnion) {
+function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion) {
   switch (row._) {
     case 'inlineKeyboardButtonTypeUrl':
       return row.url
@@ -54,33 +54,42 @@ function getLinkURL(row: InlineKeyboardButtonTypeUnion) {
 }
 
 function getButtons(replyMarkup: ReplyMarkupUnion) {
-  if (!replyMarkup) return undefined
-  if (replyMarkup._ !== 'replyMarkupInlineKeyboard') return undefined
+  if (!replyMarkup) return
+  if (replyMarkup._ !== 'replyMarkupInlineKeyboard') return
   return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => ({
     label: row.text,
-    linkURL: getLinkURL(row.type),
+    linkURL: getButtonLinkURL(row.type),
   })))
 }
 
-type Asset = {
-  url: string
-  size: Size
+const getAssetURL = (file: File) =>
+  (file.local.path ? `file://${file.local.path}` : `asset://$accountID/file/${file.id}`)
+
+const getAssetURLWithAccountID = (accountID: string, file: File) =>
+  (file.local.path ? `file://${file.local.path}` : `asset://${accountID}/file/${file.id}`)
+
+function mapLinkImg(photo: Photo): Partial<MessageLink> {
+  if (photo.sizes.length < 1) return
+  const photoSize = photo.sizes.slice(-1)[0] // last image should be biggest
+  const { width, height } = photoSize
+  const imgSize = { width, height }
+  const file = photoSize.photo
+  const img = getAssetURL(file)
+  return { img, imgSize }
 }
 
-function mapPhotoToAsset(photo: Photo): Asset {
-  if (!photo.sizes[0]) {
-    return
+function mapMessageLink(webPage: WebPage) {
+  const { url, displayUrl, title, description, photo } = webPage
+  const link: MessageLink = {
+    url: displayUrl,
+    originalURL: url,
+    title,
+    summary: description.text,
+    img: undefined,
+    imgSize: undefined,
   }
-  const { width, height } = photo.sizes[0]
-  const size = {
-    width,
-    height,
-  }
-  const file = photo.sizes[0].photo
-  const url = file.local.path
-    ? `file://${file.local.path}`
-    : `asset://$accountID/${file.id}`
-  return { url, size }
+  if (photo) Object.assign(link, mapLinkImg(photo))
+  return link
 }
 
 export function mapMessage(msg: TGMessage) {
@@ -107,27 +116,11 @@ export function mapMessage(msg: TGMessage) {
     mapped.text = ft.text
     mapped.textAttributes = mapTextAttributes(ft.entities)
   }
-  const getSrcURL = (file: File) => (file.local.path ? `file://${file.local.path}` : `asset://$accountID/file/${file.id}`)
   switch (msg.content._) {
     case 'messageText':
       setFormattedText(msg.content.text)
       if (msg.content.webPage) {
-        const { url, displayUrl, title, description, photo } = msg.content.webPage
-        const link : MessageLink = {
-          url: displayUrl,
-          originalURL: url,
-          title,
-          summary: description.text,
-        }
-        if (photo) {
-          const asset = mapPhotoToAsset(photo)
-          if (asset) {
-            // FIXME: asset:// is not supported for MessageLink yet.
-            // link.img = asset.url
-            // link.imgSize = asset.size
-          }
-        }
-        mapped.links = [link]
+        mapped.links = [mapMessageLink(msg.content.webPage)]
       }
       break
 
@@ -136,7 +129,7 @@ export function mapMessage(msg: TGMessage) {
       const photo = msg.content.photo.sizes.slice(-1)[0]
       mapped.attachments.push({
         id: String(photo.photo.id),
-        srcURL: getSrcURL(photo.photo),
+        srcURL: getAssetURL(photo.photo),
         type: MessageAttachmentType.IMG,
         size: { width: photo.width, height: photo.height },
       })
@@ -147,7 +140,7 @@ export function mapMessage(msg: TGMessage) {
       const { video } = msg.content
       mapped.attachments.push({
         id: String(video.video.id),
-        srcURL: getSrcURL(video.video),
+        srcURL: getAssetURL(video.video),
         type: MessageAttachmentType.VIDEO,
         fileName: video.fileName,
         mimeType: video.mimeType,
@@ -160,7 +153,7 @@ export function mapMessage(msg: TGMessage) {
       const { audio } = msg.content
       mapped.attachments.push({
         id: String(audio.audio.id),
-        srcURL: getSrcURL(audio.audio),
+        srcURL: getAssetURL(audio.audio),
         type: MessageAttachmentType.AUDIO,
         fileName: audio.fileName,
         mimeType: audio.mimeType,
@@ -173,7 +166,7 @@ export function mapMessage(msg: TGMessage) {
       mapped.attachments.push({
         id: String(document.document.id),
         type: MessageAttachmentType.UNKNOWN,
-        srcURL: getSrcURL(document.document),
+        srcURL: getAssetURL(document.document),
         fileName: document.fileName,
         mimeType: document.mimeType,
         fileSize: document.document.size === 0 ? document.document.expectedSize : document.document.size,
@@ -184,7 +177,7 @@ export function mapMessage(msg: TGMessage) {
       const { videoNote } = msg.content
       mapped.attachments.push({
         id: String(videoNote.video.id),
-        srcURL: getSrcURL(videoNote.video),
+        srcURL: getAssetURL(videoNote.video),
         type: MessageAttachmentType.VIDEO,
       })
       break
@@ -194,7 +187,7 @@ export function mapMessage(msg: TGMessage) {
       const { voiceNote } = msg.content
       mapped.attachments.push({
         id: String(voiceNote.voice.id),
-        srcURL: getSrcURL(voiceNote.voice),
+        srcURL: getAssetURL(voiceNote.voice),
         type: MessageAttachmentType.AUDIO,
       })
       break
@@ -204,7 +197,7 @@ export function mapMessage(msg: TGMessage) {
       const { animation } = msg.content
       mapped.attachments.push({
         id: String(animation.animation.id),
-        srcURL: getSrcURL(animation.animation),
+        srcURL: getAssetURL(animation.animation),
         type: MessageAttachmentType.VIDEO,
         isGif: true,
         fileName: animation.fileName,
@@ -217,7 +210,7 @@ export function mapMessage(msg: TGMessage) {
       const { sticker } = msg.content
       mapped.attachments.push({
         id: String(sticker.sticker.id),
-        srcURL: getSrcURL(sticker.sticker),
+        srcURL: getAssetURL(sticker.sticker),
         type: MessageAttachmentType.IMG,
         isGif: true,
         size: { width: sticker.width, height: sticker.height },
@@ -258,12 +251,9 @@ export function mapMessage(msg: TGMessage) {
   return mapped
 }
 
-const getFileURL = (accountID: string, file: File) =>
-  (file.local.path ? `file://${file.local.path}` : `asset://${accountID}/file/${file.id}`)
-
 export function mapUser(user: TGUser, accountID: string): User {
   const file = user.profilePhoto?.small
-  const imgURL = file ? getFileURL(accountID, file) : undefined
+  const imgURL = file ? getAssetURLWithAccountID(accountID, file) : undefined
   return {
     id: user.id.toString(),
     username: user.username,
@@ -284,7 +274,7 @@ export function mapThread(thread: Chat, members: Participant[], accountID: strin
     timestamp: messages[0]?.timestamp || new Date(),
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: !thread.permissions.canSendMessages,
-    imgURL: imgFile ? getFileURL(accountID, imgFile) : undefined,
+    imgURL: imgFile ? getAssetURLWithAccountID(accountID, imgFile) : undefined,
     title: thread.title,
     messages: {
       hasMore: true,
