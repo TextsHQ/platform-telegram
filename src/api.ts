@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, InputMessageAnimationInput, InputMessageVoiceNoteInput, ChatActionInputUnion } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError } from 'airgram'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
 
@@ -110,10 +110,6 @@ export default class TelegramAPI implements PlatformAPI {
       useChatInfoDatabase: true,
       databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
       filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      // models: useModels({
-      //   chat: ChatBaseModel,
-      // }),
     })
 
     this.airgram.use(new Auth({
@@ -128,12 +124,6 @@ export default class TelegramAPI implements PlatformAPI {
     if (session) {
       this.afterLogin()
     }
-    // airgram.use((ctx, next) => {
-    //   if ('update' in ctx) {
-    //     console.log(`[all updates][${ctx._}]`, JSON.stringify(ctx.update))
-    //   }
-    //   return next()
-    // })
   }
 
   private state = 'phone'
