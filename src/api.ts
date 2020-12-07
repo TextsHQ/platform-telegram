@@ -3,7 +3,6 @@ import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, InputMessageAnimationInput, InputMessageVoiceNoteInput } from 'airgram'
-// import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
 
@@ -15,7 +14,7 @@ const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
 
-function getFileInput(msgContent: MessageContent, filePath: string, textInput?: FormattedTextInput): InputMessageContentInputUnion {
+function getFileInput(msgContent: MessageContent, filePath: string, caption?: FormattedTextInput): InputMessageContentInputUnion {
   const fileInput: InputFileInputUnion = {
     _: 'inputFileLocal',
     path: filePath,
@@ -25,39 +24,39 @@ function getFileInput(msgContent: MessageContent, filePath: string, textInput?: 
       return {
         _: 'inputMessagePhoto',
         photo: fileInput,
-        caption: textInput,
+        caption,
       } as InputMessagePhotoInput
     case 'audio':
       if (msgContent.isRecordedAudio) {
         return {
           _: 'inputMessageVoiceNote',
           voiceInput: fileInput,
-          caption: textInput,
+          caption,
         } as InputMessageVoiceNoteInput
       }
       return {
         _: 'inputMessageAudio',
         audio: fileInput,
-        caption: textInput,
+        caption,
       } as InputMessageAudioInput
     case 'video':
       if (msgContent.isGif) {
         return {
           _: 'inputMessageAnimation',
           animation: fileInput,
-          caption: textInput,
+          caption,
         } as InputMessageAnimationInput
       }
       return {
         _: 'inputMessageVideo',
         video: fileInput,
-        caption: textInput,
+        caption,
       } as InputMessageVideoInput
     default:
       return {
         _: 'inputMessageDocument',
         document: fileInput,
-        caption: textInput,
+        caption,
       } as InputMessageDocumentInput
   }
 }
