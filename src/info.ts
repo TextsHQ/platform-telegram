@@ -4,6 +4,7 @@ const info: PlatformInfo = {
   name: 'telegram',
   version: '1.0.0',
   displayName: 'Telegram',
+  tags: ['Beta'],
   icon: `<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="16" height="16" rx="5" fill="#179CDE"/>
 <path d="M6.13735 12.1673C5.80961 12.1673 5.86533 12.0436 5.75229 11.7315L4.78862 8.56005L12.2067 4.15921" fill="#C8DAEA"/>
