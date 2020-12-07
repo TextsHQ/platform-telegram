@@ -25,39 +25,39 @@ function getFileInput(msgContent: MessageContent, filePath: string, caption?: Fo
         _: 'inputMessagePhoto',
         photo: fileInput,
         caption,
-      } as InputMessagePhotoInput
+      }
     case 'audio':
       if (msgContent.isRecordedAudio) {
         return {
           _: 'inputMessageVoiceNote',
-          voiceInput: fileInput,
+          voiceNote: fileInput,
           caption,
-        } as InputMessageVoiceNoteInput
+        }
       }
       return {
         _: 'inputMessageAudio',
         audio: fileInput,
         caption,
-      } as InputMessageAudioInput
+      }
     case 'video':
       if (msgContent.isGif) {
         return {
           _: 'inputMessageAnimation',
           animation: fileInput,
           caption,
-        } as InputMessageAnimationInput
+        }
       }
       return {
         _: 'inputMessageVideo',
         video: fileInput,
         caption,
-      } as InputMessageVideoInput
+      }
     default:
       return {
         _: 'inputMessageDocument',
         document: fileInput,
         caption,
-      } as InputMessageDocumentInput
+      }
   }
 }
 
