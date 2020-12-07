@@ -1,6 +1,6 @@
 import path from 'path'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, isError } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -204,7 +204,16 @@ export default class TelegramAPI implements PlatformAPI {
 
   searchUsers = async (typed: string) => []
 
-  createThread = (userIDs: string[]) => null
+  createThread = async (userIDs: string[], title?: string) => {
+    const res = await this.airgram.api.createNewBasicGroupChat({
+      userIds: userIDs.map(Number),
+      title
+    })
+    return !isError(toObject(res))
+  }
+
+  deleteThread = (threadID: string) => {
+  }
 
   private getUser = async (userId: number) => {
     const res = await this.airgram.api.getUser({ userId })
