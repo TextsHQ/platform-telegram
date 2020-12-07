@@ -1,6 +1,8 @@
 import path from 'path'
+import os from 'os'
+import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, isError } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, InputMessagePhotoInput, InputMessageAudioInput, InputMessageVideoInput, InputMessageDocumentInput, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -10,12 +12,67 @@ import { mapThread, mapMessage, mapMessages, mapUser } from './mappers'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 
+type SendMessageResolveFunction = (value: Message[]) => void
+type GetAssetResolveFunction = (value: string) => void
+
+function getFileInput(filePath: string, mimeType: string, textInput?: FormattedTextInput): InputMessageContentInputUnion {
+  const fileInput: InputFileInputUnion = {
+    _: 'inputFileLocal',
+    path: filePath,
+  }
+  switch (mimeType.split('/')[0]) {
+    case 'image':
+      return {
+        _: 'inputMessagePhoto',
+        photo: fileInput,
+        caption: textInput,
+      } as InputMessagePhotoInput
+    case 'audio':
+      return {
+        _: 'inputMessageAudio',
+        audio: fileInput,
+        caption: textInput,
+      } as InputMessageAudioInput
+    case 'video':
+      return {
+        _: 'inputMessageVideo',
+        video: fileInput,
+        caption: textInput,
+      } as InputMessageVideoInput
+    default:
+      return {
+        _: 'inputMessageDocument',
+        document: fileInput,
+        caption: textInput,
+      } as InputMessageDocumentInput
+  }
+}
+
+async function getInputMessageContent({ text, filePath, mimeType, fileBuffer, fileName }: MessageContent): Promise<InputMessageContentInputUnion> {
+  const formattedTextInput: FormattedTextInput = text ? {
+    _: 'formattedText',
+    text,
+  } : undefined
+  const textInput: InputMessageTextInput = text ? {
+    _: 'inputMessageText',
+    text: formattedTextInput,
+  } : undefined
+  if (filePath) {
+    return getFileInput(filePath, mimeType, formattedTextInput)
+  }
+  if (fileBuffer) {
+    const tmpFilePath = path.join(os.tmpdir(), fileName || Math.random().toString(36))
+    await fs.writeFile(tmpFilePath, fileBuffer)
+    return getFileInput(filePath, mimeType, formattedTextInput)
+    // TODO fs.unlink(tmpFilePath).catch(() => {})
+  }
+  return textInput
+}
+
 export default class TelegramAPI implements PlatformAPI {
   airgram: Airgram
 
   private accountInfo: AccountInfo
-
-  private currentUser = null
 
   private promptCode: { resolve: (value: string) => void, reject: (reason: any) => void }
 
@@ -25,9 +82,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private lastChat: ChatUnion = null
 
-  private pendingMessages: {[key: number]: Function} = {}
+  private sendMessageResolvers = new Map<number, SendMessageResolveFunction>()
 
-  private pendingFiles: {[key: number]: Function} = {}
+  private getAssetResolvers = new Map<number, GetAssetResolveFunction>()
 
   init = async (session: any, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
@@ -93,7 +150,6 @@ export default class TelegramAPI implements PlatformAPI {
       objectName: 'message',
       objectIDs: {
         threadID: tgMessage.chatId.toString(),
-        messageID: message.id,
       },
       entries: [message],
     }
@@ -125,10 +181,10 @@ export default class TelegramAPI implements PlatformAPI {
       this.handleMessageUpdate(update.message)
     })
     this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
-      if (this.pendingMessages[update.oldMessageId]) {
-        this.pendingMessages[update.oldMessageId](true)
-        delete this.pendingMessages[update.oldMessageId]
-      }
+      const resolve = this.sendMessageResolvers.get(update.oldMessageId)
+      if (!resolve) return console.warn('unable to find promise resolver for update.oldMessageId')
+      resolve([mapMessage(update.message)])
+      this.sendMessageResolvers.delete(update.oldMessageId)
     })
     this.airgram.on(UPDATE.updateDeleteMessages, async ({ update }) => {
       if (!update.isPermanent) {
@@ -161,9 +217,10 @@ export default class TelegramAPI implements PlatformAPI {
       }
     })
     this.airgram.on(UPDATE.updateFile, async ({ update }) => {
-      if (update.file.local.isDownloadingCompleted && update.file.local.path && this.pendingFiles[update.file.id]) {
-        this.pendingFiles[update.file.id](`file://${update.file.local.path}`)
-        delete this.pendingFiles[update.file.id]
+      const resolve = this.getAssetResolvers.get(update.file.id)
+      if (resolve && update.file.local.isDownloadingCompleted && update.file.local.path) {
+        resolve(`file://${update.file.local.path}`)
+        this.getAssetResolvers.delete(update.file.id)
       }
     })
   }
@@ -189,10 +246,9 @@ export default class TelegramAPI implements PlatformAPI {
   getCurrentUser = async (): Promise<CurrentUser> => {
     const me = await this.airgram.api.getMe()
     const user = toObject(me)
-    this.currentUser = user
     return {
-      id: String(user.id),
-      displayText: user.username,
+      ...mapUser(user, this.accountInfo.accountID),
+      displayText: (user.username ? '@' + user.username : '') || user.phoneNumber,
     }
   }
 
@@ -319,61 +375,19 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  sendMessage = async (threadID: string, { text, filePath, mimeType }: MessageContent, { quotedMessageID }: MessageSendOptions) : Promise<boolean> => {
-    let content
-    if (text) {
-      content = {
-        _: 'inputMessageText',
-        text: {
-          _: 'formattedText',
-          text,
-        },
-      }
-    } else if (filePath) {
-      const fileInput = {
-        _: 'inputFileLocal',
-        path: filePath,
-      }
-      switch (mimeType.split('/')[0]) {
-        case 'image':
-          content = {
-            _: 'inputMessagePhoto',
-            photo: fileInput,
-          }
-          break
-        case 'audio':
-          content = {
-            _: 'inputMessageAudio',
-            audio: fileInput,
-          }
-          break
-        case 'video':
-          content = {
-            _: 'inputMessageVideo',
-            video: fileInput,
-          }
-          break
-        default:
-          content = {
-            _: 'inputMessageDocument',
-            document: fileInput,
-          }
-          break
-      }
-    }
-    if (content) {
-      const res = await this.airgram.api.sendMessage({
-        chatId: Number(threadID),
-        messageThreadId: 0,
-        replyToMessageId: +quotedMessageID || 0,
-        inputMessageContent: content,
-      })
-      return new Promise(resolve => {
-        const tmpId = toObject(res).id
-        this.pendingMessages[tmpId] = resolve
-      })
-    }
-    return false
+  sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
+    const inputMessageContent = await getInputMessageContent(msgContent)
+    if (!inputMessageContent) return false
+    const res = await this.airgram.api.sendMessage({
+      chatId: Number(threadID),
+      messageThreadId: 0,
+      replyToMessageId: +quotedMessageID || 0,
+      inputMessageContent,
+    })
+    return new Promise<Message[]>(resolve => {
+      const tmpId = toObject(res).id
+      this.sendMessageResolvers.set(tmpId, resolve)
+    })
   }
 
   sendTypingIndicator = (threadID: string, typing: boolean) => {
@@ -407,6 +421,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getAsset = async (type: string, fileIdStr: string) => {
+    texts.log('get asset', type, fileIdStr)
     if (type !== 'file') throw new Error('unknown asset type')
     const fileId = +fileIdStr
     await this.airgram.api.downloadFile({
@@ -414,7 +429,7 @@ export default class TelegramAPI implements PlatformAPI {
       priority: 32,
     })
     return new Promise<string>(resolve => {
-      this.pendingFiles[fileId] = resolve
+      this.getAssetResolvers.set(fileId, resolve)
     })
   }
 }

@@ -24,6 +24,9 @@ const info: PlatformInfo = {
     Attribute.CAN_MESSAGE_USERNAME,
     Attribute.SUPPORTS_QUOTED_MESSAGES,
   ]),
+  attachments: {
+    supportsCaption: true,
+  },
 }
 
 export default info
