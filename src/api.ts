@@ -1,6 +1,6 @@
 import path from 'path'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, isError } from 'airgram'
 // import { useModels, ChatBaseModel } from '@airgram/use-models'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions } from '@textshq/platform-sdk'
@@ -22,6 +22,8 @@ export default class TelegramAPI implements PlatformAPI {
   private promptPhoneNumber: { resolve: (value: string) => void, reject: (reason: any) => void }
 
   private getThreadsDone = false
+
+  private lastChat: ChatUnion = null
 
   private pendingMessages: {[key: number]: Function} = {}
 
@@ -202,9 +204,28 @@ export default class TelegramAPI implements PlatformAPI {
 
   serializeSession = () => true
 
-  searchUsers = async (typed: string) => []
+  searchUsers = async (query: string) => {
+    const res = await this.airgram.api.searchContacts({
+      query,
+      limit: 20,
+    })
+    const { userIds } = toObject(res)
+    return Promise.all(userIds.map(userId => this.getUser(userId)))
+  }
 
-  createThread = (userIDs: string[]) => null
+  createThread = async (userIDs: string[], title?: string) => {
+    const res = await this.airgram.api.createNewBasicGroupChat({
+      userIds: userIDs.map(Number),
+      title,
+    })
+    return !isError(toObject(res))
+  }
+
+  deleteThread = (threadID: string) => {
+    this.airgram.api.leaveChat({
+      chatId: +threadID,
+    })
+  }
 
   private getUser = async (userId: number) => {
     const res = await this.airgram.api.getUser({ userId })
@@ -253,12 +274,17 @@ export default class TelegramAPI implements PlatformAPI {
     const chatsResponse = await this.airgram.api.getChats({
       limit,
       offsetChatId: +cursor,
-      offsetOrder: MAX_SIGNED_64BIT_NUMBER,
+      offsetOrder: (cursor && this.lastChat)
+        ? this.lastChat.positions.find(x => x.list._ === 'chatListMain').order
+        : MAX_SIGNED_64BIT_NUMBER,
     })
     const { chatIds } = toObject(chatsResponse)
-    const items = await Promise.all(chatIds.map(async chatId => {
+    const chats = await Promise.all(chatIds.map(async chatId => {
       const chatResponse = await this.airgram.api.getChat({ chatId })
-      const chat = toObject(chatResponse)
+      return toObject(chatResponse)
+    }))
+    this.lastChat = chats[chats.length - 1]
+    const items = await Promise.all(chats.map(async chat => {
       const participants = await this._getParticipants(chat)
       return mapThread(chat, participants, this.accountInfo.accountID)
     }))
