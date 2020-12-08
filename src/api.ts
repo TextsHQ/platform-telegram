@@ -420,6 +420,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   sendReadReceipt = async (threadID: string, messageID: string) => {
+    await this.airgram.api.toggleChatIsMarkedAsUnread({
+      chatId: +threadID,
+      isMarkedAsUnread: false,
+    })
     const res = await this.airgram.api.viewMessages({
       chatId: +threadID,
       messageThreadId: 0,
