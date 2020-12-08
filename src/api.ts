@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember } from 'airgram'
+import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat } from 'airgram'
 import { UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
 
@@ -166,6 +166,11 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
+  private asyncMapThread = async (chat: Chat) => {
+    const participants = await this._getParticipants(chat)
+    return mapThread(chat, participants, this.accountInfo.accountID)
+  }
+
   private afterLogin = () => {
     this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
       if (!this.getThreadsDone) {
@@ -174,8 +179,7 @@ export default class TelegramAPI implements PlatformAPI {
         // mess up thread timestamp.
         return
       }
-      const participants = await this._getParticipants(update.chat)
-      const thread = mapThread(update.chat, participants, this.accountInfo.accountID)
+      const thread = await this.asyncMapThread(update.chat)
       const event: ServerEvent = {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'upsert',
@@ -280,11 +284,16 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   createThread = async (userIDs: string[], title?: string) => {
+    if (userIDs.length === 0) return
+    if (userIDs.length === 1) {
+      throw Error('not implemented')
+    }
     const res = await this.airgram.api.createNewBasicGroupChat({
       userIds: userIDs.map(Number),
       title,
     })
-    return !isError(toObject(res))
+    const chat = toObject(res)
+    return this.asyncMapThread(chat)
   }
 
   deleteThread = (threadID: string) => {
@@ -346,10 +355,7 @@ export default class TelegramAPI implements PlatformAPI {
       return toObject(chatResponse)
     }))
     this.lastChat = chats[chats.length - 1]
-    const items = await Promise.all(chats.map(async chat => {
-      const participants = await this._getParticipants(chat)
-      return mapThread(chat, participants, this.accountInfo.accountID)
-    }))
+    const items = await Promise.all(chats.map(this.asyncMapThread))
     this.getThreadsDone = true
     return {
       items,
