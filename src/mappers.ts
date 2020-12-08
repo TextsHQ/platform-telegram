@@ -292,7 +292,7 @@ export function mapUser(user: TGUser, accountID: string): User {
   return {
     id: user.id.toString(),
     username: user.username,
-    phoneNumber: '+' + user.phoneNumber,
+    phoneNumber: user.phoneNumber ? '+' + user.phoneNumber : undefined,
     isVerified: user.isVerified,
     fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     imgURL,
