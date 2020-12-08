@@ -416,10 +416,18 @@ export default class TelegramAPI implements PlatformAPI {
       messageIds: [+messageID],
       revoke: forEveryone,
     })
-    return toObject(res)._ === 'ok'
+    return !isError(toObject(res))
   }
 
-  sendReadReceipt = async (threadID: string, messageID: string) => {}
+  sendReadReceipt = async (threadID: string, messageID: string) => {
+    const res = await this.airgram.api.viewMessages({
+      chatId: +threadID,
+      messageThreadId: 0,
+      messageIds: [+messageID],
+      forceRead: true
+    })
+    return !isError(toObject(res))
+  }
 
   private lastChatID: number
 
