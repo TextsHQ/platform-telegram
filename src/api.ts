@@ -320,14 +320,13 @@ export default class TelegramAPI implements PlatformAPI {
         if (!supergroup.canGetMembers) {
           return []
         }
-        return []
-        // const membersResponse = await this.airgram.api.getSupergroupMembers({
-        //   supergroupId: chat.id,
-        //   limit: 100,
-        // })
-        // const { members } = toObject(membersResponse)
-        // const participants = await Promise.all(members.map(member => this.getParticipant(member.userId)))
-        // return participants
+        const membersResponse = await this.airgram.api.getSupergroupMembers({
+          supergroupId: chat.type.supergroupId,
+          limit: 256, // random limit
+        })
+        const { members } = toObject(membersResponse)
+        const participants = await Promise.all(members.map(member => this.getUser(member.userId)))
+        return participants
       }
       default:
         return []
