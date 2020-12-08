@@ -83,7 +83,11 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
   return textInput
 }
 
-const tdlibPath = texts.constants.BUILD_DIR_PATH + '/libtdjson.dylib'
+const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, {
+  darwin: 'libtdjson.dylib',
+  linux: 'libtdjson.so',
+  windows: 'tdjson.dll',
+}[process.platform])
 
 export default class TelegramAPI implements PlatformAPI {
   airgram: Airgram
