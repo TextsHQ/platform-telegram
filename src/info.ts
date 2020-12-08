@@ -24,6 +24,7 @@ const info: PlatformInfo = {
   attributes: new Set([
     Attribute.CAN_MESSAGE_USERNAME,
     Attribute.SUPPORTS_QUOTED_MESSAGES,
+    Attribute.SUPPORTS_MARK_AS_UNREAD,
   ]),
   attachments: {
     supportsCaption: true,

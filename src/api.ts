@@ -424,9 +424,16 @@ export default class TelegramAPI implements PlatformAPI {
       chatId: +threadID,
       messageThreadId: 0,
       messageIds: [+messageID],
-      forceRead: true
+      forceRead: true,
     })
     return !isError(toObject(res))
+  }
+
+  markAsUnread = (threadID: string) => {
+    this.airgram.api.toggleChatIsMarkedAsUnread({
+      chatId: +threadID,
+      isMarkedAsUnread: true,
+    })
   }
 
   private lastChatID: number
