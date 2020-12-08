@@ -50,6 +50,8 @@ function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion) {
   switch (row._) {
     case 'inlineKeyboardButtonTypeUrl':
       return row.url
+    case 'inlineKeyboardButtonTypeSwitchInline':
+      return 'texts://fill-textarea?text=' + encodeURIComponent(row.query)
   }
 }
 
