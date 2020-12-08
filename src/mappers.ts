@@ -246,6 +246,26 @@ export function mapMessage(msg: TGMessage) {
       mapped.isAction = true
       mapped.parseTemplate = true
       break
+    case 'messageChatAddMembers':
+      mapped.text = `${msg.content.memberUserIds.map(m => `{{${m}}}`).join(', ')} joined the group`
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+        participantIDs: msg.content.memberUserIds.map(num => String(num)),
+        actorParticipantID: null,
+      }
+      break
+    case 'messageChatDeleteMember':
+      mapped.text = `{{${msg.content.userId}}} left the group`
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
+        participantIDs: [String(msg.content.userId)],
+        actorParticipantID: null,
+      }
+      break
     case 'messageChatJoinByLink':
       mapped.text = '{{sender}} joined the group via invite link'
       mapped.isAction = true
