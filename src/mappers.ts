@@ -230,6 +230,13 @@ export function mapMessage(msg: TGMessage) {
           break
       }
       break
+    case 'messagePoll': {
+      const { poll } = msg.content
+      mapped.textHeading = `${poll.isAnonymous ? 'Anonymous ' : ''}Poll
+
+${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `— ${option.votePercentage}%`, `(${option.voterCount})`].filter(Boolean).join('\t')).join('\n')}`
+      break
+    }
 
     case 'messageContactRegistered':
       mapped.text = '{{sender}} joined Telegram'
