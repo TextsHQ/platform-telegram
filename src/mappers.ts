@@ -277,7 +277,16 @@ export function mapMessage(msg: TGMessage) {
       }
       break
     case 'messageChatChangePhoto':
-      mapped.text = '{{sender}} updated group photo'
+      mapped.text = '{{sender}} updated the group photo'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_IMG_CHANGED,
+        actorParticipantID: mapped.senderID,
+      }
+      break
+    case 'messageChatDeletePhoto':
+      mapped.text = '{{sender}} deleted the group photo'
       mapped.isAction = true
       mapped.parseTemplate = true
       mapped.action = {
