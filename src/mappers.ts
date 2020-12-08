@@ -231,6 +231,11 @@ export function mapMessage(msg: TGMessage) {
       }
       break
 
+    case 'messageContactRegistered':
+      mapped.text = '{{sender}} joined Telegram'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      break
     case 'messageChatChangeTitle':
       mapped.text = `{{sender}} changed the thread title to "${msg.content.title}"`
       mapped.isAction = true
@@ -241,11 +246,6 @@ export function mapMessage(msg: TGMessage) {
         actorParticipantID: mapped.senderID,
       }
       break
-    case 'messageContactRegistered':
-      mapped.text = '{{sender}} joined Telegram'
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      break
     case 'messageChatAddMembers':
       mapped.text = `${msg.content.memberUserIds.map(m => `{{${m}}}`).join(', ')} joined the group`
       mapped.isAction = true
@@ -253,7 +253,7 @@ export function mapMessage(msg: TGMessage) {
       mapped.action = {
         type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
         participantIDs: msg.content.memberUserIds.map(num => String(num)),
-        actorParticipantID: null,
+        actorParticipantID: undefined,
       }
       break
     case 'messageChatDeleteMember':
@@ -263,13 +263,27 @@ export function mapMessage(msg: TGMessage) {
       mapped.action = {
         type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
         participantIDs: [String(msg.content.userId)],
-        actorParticipantID: null,
+        actorParticipantID: undefined,
       }
       break
     case 'messageChatJoinByLink':
       mapped.text = '{{sender}} joined the group via invite link'
       mapped.isAction = true
       mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+        participantIDs: [mapped.senderID],
+        actorParticipantID: undefined,
+      }
+      break
+    case 'messageChatChangePhoto':
+      mapped.text = '{{sender}} updated group photo'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_IMG_CHANGED,
+        actorParticipantID: mapped.senderID,
+      }
       break
     case 'messageBasicGroupChatCreate':
     case 'messageSupergroupChatCreate':
