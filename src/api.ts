@@ -280,7 +280,10 @@ export default class TelegramAPI implements PlatformAPI {
       limit: 20,
     })
     const { userIds } = toObject(res)
-    return Promise.all(userIds.map(userId => this.getUser(userId)))
+    return Promise.all(userIds.map(async userId => {
+      const user = await this.getUser(userId)
+      return mapUser(user, this.accountInfo.accountID)
+    }))
   }
 
   createThread = async (userIDs: string[], title?: string) => {
@@ -304,11 +307,10 @@ export default class TelegramAPI implements PlatformAPI {
 
   private getUser = async (userId: number) => {
     const res = await this.airgram.api.getUser({ userId })
-    const user = toObject(res)
-    return mapUser(user, this.accountInfo.accountID)
+    return toObject(res)
   }
 
-  private _getParticipants = async (chat: ChatUnion): Promise<Participant[]> => {
+  private _getParticipants = async (chat: ChatUnion) => {
     const mapMembers = (members: ChatMember[]) => Promise.all(members.map(member => this.getUser(member.userId)))
     switch (chat.type._) {
       case 'chatTypePrivate':

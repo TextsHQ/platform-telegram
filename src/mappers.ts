@@ -1,4 +1,4 @@
-import { Message, Thread, User, Participant, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, Size } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink } from '@textshq/platform-sdk'
 import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage } from 'airgram'
 import { CHAT_TYPE } from '@airgram/constants'
 
@@ -322,7 +322,7 @@ export function mapUser(user: TGUser, accountID: string): User {
   }
 }
 
-export function mapThread(thread: Chat, members: Participant[], accountID: string): Thread {
+export function mapThread(thread: Chat, members: TGUser[], accountID: string): Thread {
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage)] : []
   const imgFile = thread.photo?.small
   const t: Thread = {
@@ -341,7 +341,7 @@ export function mapThread(thread: Chat, members: Participant[], accountID: strin
     },
     participants: {
       hasMore: false,
-      items: members,
+      items: members.map(m => mapUser(m, accountID)),
     },
   }
   return t
