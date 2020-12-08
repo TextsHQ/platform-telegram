@@ -1,5 +1,5 @@
 import type { FormEvent, ChangeEvent } from 'react'
-// import PhoneInput from 'react-phone-number-input'
+import PhoneInput from 'react-phone-number-input/input'
 import { PlatformAPI, LoginCreds, LoginResult, texts } from '@textshq/platform-sdk'
 
 const { React } = texts
@@ -19,9 +19,6 @@ const TelegramAuth: React.FC<{
       setShow(['code'])
     }
   }
-  const onPhoneNumberChange = (ev: ChangeEvent<HTMLInputElement>) => {
-    setPhoneNumber(ev.target.value)
-  }
   const onCodeChange = (ev: ChangeEvent<HTMLInputElement>) => {
     setCode(ev.target.value)
   }
@@ -31,7 +28,7 @@ const TelegramAuth: React.FC<{
         {show.includes('phone') && (
           <label>
             <span>Phone Number</span>
-            <input onChange={onPhoneNumberChange} value={phoneNumber} />
+            <PhoneInput onChange={setPhoneNumber} value={phoneNumber} />
           </label>
         )}
         {show.includes('code') && (
