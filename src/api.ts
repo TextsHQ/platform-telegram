@@ -107,6 +107,7 @@ export default class TelegramAPI implements PlatformAPI {
   init = async (session: any, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
     this.airgram = new Airgram({
+      // todo: databaseEncryptionKey: '',
       apiId: API_ID,
       apiHash: API_HASH,
       command: tdlibPath,
