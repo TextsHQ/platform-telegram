@@ -94,11 +94,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private accountInfo: AccountInfo
 
-  private authState : string
-
-  private promptCode: { resolve: (value: string) => void, reject: (reason: any) => void }
-
-  private promptPhoneNumber: { resolve: (value: string) => void, reject: (reason: any) => void }
+  private authState: string
 
   private getThreadsDone = false
 
