@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, UpdateAuthorizationState } from 'airgram'
+import { Airgram, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion } from 'airgram'
 import { AUTHORIZATION_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
 
@@ -90,11 +90,11 @@ const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, {
 }[process.platform])
 
 export default class TelegramAPI implements PlatformAPI {
-  airgram: Airgram
+  private airgram: Airgram
 
   private accountInfo: AccountInfo
 
-  private authState: string
+  private authState: AuthorizationStateUnion
 
   private getThreadsDone = false
 
@@ -115,42 +115,34 @@ export default class TelegramAPI implements PlatformAPI {
       databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
       filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
     })
-
     if (session) {
       this.afterLogin()
       return
     }
-
-    this.airgram.use((ctx, next) => {
-      if ('update' in ctx && ctx.update._ === UPDATE.updateAuthorizationState) {
-        const update = (ctx.update as unknown) as UpdateAuthorizationState
-        this.authState = update.authorizationState._
-      }
-      return next()
+    this.airgram.on(UPDATE.updateAuthorizationState, ({ update }) => {
+      this.authState = update.authorizationState
     })
   }
 
   login = async (creds: LoginCreds): Promise<LoginResult> => {
     const { phoneNumber, code } = creds.custom
-    if (this.authState === AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber) {
-      const res = await this.airgram.api.setAuthenticationPhoneNumber({
-        phoneNumber,
-      })
+    if (this.authState._ === AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber) {
+      const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
       const data = res.response
       if (isError(data)) {
         return { type: 'error', errorMessage: data.message }
       }
       return { type: 'code_required' }
-    } if (this.authState === AUTHORIZATION_STATE.authorizationStateWaitCode) {
-      const res = await this.airgram.api.checkAuthenticationCode({
-        code,
-      })
+    }
+    if (this.authState._ === AUTHORIZATION_STATE.authorizationStateWaitCode) {
+      const res = await this.airgram.api.checkAuthenticationCode({ code })
       const data = res.response
       if (isError(data)) {
         return { type: 'error', errorMessage: data.message }
       }
       return { type: 'success' }
     }
+    return { type: 'error', errorMessage: this.authState._ }
   }
 
   private handleMessageUpdate = (tgMessage: TGMessage) => {
