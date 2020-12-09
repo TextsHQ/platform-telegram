@@ -20,7 +20,7 @@ const info: PlatformInfo = {
   loginMode: 'custom',
   auth: texts.React?.lazy(() => import('./auth')),
   deletionMode: MessageDeletionMode.DELETE_FOR_EVERYONE,
-  typingDurationMs: 3000,
+  typingDurationMs: 5_000,
   attributes: new Set([
     Attribute.CAN_MESSAGE_USERNAME,
     Attribute.SUPPORTS_QUOTED_MESSAGES,

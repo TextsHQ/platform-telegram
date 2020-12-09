@@ -220,7 +220,7 @@ export default class TelegramAPI implements PlatformAPI {
             typing: true,
             threadID: update.chatId.toString(),
             participantID: update.userId.toString(),
-            durationMs: 3000,
+            durationMs: 5_000,
           }])
         }
         default:
