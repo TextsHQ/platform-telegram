@@ -312,6 +312,10 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
         title: msg.content.title,
       }
       break
+    case 'messageChatUpgradeFrom':
+      mapped.text = `{{sender}} created the group "${msg.content.title}"`
+      mapped.isAction = true
+      mapped.parseTemplate = true
   }
   return mapped
 }
