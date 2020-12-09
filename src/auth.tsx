@@ -9,7 +9,7 @@ const TelegramAuth: React.FC<{
 }> = ({ api, login }) => {
   const [loading, setLoading] = React.useState(false)
   const [show, setShow] = React.useState(['phone'])
-  const [phoneNumber, setPhoneNumber] = React.useState('')
+  const [phoneNumber, setPhoneNumber] = React.useState('+')
   const [code, setCode] = React.useState('')
   const onSubmit = async (ev: FormEvent<HTMLFormElement>) => {
     ev.preventDefault()
@@ -30,7 +30,7 @@ const TelegramAuth: React.FC<{
         {show.includes('phone') && (
           <label>
             <span>Phone Number</span>
-            <PhoneInput onChange={setPhoneNumber} value={phoneNumber} />
+            <PhoneInput onChange={setPhoneNumber} value={phoneNumber} autoFocus />
           </label>
         )}
         {show.includes('code') && (
@@ -38,7 +38,7 @@ const TelegramAuth: React.FC<{
             <div>Authentication code has been sent to {phoneNumber}</div>
             <label>
               <span>Code</span>
-              <input onChange={onCodeChange} value={code} />
+              <input onChange={onCodeChange} value={code} autoFocus />
             </label>
           </>
         )}
