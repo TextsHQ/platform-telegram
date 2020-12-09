@@ -17,7 +17,7 @@
     "airgram": "^3.3.0",
     "bluebird": "^3.7.2",
     "lodash": "^4.17.20",
-    "react": "file:./react",
+    "react": "link:./react",
     "react-phone-number-input": "^3.1.8",
     "rimraf": "^3.0.2"
   },

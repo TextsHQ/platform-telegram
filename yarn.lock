@@ -1769,8 +1769,9 @@ react-phone-number-input@^3.1.8:
     libphonenumber-js "^1.9.6"
     prop-types "^15.7.2"
 
-"react@file:./react":
+"react@link:./react":
   version "0.0.0"
+  uid ""
 
 read-pkg-up@^2.0.0:
   version "2.0.0"
