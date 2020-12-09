@@ -15,10 +15,12 @@ const TelegramAuth: React.FC<{
   const [code, setCode] = React.useState('')
   const onSubmit = async (ev: FormEvent<HTMLFormElement>) => {
     ev.preventDefault()
+    setLoading(true)
     const result = await login({ custom: { phoneNumber, code } })
     if (result.type === 'code_required') {
       setShow(['code'])
     }
+    setLoading(false)
   }
   const onCodeChange = (ev: ChangeEvent<HTMLInputElement>) => {
     setCode(ev.target.value)
@@ -34,13 +36,16 @@ const TelegramAuth: React.FC<{
           </label>
         )}
         {show.includes('code') && (
-          <label>
-            <span>Code</span>
-            <input onChange={onCodeChange} value={code} />
-          </label>
+          <>
+            <div>Authentication code has been sent to {phoneNumber}</div>
+            <label>
+              <span>Code</span>
+              <input onChange={onCodeChange} value={code} />
+            </label>
+          </>
         )}
         <label>
-      <button type="submit" disabled={submitDisabled}>{loading ? '...' : 'Login to Telegram'}</button>
+          <button type="submit" disabled={submitDisabled}>{loading ? '...' : 'Login to Telegram'}</button>
         </label>
       </form>
     </div>

@@ -2,9 +2,9 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, Auth, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat } from 'airgram'
-import { UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, Participant, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
+import { Airgram, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, UpdateAuthorizationState } from 'airgram'
+import { AUTHORIZATION_STATE, UPDATE } from '@airgram/constants'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser } from './mappers'
@@ -94,6 +94,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private accountInfo: AccountInfo
 
+  private authState : string
+
   private promptCode: { resolve: (value: string) => void, reject: (reason: any) => void }
 
   private promptPhoneNumber: { resolve: (value: string) => void, reject: (reason: any) => void }
@@ -123,37 +125,34 @@ export default class TelegramAPI implements PlatformAPI {
       return
     }
 
-    // `this.airgram.on(UPDATE.updateAuthorizationState, handler)` doesn't seem
-    // to work after `this.airgram.use(new Auth())`.
     this.airgram.use((ctx, next) => {
-      if ('update' in ctx && ctx.update._ ===  UPDATE.updateAuthorizationState) {
-        console.log('[middleware]', ctx.update)
+      if ('update' in ctx && ctx.update._ === UPDATE.updateAuthorizationState) {
+        const update = (ctx.update as unknown) as UpdateAuthorizationState
+        this.authState = update.authorizationState._
       }
       return next()
     })
-
-    this.airgram.use(new Auth({
-      code: () => new Promise((resolve, reject) => {
-        this.promptCode = { resolve, reject }
-      }),
-      phoneNumber: () => new Promise((resolve, reject) => {
-        this.promptPhoneNumber = { resolve, reject }
-      }),
-    }))
   }
-
-  private state = 'phone'
 
   login = async (creds: LoginCreds): Promise<LoginResult> => {
     const { phoneNumber, code } = creds.custom
-    if (this.state === 'phone') {
-      this.promptPhoneNumber.resolve(phoneNumber)
-      this.state = 'code'
+    if (this.authState === AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber) {
+      const res = await this.airgram.api.setAuthenticationPhoneNumber({
+        phoneNumber,
+      })
+      const data = res.response
+      if (isError(data)) {
+        return { type: 'error', errorMessage: data.message }
+      }
       return { type: 'code_required' }
-    }
-    if (this.state === 'code') {
-      this.promptCode.resolve(code)
-      this.afterLogin()
+    } if (this.authState === AUTHORIZATION_STATE.authorizationStateWaitCode) {
+      const res = await this.airgram.api.checkAuthenticationCode({
+        code,
+      })
+      const data = res.response
+      if (isError(data)) {
+        return { type: 'error', errorMessage: data.message }
+      }
       return { type: 'success' }
     }
   }
