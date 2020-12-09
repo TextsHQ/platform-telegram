@@ -229,6 +229,12 @@ export function mapMessage(msg: TGMessage) {
       })
       break
     }
+    case 'messageLocation': {
+      const { location } = msg.content
+      mapped.textHeading = msg.content.livePeriod ? '📍 Live Location' : '📍 Location'
+      mapped.text = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
+      break
+    }
     case 'messageDice':
       mapped.text = msg.content.emoji
       switch (msg.content.initialState?._) {
