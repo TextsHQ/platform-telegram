@@ -115,13 +115,11 @@ export default class TelegramAPI implements PlatformAPI {
       databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
       filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
     })
-    if (session) {
-      this.afterLogin()
-      return
-    }
     this.airgram.on(UPDATE.updateAuthorizationState, ({ update }) => {
       this.authState = update.authorizationState
+      if (texts.IS_DEV) console.log(update)
     })
+    if (session) this.afterLogin()
   }
 
   login = async (creds: LoginCreds): Promise<LoginResult> => {
@@ -140,6 +138,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (isError(data)) {
         return { type: 'error', errorMessage: data.message }
       }
+      this.afterLogin()
       return { type: 'success' }
     }
     return { type: 'error', errorMessage: this.authState._ }
@@ -168,7 +167,7 @@ export default class TelegramAPI implements PlatformAPI {
     return mapThread(chat, participants, this.accountInfo.accountID)
   }
 
-  private afterLogin = () => {
+  private registerUpdateListeners() {
     this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
       if (!this.getThreadsDone) {
         // Existing threads will be handled by getThreads, no need to duplicate
@@ -234,6 +233,10 @@ export default class TelegramAPI implements PlatformAPI {
         this.getAssetResolvers.delete(update.file.id)
       }
     })
+  }
+
+  private afterLogin = () => {
+    this.registerUpdateListeners()
   }
 
   // @ts-ignore
