@@ -1,4 +1,5 @@
 import type { FormEvent, ChangeEvent } from 'react'
+import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
 import { PlatformAPI, LoginCreds, LoginResult, texts } from '@textshq/platform-sdk'
 
@@ -22,6 +23,7 @@ const TelegramAuth: React.FC<{
   const onCodeChange = (ev: ChangeEvent<HTMLInputElement>) => {
     setCode(ev.target.value)
   }
+  const submitDisabled = !isPossiblePhoneNumber(phoneNumber)
   return (
     <div className="auth telegram-auth">
       <form onSubmit={onSubmit}>
@@ -38,7 +40,7 @@ const TelegramAuth: React.FC<{
           </label>
         )}
         <label>
-          <button type="submit">{loading ? '...' : 'Login to Telegram'}</button>
+      <button type="submit" disabled={submitDisabled}>{loading ? '...' : 'Login to Telegram'}</button>
         </label>
       </form>
     </div>

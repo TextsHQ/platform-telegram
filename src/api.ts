@@ -118,6 +118,20 @@ export default class TelegramAPI implements PlatformAPI {
       filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
     })
 
+    if (session) {
+      this.afterLogin()
+      return
+    }
+
+    // `this.airgram.on(UPDATE.updateAuthorizationState, handler)` doesn't seem
+    // to work after `this.airgram.use(new Auth())`.
+    this.airgram.use((ctx, next) => {
+      if ('update' in ctx && ctx.update._ ===  UPDATE.updateAuthorizationState) {
+        console.log('[middleware]', ctx.update)
+      }
+      return next()
+    })
+
     this.airgram.use(new Auth({
       code: () => new Promise((resolve, reject) => {
         this.promptCode = { resolve, reject }
@@ -126,10 +140,6 @@ export default class TelegramAPI implements PlatformAPI {
         this.promptPhoneNumber = { resolve, reject }
       }),
     }))
-
-    if (session) {
-      this.afterLogin()
-    }
   }
 
   private state = 'phone'
