@@ -219,6 +219,16 @@ export function mapMessage(msg: TGMessage) {
       })
       break
     }
+    case 'messageContact': {
+      const { contact } = msg.content
+      mapped.attachments.push({
+        id: String(contact.userId),
+        type: MessageAttachmentType.UNKNOWN,
+        data: Buffer.from(contact.vcard, 'utf-8'),
+        fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
+      })
+      break
+    }
     case 'messageDice':
       mapped.text = msg.content.emoji
       switch (msg.content.initialState?._) {
