@@ -104,6 +104,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private getAssetResolvers = new Map<number, GetAssetResolveFunction>()
 
+  private loginEventCallback: Function
+
   init = async (session: any, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
     this.airgram = new Airgram({
@@ -118,29 +120,41 @@ export default class TelegramAPI implements PlatformAPI {
     })
     this.airgram.on(UPDATE.updateAuthorizationState, ({ update }) => {
       this.authState = update.authorizationState
+      this.loginEventCallback?.(update.authorizationState._)
       if (texts.IS_DEV) console.log(update)
     })
     if (session) this.afterLogin()
   }
 
+  onLoginEvent = (onEvent: Function) => {
+    this.loginEventCallback = onEvent
+  }
+
   login = async (creds: LoginCreds): Promise<LoginResult> => {
-    const { phoneNumber, code } = creds.custom
-    if (this.authState._ === AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber) {
-      const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
-      const data = res.response
-      if (isError(data)) {
-        return { type: 'error', errorMessage: data.message }
+    const { phoneNumber, code, password } = creds.custom
+    switch (this.authState._) {
+      case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
+        const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
+        const data = res.response
+        if (isError(data)) return { type: 'error', errorMessage: data.message }
+        return { type: 'wait' }
       }
-      return { type: 'code_required' }
-    }
-    if (this.authState._ === AUTHORIZATION_STATE.authorizationStateWaitCode) {
-      const res = await this.airgram.api.checkAuthenticationCode({ code })
-      const data = res.response
-      if (isError(data)) {
-        return { type: 'error', errorMessage: data.message }
+      case AUTHORIZATION_STATE.authorizationStateWaitCode: {
+        const res = await this.airgram.api.checkAuthenticationCode({ code })
+        const data = res.response
+        if (isError(data)) return { type: 'error', errorMessage: data.message }
+        return { type: 'wait' }
       }
-      this.afterLogin()
-      return { type: 'success' }
+      case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
+        const res = await this.airgram.api.checkAuthenticationPassword({ password })
+        const data = res.response
+        if (isError(data)) return { type: 'error', errorMessage: data.message }
+        return { type: 'wait' }
+      }
+      case AUTHORIZATION_STATE.authorizationStateReady: {
+        this.afterLogin()
+        return { type: 'success' }
+      }
     }
     return { type: 'error', errorMessage: this.authState._ }
   }

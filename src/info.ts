@@ -18,7 +18,7 @@ const info: PlatformInfo = {
 </defs>
 </svg>`,
   loginMode: 'custom',
-  auth: texts.React?.lazy(() => import('./auth')),
+  auth: texts.React?.lazy(() => import('./AuthForm')),
   deletionMode: MessageDeletionMode.DELETE_FOR_EVERYONE,
   typingDurationMs: 5_000,
   attributes: new Set([
