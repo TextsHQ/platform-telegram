@@ -234,6 +234,37 @@ export default class TelegramAPI implements PlatformAPI {
         this.getAssetResolvers.delete(update.file.id)
       }
     })
+    this.airgram.on(UPDATE.updateChatIsMarkedAsUnread, async ({ update }) => {
+      const threadID = update.chatId.toString()
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'upsert',
+        objectName: 'thread',
+        objectIDs: { threadID },
+        entries: [
+          {
+            id: threadID,
+            isUnread: update.isMarkedAsUnread,
+          },
+        ],
+      }])
+    })
+    this.airgram.on(UPDATE.updateChatReadInbox, async ({ update }) => {
+      if (!this.getThreadsDone) return
+      const threadID = update.chatId.toString()
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'upsert',
+        objectName: 'thread',
+        objectIDs: { threadID },
+        entries: [
+          {
+            id: threadID,
+            isUnread: update.unreadCount > 0,
+          },
+        ],
+      }])
+    })
   }
 
   private afterLogin = () => {
