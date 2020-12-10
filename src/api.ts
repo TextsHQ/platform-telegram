@@ -7,7 +7,7 @@ import { AUTHORIZATION_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence } from './mappers'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 
@@ -165,6 +165,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private asyncMapThread = async (chat: Chat) => {
     const participants = await this._getParticipants(chat)
+    const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
+    this.onEvent(presenceEvents)
     return mapThread(chat, participants, this.accountInfo.accountID)
   }
 
@@ -264,6 +266,9 @@ export default class TelegramAPI implements PlatformAPI {
           },
         ],
       }])
+    })
+    this.airgram.on(UPDATE.updateUserStatus, async ({ update }) => {
+      this.onEvent([mapUserPresence(update.userId, update.status)])
     })
   }
 
