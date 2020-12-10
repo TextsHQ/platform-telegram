@@ -240,7 +240,7 @@ export default class TelegramAPI implements PlatformAPI {
       const threadID = update.chatId.toString()
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
-        mutationType: 'upsert',
+        mutationType: 'update',
         objectName: 'thread',
         objectIDs: { threadID },
         entries: [
@@ -256,7 +256,7 @@ export default class TelegramAPI implements PlatformAPI {
       const threadID = update.chatId.toString()
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
-        mutationType: 'upsert',
+        mutationType: 'update',
         objectName: 'thread',
         objectIDs: { threadID },
         entries: [
