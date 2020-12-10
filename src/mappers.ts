@@ -1,6 +1,6 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage } from 'airgram'
-import { CHAT_TYPE } from '@airgram/constants'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType } from '@textshq/platform-sdk'
+import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion } from 'airgram'
+import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 
 function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
   if (!entities || entities.length === 0) return
@@ -346,6 +346,38 @@ export function mapUser(user: TGUser, accountID: string): User {
     isVerified: user.isVerified,
     fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     imgURL,
+  }
+}
+
+export function mapUserPresence(userId: number, status: UserStatusUnion) : UserPresenceEvent {
+  const presence = {
+    userID: userId.toString(),
+    isActive: false,
+    lastActive: null,
+  }
+  const oneDay = 24 * 3600 * 1000
+  switch (status._) {
+    case USER_STATUS.userStatusOnline:
+      presence.isActive = true
+      presence.lastActive = new Date()
+      break
+    case USER_STATUS.userStatusRecently:
+      presence.isActive = true
+      presence.lastActive = new Date(Date.now() - 3600 * 1000)
+      break
+    case USER_STATUS.userStatusOffline:
+      presence.lastActive = new Date(status.wasOnline * 1000)
+      break
+    case USER_STATUS.userStatusLastWeek:
+      presence.lastActive = new Date(Date.now() - 7 * oneDay)
+      break
+    case USER_STATUS.userStatusLastMonth:
+      presence.lastActive = new Date(Date.now() - 30 * oneDay)
+      break
+  }
+  return {
+    type: ServerEventType.USER_PRESENCE_UPDATED,
+    presence,
   }
 }
 
