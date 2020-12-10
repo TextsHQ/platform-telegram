@@ -57,11 +57,23 @@ function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion) {
 
 function getButtons(replyMarkup: ReplyMarkupUnion) {
   if (!replyMarkup) return
-  if (replyMarkup._ !== 'replyMarkupInlineKeyboard') return
-  return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => ({
-    label: row.text,
-    linkURL: getButtonLinkURL(row.type),
-  })))
+  switch (replyMarkup._) {
+    case 'replyMarkupInlineKeyboard':
+      return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => ({
+        label: row.text,
+        linkURL: getButtonLinkURL(row.type),
+      })))
+    case 'replyMarkupShowKeyboard':
+      return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => {
+        if (row.type._ === 'keyboardButtonTypeText') {
+          return {
+            label: row.text,
+            linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text), // todo: should actually be sent on clicking instantly
+          }
+        }
+        return undefined // todo
+      })).filter(Boolean)
+  }
 }
 
 const getAssetURL = (file: File) =>
