@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
 import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion } from 'airgram'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 
@@ -349,8 +349,8 @@ export function mapUser(user: TGUser, accountID: string): User {
   }
 }
 
-export function mapUserPresence(userId: number, status: UserStatusUnion) : UserPresenceEvent {
-  const presence = {
+export function mapUserPresence(userId: number, status: UserStatusUnion): UserPresenceEvent {
+  const presence: UserPresence = {
     userID: userId.toString(),
     isActive: false,
     lastActive: null,
@@ -365,9 +365,9 @@ export function mapUserPresence(userId: number, status: UserStatusUnion) : UserP
       presence.isActive = true
       presence.lastActive = new Date(Date.now() - 3600 * 1000)
       break
-    case USER_STATUS.userStatusOffline:
-      presence.lastActive = new Date(status.wasOnline * 1000)
-      break
+    // case USER_STATUS.userStatusOffline:
+    //   presence.lastActive = new Date(status.wasOnline * 1000)
+    //   break
     case USER_STATUS.userStatusLastWeek:
       presence.lastActive = new Date(Date.now() - 7 * oneDay)
       break
