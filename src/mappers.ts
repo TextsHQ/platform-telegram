@@ -1,5 +1,5 @@
 import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion } from 'airgram'
+import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker } from 'airgram'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 
 function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttributes {
@@ -133,6 +133,17 @@ export function mapMessage(msg: TGMessage) {
     mapped.text = ft.text
     mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
   }
+  const pushSticker = (sticker: Sticker) => {
+    mapped.attachments.push({
+      id: String(sticker.sticker.id),
+      srcURL: getAssetURL(sticker.sticker),
+      mimeType: 'image/tgs',
+      type: MessageAttachmentType.IMG,
+      isGif: true,
+      isSticker: true,
+      size: { width: sticker.width, height: sticker.height },
+    })
+  }
   switch (msg.content._) {
     case 'messageText':
       setFormattedText(msg.content.text)
@@ -225,14 +236,7 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageSticker': {
       const { sticker } = msg.content
-      mapped.attachments.push({
-        id: String(sticker.sticker.id),
-        srcURL: getAssetURL(sticker.sticker),
-        mimeType: 'image/tgs',
-        type: MessageAttachmentType.IMG,
-        isGif: true,
-        size: { width: sticker.width, height: sticker.height },
-      })
+      pushSticker(sticker)
       break
     }
     case 'messageContact': {
@@ -254,6 +258,14 @@ export function mapMessage(msg: TGMessage) {
     case 'messageDice':
       mapped.text = msg.content.emoji
       switch (msg.content.initialState?._) {
+        case 'diceStickersRegular':
+          mapped.textHeading = `Dice: ${msg.content.value}`
+          break
+        case 'diceStickersSlotMachine':
+          mapped.textHeading = `Slot Machine: ${msg.content.value}`
+          break
+      }
+      switch (msg.content.finalState?._) {
         case 'diceStickersRegular':
           mapped.textHeading = `Dice: ${msg.content.value}`
           break
