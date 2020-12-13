@@ -340,7 +340,10 @@ export default class TelegramAPI implements PlatformAPI {
   createThread = async (userIDs: string[], title?: string) => {
     if (userIDs.length === 0) return
     if (userIDs.length === 1) {
-      throw Error('not implemented')
+      const chatResponse = await this.airgram.api.createPrivateChat({
+        userId: +userIDs[0],
+      })
+      return this.asyncMapThread(toObject(chatResponse))
     }
     const res = await this.airgram.api.createNewBasicGroupChat({
       userIds: userIDs.map(Number),
