@@ -458,6 +458,18 @@ export default class TelegramAPI implements PlatformAPI {
     })
   }
 
+  forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[], userIDs?: string[]): Promise<boolean> => {
+    const resArr = await Promise.all(threadIDs.map(async toThreadID => {
+      const res = await this.airgram.api.forwardMessages({
+        chatId: +toThreadID,
+        fromChatId: +threadID,
+        messageIds: [+messageID]
+      })
+      return !isError(toObject(res))
+    }))
+    return resArr.every(Boolean)
+  }
+
   sendActivityIndicator = async (type: ActivityType, threadID: string) => {
     const _ = {
       [ActivityType.NONE]: 'chatActionCancel', // todo review
