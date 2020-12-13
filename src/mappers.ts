@@ -2,7 +2,7 @@ import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAt
 import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion } from 'airgram'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 
-function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
+function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttributes {
   if (!entities || entities.length === 0) return
   return {
     entities: entities.map<TextEntity>(e => {
@@ -33,6 +33,9 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
         case 'textEntityTypeTextUrl':
           if (e.type.url) return { from, to, link: e.type.url }
           break
+
+        case 'textEntityTypeMention':
+          return { from, to, mentionedUser: { username: text.slice(from, to) } }
 
         case 'textEntityTypeMentionName':
           return {
@@ -128,7 +131,7 @@ export function mapMessage(msg: TGMessage) {
   }
   const setFormattedText = (ft: FormattedText) => {
     mapped.text = ft.text
-    mapped.textAttributes = mapTextAttributes(ft.entities)
+    mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
   }
   switch (msg.content._) {
     case 'messageText':
