@@ -35,7 +35,7 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
           break
 
         case 'textEntityTypeMention':
-          return { from, to, mentionedUser: { username: text.slice(from, to) } }
+          return { from, to, mentionedUser: { username: text.slice(from, to) } } as TextEntity
 
         case 'textEntityTypeMentionName':
           return {
