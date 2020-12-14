@@ -84,9 +84,9 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
 }
 
 const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, {
-  darwin: 'libtdjson.dylib',
-  linux: 'libtdjson.so',
-  win32: 'tdjson.dll',
+  darwin: 'telegram/libtdjson.dylib',
+  linux: 'telegram/libtdjson.so',
+  win32: 'telegram/tdjson.dll',
 }[process.platform])
 
 export default class TelegramAPI implements PlatformAPI {
