@@ -270,7 +270,13 @@ export function mapMessage(msg: TGMessage) {
           mapped.textHeading = `Dice: ${msg.content.value}`
           break
         case 'diceStickersSlotMachine':
-          mapped.textHeading = `Slot Machine: ${msg.content.value}`
+          mapped.text = ''
+          mapped.textHeading = ''
+          pushSticker(msg.content.finalState.background)
+          pushSticker(msg.content.finalState.leftReel)
+          pushSticker(msg.content.finalState.centerReel)
+          pushSticker(msg.content.finalState.rightReel)
+          pushSticker(msg.content.finalState.lever)
           break
       }
       break
