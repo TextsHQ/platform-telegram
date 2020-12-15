@@ -2,14 +2,26 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, ChatUnion, toObject, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion } from 'airgram'
+import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, ErrorUnion, TDLibError, ApiResponse, BaseTdObject } from 'airgram'
 import { AUTHORIZATION_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence } from './mappers'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
+
+function toObject<T extends BaseTdObject> ({ response }: ApiResponse<any, T>): T {
+  if (isError(response)) {
+    switch (response.code) {
+      case 401:
+        throw new ReAuthError(response.message)
+      default:
+        throw new TDLibError(response.code, response.message)
+    }
+  }
+  return response
+}
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
@@ -122,12 +134,16 @@ export default class TelegramAPI implements PlatformAPI {
       this.authState = update.authorizationState
       this.loginEventCallback?.(update.authorizationState._)
       if (texts.IS_DEV) console.log(update)
+      if (this.authState._ === AUTHORIZATION_STATE.authorizationStateClosed) {
+        throw new ReAuthError('Session closed')
+      }
     })
     if (session) this.afterLogin()
   }
 
   onLoginEvent = (onEvent: Function) => {
     this.loginEventCallback = onEvent
+    this.loginEventCallback(this.authState?._)
   }
 
   login = async (creds: LoginCreds): Promise<LoginResult> => {
