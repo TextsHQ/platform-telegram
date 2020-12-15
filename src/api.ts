@@ -143,6 +143,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   onLoginEvent = (onEvent: Function) => {
     this.loginEventCallback = onEvent
+    this.loginEventCallback(this.authState?._)
   }
 
   login = async (creds: LoginCreds): Promise<LoginResult> => {
