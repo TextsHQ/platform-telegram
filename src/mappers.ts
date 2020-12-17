@@ -133,7 +133,7 @@ export function mapMessage(msg: TGMessage) {
     mapped.text = ft.text
     mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
   }
-  const pushSticker = (sticker: Sticker, loop = true) => {
+  const pushSticker = (sticker: Sticker, loop: boolean = undefined) => {
     mapped.attachments.push({
       id: String(sticker.sticker.id),
       srcURL: getAssetURL(sticker.sticker),
