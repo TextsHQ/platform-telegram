@@ -11,7 +11,7 @@ import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence } from './
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 
-function toObject<T extends BaseTdObject> ({ response }: ApiResponse<any, T>): T {
+function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T {
   if (isError(response)) {
     switch (response.code) {
       case 401:
@@ -479,7 +479,7 @@ export default class TelegramAPI implements PlatformAPI {
       const res = await this.airgram.api.forwardMessages({
         chatId: +toThreadID,
         fromChatId: +threadID,
-        messageIds: [+messageID]
+        messageIds: [+messageID],
       })
       return !isError(toObject(res))
     }))

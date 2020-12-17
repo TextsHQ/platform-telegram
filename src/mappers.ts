@@ -144,7 +144,7 @@ export function mapMessage(msg: TGMessage) {
       size: { width: sticker.width, height: sticker.height },
       extra: {
         loop,
-      }
+      },
     })
   }
   switch (msg.content._) {
@@ -294,6 +294,11 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       break
     }
 
+    case 'messagePinMessage':
+      mapped.text = '{{sender}} pinned a message'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      break
     case 'messageContactRegistered':
       mapped.text = '{{sender}} joined Telegram'
       mapped.isAction = true
