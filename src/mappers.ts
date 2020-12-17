@@ -268,11 +268,12 @@ export function mapMessage(msg: TGMessage) {
           mapped.textHeading = `Slot Machine: ${msg.content.value}`
           break
       }
+      if (msg.content.finalState?._) {
+        mapped.text = undefined
+        mapped.textHeading = undefined
+        mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
+      }
       switch (msg.content.finalState?._) {
-        default:
-          mapped.text = undefined
-          mapped.textHeading = undefined
-          mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
         case 'diceStickersRegular':
           pushSticker(msg.content.finalState.sticker, false)
           break
