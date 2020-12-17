@@ -143,7 +143,7 @@ export function mapMessage(msg: TGMessage) {
       isSticker: true,
       size: { width: sticker.width, height: sticker.height },
       extra: {
-        dontLoop: !loop,
+        loop,
       }
     })
   }
