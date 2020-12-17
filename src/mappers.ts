@@ -133,7 +133,7 @@ export function mapMessage(msg: TGMessage) {
     mapped.text = ft.text
     mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
   }
-  const pushSticker = (sticker: Sticker) => {
+  const pushSticker = (sticker: Sticker, loop = true) => {
     mapped.attachments.push({
       id: String(sticker.sticker.id),
       srcURL: getAssetURL(sticker.sticker),
@@ -142,6 +142,9 @@ export function mapMessage(msg: TGMessage) {
       isGif: true,
       isSticker: true,
       size: { width: sticker.width, height: sticker.height },
+      extra: {
+        loop,
+      }
     })
   }
   switch (msg.content._) {
@@ -265,12 +268,21 @@ export function mapMessage(msg: TGMessage) {
           mapped.textHeading = `Slot Machine: ${msg.content.value}`
           break
       }
+      if (msg.content.finalState?._) {
+        mapped.text = undefined
+        mapped.textHeading = undefined
+        mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
+      }
       switch (msg.content.finalState?._) {
         case 'diceStickersRegular':
-          mapped.textHeading = `Dice: ${msg.content.value}`
+          pushSticker(msg.content.finalState.sticker, false)
           break
         case 'diceStickersSlotMachine':
-          mapped.textHeading = `Slot Machine: ${msg.content.value}`
+          pushSticker(msg.content.finalState.background, false)
+          pushSticker(msg.content.finalState.leftReel, false)
+          pushSticker(msg.content.finalState.centerReel, false)
+          pushSticker(msg.content.finalState.rightReel, false)
+          pushSticker(msg.content.finalState.lever, false)
           break
       }
       break
