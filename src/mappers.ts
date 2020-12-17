@@ -142,7 +142,9 @@ export function mapMessage(msg: TGMessage) {
       isGif: true,
       isSticker: true,
       size: { width: sticker.width, height: sticker.height },
-      extra: loop
+      extra: {
+        dontLoop: !loop,
+      }
     })
   }
   switch (msg.content._) {
@@ -267,14 +269,14 @@ export function mapMessage(msg: TGMessage) {
           break
       }
       switch (msg.content.finalState?._) {
+        default:
+          mapped.text = undefined
+          mapped.textHeading = undefined
+          mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
         case 'diceStickersRegular':
-          mapped.text = ''
-          mapped.textHeading = ''
           pushSticker(msg.content.finalState.sticker, false)
           break
         case 'diceStickersSlotMachine':
-          mapped.text = ''
-          mapped.textHeading = ''
           pushSticker(msg.content.finalState.background, false)
           pushSticker(msg.content.finalState.leftReel, false)
           pushSticker(msg.content.finalState.centerReel, false)
