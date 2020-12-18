@@ -114,10 +114,12 @@ function* getTextFooter(msg: TGMessage) {
   if (msg.interactionInfo?.forwardCount) yield `${msg.interactionInfo!.forwardCount} ${msg.interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
 }
 
+function getSenderID(msg: TGMessage) {
+  if (msg.sender._ === 'messageSenderUser') return msg.sender.userId
+  return msg.sender.chatId === msg.chatId ? '$thread' : msg.sender.chatId
+}
+
 export function mapMessage(msg: TGMessage) {
-  const senderID = msg.sender._ === 'messageSenderUser'
-    ? msg.sender.userId
-    : msg.sender.chatId
   const mapped: Message = {
     _original: JSON.stringify(msg),
     id: String(msg.id),
@@ -126,7 +128,7 @@ export function mapMessage(msg: TGMessage) {
     text: undefined,
     textFooter: [...getTextFooter(msg)].join(' · '),
     textAttributes: undefined,
-    senderID: String(senderID),
+    senderID: String(getSenderID(msg)),
     isSender: msg.isOutgoing,
     attachments: [],
     reactions: [],
