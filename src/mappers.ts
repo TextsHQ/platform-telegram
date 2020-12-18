@@ -109,6 +109,11 @@ function mapMessageLink(webPage: WebPage) {
   return link
 }
 
+function* getTextFooter(msg: TGMessage) {
+  if (msg.interactionInfo?.viewCount) yield `${msg.interactionInfo?.viewCount.toLocaleString()} views`
+  if (msg.interactionInfo?.forwardCount) yield `${msg.interactionInfo!.forwardCount} ${msg.interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
+}
+
 export function mapMessage(msg: TGMessage) {
   const senderID = msg.sender._ === 'messageSenderUser'
     ? msg.sender.userId
@@ -119,6 +124,7 @@ export function mapMessage(msg: TGMessage) {
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
+    textFooter: [...getTextFooter(msg)].join(' · '),
     textAttributes: undefined,
     senderID: String(senderID),
     isSender: msg.isOutgoing,
