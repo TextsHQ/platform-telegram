@@ -126,6 +126,7 @@ export function mapMessage(msg: TGMessage) {
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
+    textHeading: msg.forwardInfo?.date ? 'Forwarded' : undefined,
     textFooter: [...getTextFooter(msg)].join(' · '),
     textAttributes: undefined,
     senderID: String(getSenderID(msg)),
@@ -262,24 +263,27 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageLocation': {
       const { location } = msg.content
-      mapped.textHeading = msg.content.livePeriod ? '📍 Live Location' : '📍 Location'
+      if (mapped.textHeading) mapped.textHeading += '\n'
+      else mapped.textHeading = ''
+      mapped.textHeading += msg.content.livePeriod ? '📍 Live Location' : '📍 Location'
       mapped.text = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
       break
     }
     case 'messageDice':
-      mapped.text = msg.content.emoji
-      switch (msg.content.initialState?._) {
-        case 'diceStickersRegular':
-          mapped.textHeading = `Dice: ${msg.content.value}`
-          break
-        case 'diceStickersSlotMachine':
-          mapped.textHeading = `Slot Machine: ${msg.content.value}`
-          break
-      }
+      if (mapped.textHeading) mapped.textHeading += '\n'
+      else mapped.textHeading = ''
       if (msg.content.finalState?._) {
-        mapped.text = undefined
-        mapped.textHeading = undefined
         mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
+      } else {
+        mapped.text = msg.content.emoji
+        switch (msg.content.initialState?._) {
+          case 'diceStickersRegular':
+            mapped.textHeading = `Dice: ${msg.content.value}`
+            break
+          case 'diceStickersSlotMachine':
+            mapped.textHeading = `Slot Machine: ${msg.content.value}`
+            break
+        }
       }
       switch (msg.content.finalState?._) {
         case 'diceStickersRegular':
