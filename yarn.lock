@@ -160,9 +160,9 @@
     "@nodelib/fs.scandir" "2.1.3"
     fastq "^1.6.0"
 
-"@textshq/eslint-config@https://github.com/textshq/eslint-config":
+"@textshq/eslint-config@https://github.com/TextsHQ/eslint-config":
   version "1.0.4"
-  resolved "https://github.com/textshq/eslint-config#98f9b513d7c6b4a91667e449946c9a1a27f0657b"
+  resolved "https://github.com/TextsHQ/eslint-config#98f9b513d7c6b4a91667e449946c9a1a27f0657b"
   dependencies:
     "@typescript-eslint/eslint-plugin" "^4.9.0"
     babel-eslint "^10.1.0"
@@ -1769,9 +1769,9 @@ react-phone-number-input@^3.1.8:
     libphonenumber-js "^1.9.6"
     prop-types "^15.7.2"
 
-"react@link:./react":
-  version "0.0.0"
-  uid ""
+"react@https://github.com/TextsHQ/react-global-shim":
+  version "17.0.0"
+  resolved "https://github.com/TextsHQ/react-global-shim#b47d9bf689bd99104c674b5ab59fcdcb69bb6871"
 
 read-pkg-up@^2.0.0:
   version "2.0.0"

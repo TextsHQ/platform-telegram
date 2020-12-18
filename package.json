@@ -17,12 +17,12 @@
     "airgram": "^3.3.0",
     "bluebird": "^3.7.2",
     "lodash": "^4.17.20",
-    "react": "link:./react",
+    "react": "https://github.com/TextsHQ/react-global-shim",
     "react-phone-number-input": "^3.1.8",
     "rimraf": "^3.0.2"
   },
   "devDependencies": {
-    "@textshq/eslint-config": "https://github.com/textshq/eslint-config",
+    "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config",
     "@textshq/platform-sdk": "link:../platform-sdk",
     "eslint": "^7.15.0",
     "husky": "^4.3.5",
