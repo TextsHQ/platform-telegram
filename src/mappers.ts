@@ -110,8 +110,8 @@ function mapMessageLink(webPage: WebPage) {
 }
 
 function* getTextFooter(msg: TGMessage) {
-  if (msg.interactionInfo?.viewCount) yield `${msg.interactionInfo?.viewCount.toLocaleString()} views`
-  if (msg.interactionInfo?.forwardCount) yield `${msg.interactionInfo!.forwardCount} ${msg.interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
+  if (msg.interactionInfo?.viewCount) yield `${msg.interactionInfo!.viewCount.toLocaleString()} views`
+  if (msg.interactionInfo?.forwardCount) yield `${msg.interactionInfo!.forwardCount.toLocaleString()} ${msg.interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
 }
 
 function getSenderID(msg: TGMessage) {
