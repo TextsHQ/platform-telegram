@@ -2,10 +2,28 @@ import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAt
 import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker } from 'airgram'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 
+/**
+ * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
+ * characters. An example: for text "👍@user👍"
+ *   before: { from: 2, to: 7 }
+ *   after: { from: 1, to: 6 }
+ */
+function transformOffset(text: string, entities: TextEntity[]) {
+  const arr = Array.from(text)
+  let cursor = 0
+  for (let entity of entities) {
+    const { from, to } = entity
+    entity.from = arr.indexOf(text[from], cursor)
+    entity.to = entity.from + to - from
+    cursor = entity.to
+  }
+  return entities
+}
+
 function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttributes {
   if (!entities || entities.length === 0) return
   return {
-    entities: entities.map<TextEntity>(e => {
+    entities: transformOffset(text, entities.map<TextEntity>(e => {
       const from = e.offset
       const to = e.offset + e.length
       switch (e.type._) {
@@ -45,7 +63,7 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
           }
       }
       return undefined
-    }).filter(Boolean),
+    }).filter(Boolean)),
   }
 }
 
