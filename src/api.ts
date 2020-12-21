@@ -3,7 +3,7 @@ import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, ErrorUnion, TDLibError, ApiResponse, BaseTdObject } from 'airgram'
-import { AUTHORIZATION_STATE, UPDATE } from '@airgram/constants'
+import { AUTHORIZATION_STATE, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
@@ -118,6 +118,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginEventCallback: Function
 
+  private secretChatIdToChatId = new Map<number, number>()
+
   init = async (session: any, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
     this.airgram = new Airgram({
@@ -127,6 +129,7 @@ export default class TelegramAPI implements PlatformAPI {
       command: tdlibPath,
       logVerbosityLevel: texts.IS_DEV ? 2 : 0,
       useChatInfoDatabase: true,
+      useSecretChats: true,
       databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
       filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
     })
@@ -219,6 +222,25 @@ export default class TelegramAPI implements PlatformAPI {
         entries: [thread],
       }
       this.onEvent([event])
+    })
+    this.airgram.on(UPDATE.updateSecretChat, async ({ update }) => {
+      if (update.secretChat.state._ === SECRET_CHAT_STATE.secretChatStateClosed) {
+        // Secret chat is accepted by another device or closed.
+        const chatId = this.secretChatIdToChatId.get(update.secretChat.id)
+        if (!chatId) return
+        const threadID = chatId.toString()
+        const event: ServerEvent = {
+          type: ServerEventType.STATE_SYNC,
+          mutationType: 'delete',
+          objectName: 'thread',
+          objectIDs: {
+            threadID,
+          },
+          entries: [threadID],
+        }
+        this.onEvent([event])
+        this.secretChatIdToChatId.delete(update.secretChat.id)
+      }
     })
     this.airgram.on(UPDATE.updateNewMessage, async ({ update }) => {
       this.handleMessageUpdate(update.message)
@@ -383,8 +405,12 @@ export default class TelegramAPI implements PlatformAPI {
   private _getParticipants = async (chat: ChatUnion) => {
     const mapMembers = (members: ChatMember[]) => Promise.all(members.map(member => this.getUser(member.userId)))
     switch (chat.type._) {
-      case 'chatTypePrivate':
+      case 'chatTypePrivate': {
+        const participant = await this.getUser(chat.type.userId)
+        return [participant]
+      }
       case 'chatTypeSecret': {
+        this.secretChatIdToChatId.set(chat.type.secretChatId, chat.id)
         const participant = await this.getUser(chat.type.userId)
         return [participant]
       }
