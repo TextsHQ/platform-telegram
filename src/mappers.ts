@@ -128,7 +128,7 @@ function mapMessageLink(webPage: WebPage) {
 }
 
 function* getTextFooter(msg: TGMessage) {
-  if (msg.interactionInfo?.viewCount) yield `${msg.interactionInfo!.viewCount.toLocaleString()} views`
+  if (msg.interactionInfo?.viewCount) yield `${msg.interactionInfo!.viewCount.toLocaleString()} ${msg.interactionInfo!.viewCount === 1 ? 'view' : 'views'}`
   if (msg.interactionInfo?.forwardCount) yield `${msg.interactionInfo!.forwardCount.toLocaleString()} ${msg.interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
 }
 
