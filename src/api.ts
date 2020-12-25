@@ -134,7 +134,7 @@ export default class TelegramAPI implements PlatformAPI {
       this.session = session
     } else {
       this.session = {
-        dbKey: require('crypto').randomBytes(24).toString('hex')
+        dbKey: require('crypto').randomBytes(32).toString('hex')
       }
     }
     this.airgram = new Airgram({
@@ -383,7 +383,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent = onEvent
   }
 
-  serializeSession = (): Session => this.session
+  serializeSession = () => this.session
 
   searchUsers = async (query: string) => {
     const res = await this.airgram.api.searchContacts({
