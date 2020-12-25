@@ -101,6 +101,10 @@ const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, {
   win32: 'tdjson.dll',
 }[process.platform])
 
+type Session = {
+  dbKey: string
+}
+
 export default class TelegramAPI implements PlatformAPI {
   private airgram: Airgram
 
@@ -122,10 +126,19 @@ export default class TelegramAPI implements PlatformAPI {
 
   private secretChatIdToChatId = new Map<number, number>()
 
-  init = async (session: any, accountInfo: AccountInfo) => {
+  private session: Session
+
+  init = async (session: Session, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
+    if (session) {
+      this.session = session
+    } else {
+      this.session = {
+        dbKey: require('crypto').randomBytes(24).toString('hex')
+      }
+    }
     this.airgram = new Airgram({
-      // todo: databaseEncryptionKey: '',
+      databaseEncryptionKey: this.session.dbKey,
       apiId: API_ID,
       apiHash: API_HASH,
       command: tdlibPath,
@@ -370,7 +383,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent = onEvent
   }
 
-  serializeSession = () => true
+  serializeSession = (): Session => this.session
 
   searchUsers = async (query: string) => {
     const res = await this.airgram.api.searchContacts({
