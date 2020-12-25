@@ -10,12 +10,15 @@ import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
  */
 function transformOffset(text: string, entities: TextEntity[]) {
   const arr = Array.from(text)
-  let cursor = 0
+  let strCursor = 0
+  let arrCursor = 0
   for (let entity of entities) {
     const { from, to } = entity
-    entity.from = arr.indexOf(text[from], cursor)
-    entity.to = entity.from + to - from
-    cursor = entity.to
+    while (strCursor < from) {
+      strCursor += arr[arrCursor++].length
+    }
+    entity.from = arrCursor
+    entity.to = entity.from + Array.from(text.slice(from, to)).length
   }
   return entities
 }
