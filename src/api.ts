@@ -4,7 +4,7 @@ import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, ErrorUnion, TDLibError, ApiResponse, BaseTdObject } from 'airgram'
 import { AUTHORIZATION_STATE, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence } from './mappers'
@@ -118,6 +118,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginEventCallback: Function
 
+  private connStateChangeCallback: OnConnStateChangeCallback
+
   private secretChatIdToChatId = new Map<number, number>()
 
   init = async (session: any, accountInfo: AccountInfo) => {
@@ -138,6 +140,9 @@ export default class TelegramAPI implements PlatformAPI {
       this.loginEventCallback?.(update.authorizationState._)
       if (texts.IS_DEV) console.log(update)
       if (this.authState._ === AUTHORIZATION_STATE.authorizationStateClosed) {
+        this.connStateChangeCallback({
+          status: ConnectionStatus.UNAUTHORIZED
+        })
         throw new ReAuthError('Session closed')
       }
     })
@@ -147,6 +152,10 @@ export default class TelegramAPI implements PlatformAPI {
   onLoginEvent = (onEvent: Function) => {
     this.loginEventCallback = onEvent
     this.loginEventCallback(this.authState?._)
+  }
+
+  onConnectionStateChange = (onEvent: OnConnStateChangeCallback) => {
+    this.connStateChangeCallback = onEvent
   }
 
   login = async (creds: LoginCreds): Promise<LoginResult> => {
