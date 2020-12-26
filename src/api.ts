@@ -227,10 +227,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   private registerUpdateListeners() {
     this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
-      if (!this.getThreadsDone) {
+      if (!this.getThreadsDone || !update.chat.positions.length) {
         // Existing threads will be handled by getThreads, no need to duplicate
         // here. And update.chat.lastMessage seems to be always null, which will
         // mess up thread timestamp.
+        // If the chat has no position, no need to show it in thread list.
         return
       }
       const thread = await this.asyncMapThread(update.chat)
