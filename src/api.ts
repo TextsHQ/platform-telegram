@@ -3,7 +3,7 @@ import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, ErrorUnion, TDLibError, ApiResponse, BaseTdObject } from 'airgram'
-import { AUTHORIZATION_STATE, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
+import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
@@ -125,6 +125,10 @@ export default class TelegramAPI implements PlatformAPI {
   private connStateChangeCallback: OnConnStateChangeCallback
 
   private secretChatIdToChatId = new Map<number, number>()
+
+  private basicGroupIdToChatId = new Map<number, number>()
+
+  private superGroupIdToChatId = new Map<number, number>()
 
   private session: Session
 
@@ -251,18 +255,34 @@ export default class TelegramAPI implements PlatformAPI {
         // Secret chat is accepted by another device or closed.
         const chatId = this.secretChatIdToChatId.get(update.secretChat.id)
         if (!chatId) return
-        const threadID = chatId.toString()
-        const event: ServerEvent = {
-          type: ServerEventType.STATE_SYNC,
-          mutationType: 'delete',
-          objectName: 'thread',
-          objectIDs: {
-            threadID,
-          },
-          entries: [threadID],
-        }
-        this.onEvent([event])
+        this.emitDeleteThread(chatId)
         this.secretChatIdToChatId.delete(update.secretChat.id)
+      }
+    })
+    this.airgram.on(UPDATE.updateBasicGroup, async ({ update }) => {
+      const { status } = update.basicGroup
+      if (
+        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
+          status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned ||
+          (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
+      ) {
+        const chatId = this.basicGroupIdToChatId.get(update.basicGroup.id)
+        if (!chatId) return
+        this.emitDeleteThread(chatId)
+        this.basicGroupIdToChatId.delete(update.basicGroup.id)
+      }
+    })
+    this.airgram.on(UPDATE.updateSupergroup, async ({ update }) => {
+      const { status } = update.supergroup
+      if (
+        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
+          status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned ||
+          (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
+      ) {
+        const chatId = this.superGroupIdToChatId.get(update.supergroup.id)
+        if (!chatId) return
+        this.emitDeleteThread(chatId)
+        this.superGroupIdToChatId.delete(update.supergroup.id)
       }
     })
     this.airgram.on(UPDATE.updateNewMessage, async ({ update }) => {
@@ -345,6 +365,20 @@ export default class TelegramAPI implements PlatformAPI {
     this.airgram.on(UPDATE.updateUserStatus, async ({ update }) => {
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
+  }
+
+  private emitDeleteThread(chatId: number) {
+    const threadID = chatId.toString()
+    const event: ServerEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'delete',
+      objectName: 'thread',
+      objectIDs: {
+        threadID,
+      },
+      entries: [threadID],
+    }
+    this.onEvent([event])
   }
 
   private afterLogin = () => {
@@ -439,11 +473,13 @@ export default class TelegramAPI implements PlatformAPI {
         return [participant]
       }
       case 'chatTypeBasicGroup': {
+        this.basicGroupIdToChatId.set(chat.type.basicGroupId, chat.id)
         const res = await this.airgram.api.getBasicGroupFullInfo({ basicGroupId: chat.type.basicGroupId })
         const { members } = toObject(res)
         return mapMembers(members)
       }
       case 'chatTypeSupergroup': {
+        this.superGroupIdToChatId.set(chat.type.supergroupId, chat.id)
         const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
         const supergroup = toObject(supergroupRes)
         if (!supergroup.canGetMembers) {
