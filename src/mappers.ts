@@ -51,6 +51,9 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
         case 'textEntityTypePreCode':
           return { from, to, codeLanguage: e.type.language }
 
+        case 'textEntityTypeUrl':
+          return { from, to, link: text.slice(from, to) }
+
         case 'textEntityTypeTextUrl':
           if (e.type.url) return { from, to, link: e.type.url }
           break
