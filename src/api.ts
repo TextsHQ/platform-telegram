@@ -96,7 +96,7 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
 }
 
 const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, {
-  darwin: 'libtdjson.dylib',
+  darwin: `libtdjson-${process.arch}.dylib`,
   linux: 'libtdjson.so',
   win32: 'tdjson.dll',
 }[process.platform])
