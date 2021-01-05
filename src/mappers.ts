@@ -1,6 +1,7 @@
 import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker } from 'airgram'
+import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion } from 'airgram'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
+import { formatDuration } from 'date-fns'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
@@ -329,6 +330,27 @@ export function mapMessage(msg: TGMessage) {
 ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `— ${option.votePercentage}%`, `(${option.voterCount})`].filter(Boolean).join('\t')).join('\n')}`
       break
     }
+
+    case 'messageCall':
+      function mapReason(discardReason: CallDiscardReasonUnion) {
+        switch (discardReason._) {
+          case 'callDiscardReasonMissed':
+            return 'Missed'
+          case 'callDiscardReasonDeclined':
+            return 'Declined'
+          case 'callDiscardReasonDisconnected':
+            return 'Disconnected'
+          case 'callDiscardReasonHungUp':
+            return 'Hung up'
+        }
+        return ''
+      }
+      mapped.textHeading = [
+        `${msg.content.isVideo ? '🎥 Video ' : '📞 '}Call`,
+        msg.content.duration ? formatDuration({ seconds: msg.content.duration }) : '',
+        mapReason(msg.content.discardReason),
+      ].filter(Boolean).join('\n')
+      break
 
     case 'messagePinMessage':
       mapped.text = '{{sender}} pinned a message'
