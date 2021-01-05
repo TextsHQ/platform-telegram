@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
-import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, ErrorUnion, TDLibError, ApiResponse, BaseTdObject } from 'airgram'
+import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus } from '@textshq/platform-sdk'
 
@@ -132,6 +132,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private session: Session
 
+  private me: TGUser
+
   init = async (session: Session, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
     if (session) {
@@ -163,7 +165,7 @@ export default class TelegramAPI implements PlatformAPI {
         throw new ReAuthError('Session closed')
       }
     })
-    if (session) this.afterLogin()
+    if (session) await this.afterLogin()
   }
 
   onLoginEvent = (onEvent: Function) => {
@@ -197,7 +199,7 @@ export default class TelegramAPI implements PlatformAPI {
         return { type: 'wait' }
       }
       case AUTHORIZATION_STATE.authorizationStateReady: {
-        this.afterLogin()
+        await this.afterLogin()
         return { type: 'success' }
       }
     }
@@ -381,8 +383,9 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private afterLogin = () => {
+  private afterLogin = async () => {
     this.registerUpdateListeners()
+    this.me = toObject(await this.airgram.api.getMe())
   }
 
   // @ts-ignore
@@ -403,14 +406,10 @@ export default class TelegramAPI implements PlatformAPI {
     await this.airgram.api.close()
   }
 
-  getCurrentUser = async (): Promise<CurrentUser> => {
-    const me = await this.airgram.api.getMe()
-    const user = toObject(me)
-    return {
-      ...mapUser(user, this.accountInfo.accountID),
-      displayText: (user.username ? '@' + user.username : '') || user.phoneNumber,
-    }
-  }
+  getCurrentUser = (): CurrentUser => ({
+    ...mapUser(this.me, this.accountInfo.accountID),
+    displayText: (this.me.username ? '@' + this.me.username : '') || this.me.phoneNumber,
+  })
 
   private onEvent: OnServerEventCallback = () => {}
 
@@ -465,12 +464,12 @@ export default class TelegramAPI implements PlatformAPI {
     switch (chat.type._) {
       case 'chatTypePrivate': {
         const participant = await this.getUser(chat.type.userId)
-        return [participant]
+        return [participant, this.me]
       }
       case 'chatTypeSecret': {
         this.secretChatIdToChatId.set(chat.type.secretChatId, chat.id)
         const participant = await this.getUser(chat.type.userId)
-        return [participant]
+        return [participant, this.me]
       }
       case 'chatTypeBasicGroup': {
         this.basicGroupIdToChatId.set(chat.type.basicGroupId, chat.id)
