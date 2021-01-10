@@ -162,6 +162,7 @@ export function mapMessage(msg: TGMessage) {
     isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
     linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
     buttons: getButtons(msg.replyMarkup),
+    expiresInSeconds: msg.ttlExpiresIn,
   }
   const setFormattedText = (ft: FormattedText) => {
     mapped.text = ft.text
