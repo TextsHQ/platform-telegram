@@ -4,7 +4,7 @@ import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence } from './mappers'
@@ -367,6 +367,23 @@ export default class TelegramAPI implements PlatformAPI {
     this.airgram.on(UPDATE.updateUserStatus, async ({ update }) => {
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
+    this.airgram.on(UPDATE.updateChatReadOutbox, async ({ update }) => {
+      const threadID = update.chatId.toString()
+      const messageID = update.lastReadOutboxMessageId.toString()
+      const event: StateSyncEvent = {
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID, messageID },
+        entries: [
+          {
+            id: messageID,
+            seen: true,
+          },
+        ],
+      }
+      this.onEvent([event])
+    })
   }
 
   private emitDeleteThread(chatId: number) {
@@ -513,11 +530,14 @@ export default class TelegramAPI implements PlatformAPI {
     }))
     this.lastChat = chats[chats.length - 1]
     const items = await Promise.all(chats.map(this.asyncMapThread))
-    this.getThreadsDone = true
+    const hasMore = items.length === limit
+    if (!hasMore) {
+      this.getThreadsDone = true
+    }
     return {
       items,
       oldestCursor: items[items.length - 1]?.id,
-      hasMore: items.length === limit,
+      hasMore,
     }
   }
 
