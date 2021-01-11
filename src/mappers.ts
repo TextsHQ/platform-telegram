@@ -1,11 +1,33 @@
 import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion } from 'airgram'
+import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion } from 'airgram'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
+import { formatDuration } from 'date-fns'
 
-function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
+/**
+ * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
+ * characters. An example: for text "👍@user👍"
+ *   before: { from: 2, to: 7 }
+ *   after: { from: 1, to: 6 }
+ */
+function transformOffset(text: string, entities: TextEntity[]) {
+  const arr = Array.from(text)
+  let strCursor = 0
+  let arrCursor = 0
+  for (let entity of entities) {
+    const { from, to } = entity
+    while (strCursor < from) {
+      strCursor += arr[arrCursor++].length
+    }
+    entity.from = arrCursor
+    entity.to = entity.from + Array.from(text.slice(from, to)).length
+  }
+  return entities
+}
+
+function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttributes {
   if (!entities || entities.length === 0) return
   return {
-    entities: entities.map<TextEntity>(e => {
+    entities: transformOffset(text, entities.map<TextEntity>(e => {
       const from = e.offset
       const to = e.offset + e.length
       switch (e.type._) {
@@ -30,9 +52,15 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
         case 'textEntityTypePreCode':
           return { from, to, codeLanguage: e.type.language }
 
+        case 'textEntityTypeUrl':
+          return { from, to, link: text.slice(from, to) }
+
         case 'textEntityTypeTextUrl':
           if (e.type.url) return { from, to, link: e.type.url }
           break
+
+        case 'textEntityTypeMention':
+          return { from, to, mentionedUser: { username: text.slice(from, to) } } as TextEntity
 
         case 'textEntityTypeMentionName':
           return {
@@ -42,7 +70,7 @@ function mapTextAttributes(entities: TGTextEntity[]): TextAttributes {
           }
       }
       return undefined
-    }).filter(Boolean),
+    }).filter(Boolean)),
   }
 }
 
@@ -106,18 +134,27 @@ function mapMessageLink(webPage: WebPage) {
   return link
 }
 
+function* getTextFooter(msg: TGMessage) {
+  if (msg.interactionInfo?.viewCount) yield `${msg.interactionInfo!.viewCount.toLocaleString()} ${msg.interactionInfo!.viewCount === 1 ? 'view' : 'views'}`
+  if (msg.interactionInfo?.forwardCount) yield `${msg.interactionInfo!.forwardCount.toLocaleString()} ${msg.interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
+}
+
+function getSenderID(msg: TGMessage) {
+  if (msg.sender._ === 'messageSenderUser') return msg.sender.userId
+  return msg.sender.chatId === msg.chatId ? '$thread' : msg.sender.chatId
+}
+
 export function mapMessage(msg: TGMessage) {
-  const senderID = msg.sender._ === 'messageSenderUser'
-    ? msg.sender.userId
-    : msg.sender.chatId
   const mapped: Message = {
     _original: JSON.stringify(msg),
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
+    textHeading: msg.forwardInfo?.date ? 'Forwarded' : undefined,
+    textFooter: [...getTextFooter(msg)].join(' · '),
     textAttributes: undefined,
-    senderID: String(senderID),
+    senderID: String(getSenderID(msg)),
     isSender: msg.isOutgoing,
     attachments: [],
     reactions: [],
@@ -125,10 +162,25 @@ export function mapMessage(msg: TGMessage) {
     isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
     linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
     buttons: getButtons(msg.replyMarkup),
+    expiresInSeconds: msg.ttlExpiresIn,
   }
   const setFormattedText = (ft: FormattedText) => {
     mapped.text = ft.text
-    mapped.textAttributes = mapTextAttributes(ft.entities)
+    mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
+  }
+  const pushSticker = (sticker: Sticker, loop: boolean = undefined) => {
+    mapped.attachments.push({
+      id: String(sticker.sticker.id),
+      srcURL: getAssetURL(sticker.sticker),
+      mimeType: 'image/tgs',
+      type: MessageAttachmentType.IMG,
+      isGif: true,
+      isSticker: true,
+      size: { width: sticker.width, height: sticker.height },
+      extra: {
+        loop,
+      },
+    })
   }
   switch (msg.content._) {
     case 'messageText':
@@ -222,13 +274,7 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageSticker': {
       const { sticker } = msg.content
-      mapped.attachments.push({
-        id: String(sticker.sticker.id),
-        srcURL: getAssetURL(sticker.sticker),
-        type: MessageAttachmentType.IMG,
-        isGif: true,
-        size: { width: sticker.width, height: sticker.height },
-      })
+      pushSticker(sticker)
       break
     }
     case 'messageContact': {
@@ -243,18 +289,38 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageLocation': {
       const { location } = msg.content
-      mapped.textHeading = msg.content.livePeriod ? '📍 Live Location' : '📍 Location'
+      if (mapped.textHeading) mapped.textHeading += '\n'
+      else mapped.textHeading = ''
+      mapped.textHeading += msg.content.livePeriod ? '📍 Live Location' : '📍 Location'
       mapped.text = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
       break
     }
     case 'messageDice':
-      mapped.text = msg.content.emoji
-      switch (msg.content.initialState?._) {
+      if (mapped.textHeading) mapped.textHeading += '\n'
+      else mapped.textHeading = ''
+      if (msg.content.finalState?._) {
+        mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
+      } else {
+        mapped.text = msg.content.emoji
+        switch (msg.content.initialState?._) {
+          case 'diceStickersRegular':
+            mapped.textHeading = `Dice: ${msg.content.value}`
+            break
+          case 'diceStickersSlotMachine':
+            mapped.textHeading = `Slot Machine: ${msg.content.value}`
+            break
+        }
+      }
+      switch (msg.content.finalState?._) {
         case 'diceStickersRegular':
-          mapped.textHeading = `Dice: ${msg.content.value}`
+          pushSticker(msg.content.finalState.sticker, false)
           break
         case 'diceStickersSlotMachine':
-          mapped.textHeading = `Slot Machine: ${msg.content.value}`
+          pushSticker(msg.content.finalState.background, false)
+          pushSticker(msg.content.finalState.leftReel, false)
+          pushSticker(msg.content.finalState.centerReel, false)
+          pushSticker(msg.content.finalState.rightReel, false)
+          pushSticker(msg.content.finalState.lever, false)
           break
       }
       break
@@ -266,6 +332,32 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       break
     }
 
+    case 'messageCall':
+      function mapReason(discardReason: CallDiscardReasonUnion) {
+        switch (discardReason._) {
+          case 'callDiscardReasonMissed':
+            return 'Missed'
+          case 'callDiscardReasonDeclined':
+            return 'Declined'
+          case 'callDiscardReasonDisconnected':
+            return 'Disconnected'
+          case 'callDiscardReasonHungUp':
+            return 'Hung up'
+        }
+        return ''
+      }
+      mapped.textHeading = [
+        `${msg.content.isVideo ? '🎥 Video ' : '📞 '}Call`,
+        msg.content.duration ? formatDuration({ seconds: msg.content.duration }) : '',
+        mapReason(msg.content.discardReason),
+      ].filter(Boolean).join('\n')
+      break
+
+    case 'messagePinMessage':
+      mapped.text = '{{sender}} pinned a message'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      break
     case 'messageContactRegistered':
       mapped.text = '{{sender}} joined Telegram'
       mapped.isAction = true
@@ -342,6 +434,14 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       break
     case 'messageChatUpgradeFrom':
       mapped.text = `{{sender}} created the group "${msg.content.title}"`
+      mapped.isAction = true
+      mapped.parseTemplate = true
+    case 'messageExpiredPhoto':
+      mapped.text = '{{sender}} sent a self-destructing photo.'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+    case 'messageExpiredVideo':
+      mapped.text = '{{sender}} sent a self-destructing video.'
       mapped.isAction = true
       mapped.parseTemplate = true
   }
