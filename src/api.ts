@@ -370,7 +370,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.airgram.on(UPDATE.updateChatReadOutbox, async ({ update }) => {
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
-      const event : StateSyncEvent = {
+      const event: StateSyncEvent = {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
         objectName: 'message',
