@@ -24,6 +24,16 @@ function transformOffset(text: string, entities: TextEntity[]) {
   return entities
 }
 
+function fixLinkProtocol(link: string) {
+  try {
+    new URL(link)
+    return link
+  } catch (error) {
+    if (error.code === 'ERR_INVALID_URL') return 'http://' + link
+    throw error
+  }
+}
+
 function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttributes {
   if (!entities || entities.length === 0) return
   return {
@@ -52,8 +62,10 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
         case 'textEntityTypePreCode':
           return { from, to, codeLanguage: e.type.language }
 
-        case 'textEntityTypeUrl':
-          return { from, to, link: text.slice(from, to) }
+        case 'textEntityTypeUrl': {
+          const link = text.slice(from, to)
+          return { from, to, link: fixLinkProtocol(link) }
+        }
 
         case 'textEntityTypeTextUrl':
           if (e.type.url) return { from, to, link: e.type.url }
