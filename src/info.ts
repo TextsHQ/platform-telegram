@@ -23,6 +23,7 @@ const info: PlatformInfo = {
   typingDurationMs: 5_000,
   attributes: new Set([
     Attribute.CAN_MESSAGE_USERNAME,
+    Attribute.CAN_MESSAGE_PHONE_NUMBER,
     Attribute.SUPPORTS_QUOTED_MESSAGES,
     Attribute.SUPPORTS_MARK_AS_UNREAD,
     Attribute.SUPPORTS_FORWARD,
