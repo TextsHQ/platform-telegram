@@ -320,9 +320,16 @@ export default class TelegramAPI implements PlatformAPI {
             typing: true,
             threadID: update.chatId.toString(),
             participantID: update.userId.toString(),
-            durationMs: 5_000,
+            durationMs: 180_000,
           }])
         }
+        case 'chatActionCancel':
+          return this.onEvent([{
+            type: ServerEventType.PARTICIPANT_TYPING,
+            typing: false,
+            threadID: update.chatId.toString(),
+            participantID: update.userId.toString(),
+          }])
         default:
       }
     })
