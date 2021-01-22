@@ -28,6 +28,7 @@ const info: PlatformInfo = {
     Attribute.SUPPORTS_MARK_AS_UNREAD,
     Attribute.SUPPORTS_FORWARD,
     Attribute.SUBSCRIBE_TO_CONN_STATE_CHANGE,
+    Attribute.SUPPORTS_DELETE_THREAD,
   ]),
   attachments: {
     supportsCaption: true,
