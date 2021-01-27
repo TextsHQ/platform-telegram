@@ -35,6 +35,8 @@ const info: PlatformInfo = {
     recordedAudioMimeType: 'audio/ogg',
     gifMimeType: 'video/mp4',
   },
+  getUserProfileLink: ({ username }) =>
+    username ? `https://t.me/${username}` : null,
 }
 
 export default info
