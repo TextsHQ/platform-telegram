@@ -1,1 +1,5 @@
 * text=auto eol=lf
+binaries/libtdjson-arm64.dylib filter=lfs diff=lfs merge=lfs -text
+binaries/libtdjson-x64.dylib filter=lfs diff=lfs merge=lfs -text
+binaries/libtdjson.dll filter=lfs diff=lfs merge=lfs -text
+binaries/libtdjson.so filter=lfs diff=lfs merge=lfs -text
