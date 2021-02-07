@@ -95,7 +95,7 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
   return textInput
 }
 
-const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, {
+const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram', {
   darwin: `libtdjson-${process.arch}.dylib`,
   linux: 'libtdjson.so',
   win32: 'libtdjson.dll',
