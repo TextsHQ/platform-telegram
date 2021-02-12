@@ -427,7 +427,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getCurrentUser = (): CurrentUser => ({
     ...mapUser(this.me, this.accountInfo.accountID),
-    displayText: (this.me.username ? '@' + this.me.username : '') || this.me.phoneNumber,
+    displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phoneNumber),
   })
 
   private onEvent: OnServerEventCallback = () => {}
