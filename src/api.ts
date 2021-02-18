@@ -177,8 +177,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.connStateChangeCallback = onEvent
   }
 
-  login = async (creds: LoginCreds): Promise<LoginResult> => {
-    const { phoneNumber, code, password } = creds.custom
+  login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
+    const { phoneNumber, code, password } = creds.custom || {}
     switch (this.authState._) {
       case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
         const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
