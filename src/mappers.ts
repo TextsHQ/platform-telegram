@@ -448,14 +448,22 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       mapped.text = `{{sender}} created the group "${msg.content.title}"`
       mapped.isAction = true
       mapped.parseTemplate = true
+      break
     case 'messageExpiredPhoto':
       mapped.text = '{{sender}} sent a self-destructing photo.'
       mapped.isAction = true
       mapped.parseTemplate = true
+      break
     case 'messageExpiredVideo':
       mapped.text = '{{sender}} sent a self-destructing video.'
       mapped.isAction = true
       mapped.parseTemplate = true
+      break
+    case 'messageCustomServiceAction':
+      mapped.text = msg.content.text
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      break
   }
   return mapped
 }
