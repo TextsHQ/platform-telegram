@@ -137,7 +137,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   init = async (session: Session, accountInfo: AccountInfo) => {
     texts.log({ tdlibPath })
-    const tdlibExists = await fs.access(tdlibPath).catch(() => false)
+    const tdlibExists = await fs.access(tdlibPath).then(() => true).catch(() => false)
     if (!tdlibExists) {
       throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
     }
