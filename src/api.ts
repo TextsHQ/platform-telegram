@@ -1,5 +1,6 @@
 import path from 'path'
 import os from 'os'
+import crypto from 'crypto'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
@@ -96,9 +97,9 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
 }
 
 const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram', {
-  darwin: `libtdjson-${process.arch}.dylib`,
-  linux: 'libtdjson.so',
-  win32: 'libtdjson.dll',
+  darwin: `${process.arch}_libtdjson.dylib`,
+  linux: `${process.arch}_libtdjson.so`,
+  win32: `${process.arch}_libtdjson.dll`,
 }[process.platform])
 
 type Session = {
@@ -135,12 +136,17 @@ export default class TelegramAPI implements PlatformAPI {
   private me: TGUser
 
   init = async (session: Session, accountInfo: AccountInfo) => {
+    texts.log({ tdlibPath })
+    const tdlibExists = await fs.access(tdlibPath).catch(() => false)
+    if (!tdlibExists) {
+      throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
+    }
     this.accountInfo = accountInfo
     if (session) {
       this.session = session
     } else {
       this.session = {
-        dbKey: require('crypto').randomBytes(32).toString('hex')
+        dbKey: crypto.randomBytes(32).toString('hex')
       }
     }
     this.airgram = new Airgram({
