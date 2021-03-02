@@ -96,7 +96,24 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
   return textInput
 }
 
-const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram', {
+const binariesDirPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')
+
+const fileExists = (filePath: string) =>
+  fs.access(filePath).then(() => true).catch(() => false)
+
+async function copyToCwd(fileName: string) {
+  const newFilePath = path.join(process.cwd(), fileName)
+  const exists = await fileExists(newFilePath)
+  if (!exists) {
+    await fs.copyFile(path.join(binariesDirPath, fileName), newFilePath)
+  }
+}
+async function copyDLLsForWindows() {
+  const promises = ['libcrypto-1_1-x64.dll', 'libssl-1_1-x64.dll', 'zlib1.dll'].map(fileName => copyToCwd(fileName))
+  return Promise.all(promises)
+}
+
+const tdlibPath = path.join(binariesDirPath, {
   darwin: `${process.arch}_libtdjson.dylib`,
   linux: `${process.arch}_libtdjson.so`,
   win32: `${process.arch}_libtdjson.dll`,
@@ -137,10 +154,15 @@ export default class TelegramAPI implements PlatformAPI {
 
   init = async (session: Session, accountInfo: AccountInfo) => {
     texts.log({ tdlibPath })
-    const tdlibExists = await fs.access(tdlibPath).then(() => true).catch(() => false)
+    const tdlibExists = await fileExists(tdlibPath)
     if (!tdlibExists) {
       throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
     }
+
+    if (process.platform === 'win32') {
+      await copyDLLsForWindows()
+    }
+
     this.accountInfo = accountInfo
     if (session) {
       this.session = session
