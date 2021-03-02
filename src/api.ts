@@ -96,6 +96,16 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
   return textInput
 }
 
+async function copyTdlibDll(tdlibDir: string, tdlibDll: string): Promise<void> {
+  const tdlibDllExists = await fs.access(path.join(process.cwd(), tdlibDll)).then(() => true).catch(() => false)
+  if (!tdlibDllExists) {
+    const tdlibOrigDllExists = await fs.access(path.join(tdlibDir, tdlibDll)).then(() => true).catch(() => false)
+    if (tdlibOrigDllExists) {
+      await fs.copyFile( path.join(tdlibDir, tdlibDll), path.join(process.cwd(), tdlibDll))
+    }
+  }
+}
+
 const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram', {
   darwin: `${process.arch}_libtdjson.dylib`,
   linux: `${process.arch}_libtdjson.so`,
@@ -142,32 +152,11 @@ export default class TelegramAPI implements PlatformAPI {
       throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
     }
 
-    const tdlibDir = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram');
-
-    const tdlibDll1 = "libcrypto-1_1-x64.dll";
-    const tdlibDll1Exists = await fs.access(path.join(process.cwd(), tdlibDll1)).then(() => true).catch(() => false)
-    if (!tdlibDll1Exists) {
-      const tdlibOrigDll1Exists = await fs.access(path.join(tdlibDir, tdlibDll1)).then(() => true).catch(() => false)
-      if (tdlibOrigDll1Exists) {
-        await fs.copyFile( path.join(tdlibDir, tdlibDll1), path.join(process.cwd(), tdlibDll1))
-      }
-    }
-
-    const tdlibDll2 = "libssl-1_1-x64.dll";
-    const tdlibDll2Exists = await fs.access(path.join(process.cwd(), tdlibDll2)).then(() => true).catch(() => false)
-    if (!tdlibDll2Exists) {
-      const tdlibOrigDll2Exists = await fs.access(path.join(tdlibDir, tdlibDll2)).then(() => true).catch(() => false)
-      if (tdlibOrigDll2Exists) {
-        await fs.copyFile( path.join(tdlibDir, tdlibDll2), path.join(process.cwd(), tdlibDll2))
-      }
-    }
-
-    const tdlibDll3 = "zlib1.dll";
-    const tdlibDll3Exists = await fs.access(path.join(process.cwd(), tdlibDll3)).then(() => true).catch(() => false)
-    if (!tdlibDll3Exists) {
-      const tdlibOrigDll3Exists = await fs.access(path.join(tdlibDir, tdlibDll3)).then(() => true).catch(() => false)
-      if (tdlibOrigDll3Exists) {
-        await fs.copyFile( path.join(tdlibDir, tdlibDll3), path.join(process.cwd(), tdlibDll3))
+    if (process.platform === "win32") {
+      const tdlibDir = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')
+      const tdlibDlls = ["libcrypto-1_1-x64.dll", "libssl-1_1-x64.dll", "zlib1.dll"]
+      for(let i=0; i<tdlibDlls.length; i++) {
+        await copyTdlibDll(tdlibDir, tdlibDlls[i]);
       }
     }
 
