@@ -96,17 +96,24 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
   return textInput
 }
 
-async function copyTdlibDll(tdlibDir: string, tdlibDll: string): Promise<void> {
-  const tdlibDllExists = await fs.access(path.join(process.cwd(), tdlibDll)).then(() => true).catch(() => false)
-  if (!tdlibDllExists) {
-    const tdlibOrigDllExists = await fs.access(path.join(tdlibDir, tdlibDll)).then(() => true).catch(() => false)
-    if (tdlibOrigDllExists) {
-      await fs.copyFile( path.join(tdlibDir, tdlibDll), path.join(process.cwd(), tdlibDll))
-    }
+const binariesDirPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')
+
+const fileExists = (filePath: string) =>
+  fs.access(filePath).then(() => true).catch(() => false)
+
+async function copyToCwd(fileName: string): Promise<void> {
+  const newFilePath = path.join(process.cwd(), fileName)
+  const exists = await fileExists(newFilePath)
+  if (!exists) {
+    await fs.copyFile(path.join(binariesDirPath, fileName), newFilePath)
   }
 }
+async function copyDLLsForWindows() {
+  const promises = ['libcrypto-1_1-x64.dll', 'libssl-1_1-x64.dll', 'zlib1.dll'].map(fileName => copyToCwd(fileName))
+  return Promise.all(promises)
+}
 
-const tdlibPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram', {
+const tdlibPath = path.join(binariesDirPath, {
   darwin: `${process.arch}_libtdjson.dylib`,
   linux: `${process.arch}_libtdjson.so`,
   win32: `${process.arch}_libtdjson.dll`,
@@ -147,17 +154,13 @@ export default class TelegramAPI implements PlatformAPI {
 
   init = async (session: Session, accountInfo: AccountInfo) => {
     texts.log({ tdlibPath })
-    const tdlibExists = await fs.access(tdlibPath).then(() => true).catch(() => false)
+    const tdlibExists = await fileExists(tdlibPath)
     if (!tdlibExists) {
       throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
     }
 
-    if (process.platform === "win32") {
-      const tdlibDir = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')
-      const tdlibDlls = ["libcrypto-1_1-x64.dll", "libssl-1_1-x64.dll", "zlib1.dll"]
-      for(let i=0; i<tdlibDlls.length; i++) {
-        await copyTdlibDll(tdlibDir, tdlibDlls[i]);
-      }
+    if (process.platform === 'win32') {
+      await copyDLLsForWindows()
     }
 
     this.accountInfo = accountInfo
