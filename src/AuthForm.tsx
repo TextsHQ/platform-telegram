@@ -49,7 +49,7 @@ const TelegramAuth: React.FC<{
           </label>
         )}
         <label>
-          <button type="submit" disabled={!isPossiblePhoneNumber(phoneNumber) || loading}>{loading ? '...' : '→'}</button>
+          <button type="submit" disabled={!isPossiblePhoneNumber(phoneNumber || '') || loading}>{loading ? '...' : '→'}</button>
         </label>
       </form>
     </div>
