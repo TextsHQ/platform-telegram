@@ -141,6 +141,36 @@ export default class TelegramAPI implements PlatformAPI {
     if (!tdlibExists) {
       throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
     }
+
+    const tdlibDir = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram');
+
+    const tdlibDll1 = "libcrypto-1_1-x64.dll";
+    const tdlibDll1Exists = await fs.access(path.join(process.cwd(), tdlibDll1)).then(() => true).catch(() => false)
+    if (!tdlibDll1Exists) {
+      const tdlibOrigDll1Exists = await fs.access(path.join(tdlibDir, tdlibDll1)).then(() => true).catch(() => false)
+      if (tdlibOrigDll1Exists) {
+        await fs.copyFile( path.join(tdlibDir, tdlibDll1), path.join(process.cwd(), tdlibDll1))
+      }
+    }
+
+    const tdlibDll2 = "libssl-1_1-x64.dll";
+    const tdlibDll2Exists = await fs.access(path.join(process.cwd(), tdlibDll2)).then(() => true).catch(() => false)
+    if (!tdlibDll2Exists) {
+      const tdlibOrigDll2Exists = await fs.access(path.join(tdlibDir, tdlibDll2)).then(() => true).catch(() => false)
+      if (tdlibOrigDll2Exists) {
+        await fs.copyFile( path.join(tdlibDir, tdlibDll2), path.join(process.cwd(), tdlibDll2))
+      }
+    }
+
+    const tdlibDll3 = "zlib1.dll";
+    const tdlibDll3Exists = await fs.access(path.join(process.cwd(), tdlibDll3)).then(() => true).catch(() => false)
+    if (!tdlibDll3Exists) {
+      const tdlibOrigDll3Exists = await fs.access(path.join(tdlibDir, tdlibDll3)).then(() => true).catch(() => false)
+      if (tdlibOrigDll3Exists) {
+        await fs.copyFile( path.join(tdlibDir, tdlibDll3), path.join(process.cwd(), tdlibDll3))
+      }
+    }
+
     this.accountInfo = accountInfo
     if (session) {
       this.session = session
