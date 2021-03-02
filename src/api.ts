@@ -101,7 +101,7 @@ const binariesDirPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-tele
 const fileExists = (filePath: string) =>
   fs.access(filePath).then(() => true).catch(() => false)
 
-async function copyToCwd(fileName: string): Promise<void> {
+async function copyToCwd(fileName: string) {
   const newFilePath = path.join(process.cwd(), fileName)
   const exists = await fileExists(newFilePath)
   if (!exists) {
