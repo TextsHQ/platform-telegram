@@ -206,24 +206,30 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
+    const mapError = (message: string) => {
+      if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
+      if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
+      if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
+      return message
+    }
     const { phoneNumber, code, password } = creds.custom || {}
     switch (this.authState._) {
       case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
         const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
         const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: data.message }
+        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
         return { type: 'wait' }
       }
       case AUTHORIZATION_STATE.authorizationStateWaitCode: {
         const res = await this.airgram.api.checkAuthenticationCode({ code })
         const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: data.message }
+        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
         return { type: 'wait' }
       }
       case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
         const res = await this.airgram.api.checkAuthenticationPassword({ password })
         const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: data.message }
+        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
         return { type: 'wait' }
       }
       case AUTHORIZATION_STATE.authorizationStateReady: {
