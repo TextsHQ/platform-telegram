@@ -258,11 +258,34 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
+  private asyncUpdateParticipants = async (chat: Chat, thread: Thread) => {
+    const members = await this._getParticipants(chat)
+    const participants = {
+      hasMore: false,
+      items: members.map(m => mapUser(m, this.accountInfo.accountID)),
+    }
+    setTimeout(() => {
+      const presenceEvents = members.map(x => mapUserPresence(x.id, x.status))
+      this.onEvent(presenceEvents)
+    })
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'update',
+      objectName: 'thread',
+      objectIDs: { threadID: thread.id },
+      entries: [
+        {
+          id: thread.id,
+          participants,
+        }
+      ],
+    }])
+  }
+
   private asyncMapThread = async (chat: Chat) => {
-    const participants = await this._getParticipants(chat)
-    const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
-    this.onEvent(presenceEvents)
-    return mapThread(chat, participants, this.accountInfo.accountID)
+    const thread = mapThread(chat, [], this.accountInfo.accountID)
+    this.asyncUpdateParticipants(chat, thread)
+    return thread
   }
 
   private registerUpdateListeners() {
@@ -406,9 +429,11 @@ export default class TelegramAPI implements PlatformAPI {
       }])
     })
     this.airgram.on(UPDATE.updateUserStatus, async ({ update }) => {
+      if (!this.getThreadsDone) return
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
     this.airgram.on(UPDATE.updateChatReadOutbox, async ({ update }) => {
+      if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
       const event: StateSyncEvent = {
