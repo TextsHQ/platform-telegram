@@ -253,6 +253,7 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageVideoNote': {
       const { videoNote } = msg.content
+      mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
       mapped.attachments.push({
         id: String(videoNote.video.id),
         srcURL: getAssetURL(videoNote.video),
