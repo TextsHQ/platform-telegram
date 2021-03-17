@@ -1,7 +1,7 @@
 import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
-import { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion } from 'airgram'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration } from 'date-fns'
+import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion } from 'airgram'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in

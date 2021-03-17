@@ -1,7 +1,7 @@
 import React, { FormEvent } from 'react'
 import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
-import { PlatformAPI, LoginCreds, LoginResult } from '@textshq/platform-sdk'
+import type { PlatformAPI, LoginCreds, LoginResult } from '@textshq/platform-sdk'
 
 const TelegramAuth: React.FC<{
   api: PlatformAPI
