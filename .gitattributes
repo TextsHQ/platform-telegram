@@ -1,8 +1,2 @@
 * text=auto eol=lf
-binaries/arm64_libtdjson.dylib filter=lfs diff=lfs merge=lfs -text
-binaries/x64_libtdjson.dll filter=lfs diff=lfs merge=lfs -text
-binaries/x64_libtdjson.dylib filter=lfs diff=lfs merge=lfs -text
-binaries/x64_libtdjson.so filter=lfs diff=lfs merge=lfs -text
-binaries/libcrypto-1_1-x64.dll filter=lfs diff=lfs merge=lfs -text
-binaries/libssl-1_1-x64.dll filter=lfs diff=lfs merge=lfs -text
-binaries/zlib1.dll filter=lfs diff=lfs merge=lfs -text
+binaries/* filter=lfs diff=lfs merge=lfs -text
