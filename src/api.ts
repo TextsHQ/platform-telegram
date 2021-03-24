@@ -512,6 +512,16 @@ export default class TelegramAPI implements PlatformAPI {
     return toObject(res)
   }
 
+  getUser = async ({ username }: { username: string }) => {
+    if (!username) return
+    const res = await this.airgram.api.searchPublicChat({ username })
+    const chat = toObject(res)
+    if (isError(chat)) return
+    if (chat.type._ !== 'chatTypePrivate') return
+    const user = await this._getUser(chat.type.userId)
+    return mapUser(user, this.accountInfo.accountID)
+  }
+
   private _getParticipants = async (chat: ChatUnion) => {
     const mapMembers = (members: ChatMember[]) => Promise.all(members.map(member => this._getUser(member.userId)))
     switch (chat.type._) {
