@@ -23,7 +23,7 @@ const TelegramAuth: React.FC<{
       setAuthState(data)
       if (data === 'authorizationStateReady') onSubmit()
     })
-  })
+  }, [])
   return (
     <div className="auth telegram-auth">
       <form onSubmit={onSubmit}>
