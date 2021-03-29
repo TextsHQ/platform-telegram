@@ -470,6 +470,7 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
 }
 
 export function mapUser(user: TGUser, accountID: string): User {
+  if (!user) return
   const file = user.profilePhoto?.small
   const imgURL = file ? getAssetURLWithAccountID(accountID, file) : undefined
   return {
