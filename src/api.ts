@@ -415,9 +415,11 @@ export default class TelegramAPI implements PlatformAPI {
       }])
     })
     this.airgram.on(UPDATE.updateUserStatus, async ({ update }) => {
+      if (!this.getThreadsDone) return
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
     this.airgram.on(UPDATE.updateChatReadOutbox, async ({ update }) => {
+      if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
       const event: StateSyncEvent = {
