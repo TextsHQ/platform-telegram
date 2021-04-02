@@ -194,6 +194,14 @@ export default class TelegramAPI implements PlatformAPI {
       }
     })
     if (session) await this.afterLogin()
+    // if (texts.IS_DEV) {
+    //   this.airgram.use((ctx, next) => {
+    //     if ('update' in ctx) {
+    //       console.log(`[${ctx._}]`, JSON.stringify(ctx.update))
+    //     }
+    //     return next()
+    //   })
+    // }
   }
 
   onLoginEvent = (onEvent: Function) => {
@@ -240,7 +248,7 @@ export default class TelegramAPI implements PlatformAPI {
     return { type: 'error', errorMessage: this.authState._ }
   }
 
-  private handleMessageUpdate = (tgMessage: TGMessage) => {
+  private onUpdateNewMessage = (tgMessage: TGMessage) => {
     if (tgMessage.sendingState) {
       // Sent message is handled in updateMessageSendSucceeded.
       return
@@ -322,11 +330,11 @@ export default class TelegramAPI implements PlatformAPI {
       }
     })
     this.airgram.on(UPDATE.updateNewMessage, async ({ update }) => {
-      this.handleMessageUpdate(update.message)
+      this.onUpdateNewMessage(update.message)
     })
     this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
       const resolve = this.sendMessageResolvers.get(update.oldMessageId)
-      if (!resolve) return console.warn('unable to find promise resolver for update.oldMessageId')
+      if (!resolve) return console.warn('unable to find promise resolver for update.updateMessageSendSucceeded', update.oldMessageId)
       resolve([mapMessage(update.message)])
       this.sendMessageResolvers.delete(update.oldMessageId)
     })
@@ -369,7 +377,8 @@ export default class TelegramAPI implements PlatformAPI {
     })
     this.airgram.on(UPDATE.updateFile, async ({ update }) => {
       const resolve = this.getAssetResolvers.get(update.file.id)
-      if (resolve && update.file.local.isDownloadingCompleted && update.file.local.path) {
+      if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', update.file.id)
+      if (update.file.local.isDownloadingCompleted && update.file.local.path) {
         resolve(`file://${update.file.local.path}`)
         this.getAssetResolvers.delete(update.file.id)
       }
