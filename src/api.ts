@@ -570,7 +570,8 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  getThreads = async (inboxName: InboxName, { cursor, direction }: PaginationArg = { cursor: null, direction: null }): Promise<Paginated<Thread>> => {
+  getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
+    const { cursor, direction } = pagination || { cursor: null, direction: null }
     if (inboxName !== InboxName.NORMAL) return
     const limit = 25
     const chatsResponse = await this.airgram.api.getChats({
@@ -598,7 +599,8 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  getMessages = async (threadID: string, { cursor, direction }: PaginationArg = { cursor: null, direction: null }): Promise<Paginated<Message>> => {
+  getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
+    const { cursor, direction } = pagination || { cursor: null, direction: null }
     const messagesResponse = await this.airgram.api.getChatHistory({
       limit: 20,
       chatId: +threadID,
