@@ -1,3 +1,6 @@
+// this should be the first import to fix PATH env variable on windows
+// eslint-disable-next-line
+import { copyDLLsForWindows, IS_WINDOWS } from './windows'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
@@ -7,8 +10,9 @@ import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMess
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
 
-import { API_ID, API_HASH } from './constants'
+import { API_ID, API_HASH, BINARIES_DIR_PATH } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence } from './mappers'
+import { fileExists } from './util'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 
@@ -96,24 +100,7 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
   return textInput
 }
 
-const binariesDirPath = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')
-
-const fileExists = (filePath: string) =>
-  fs.access(filePath).then(() => true).catch(() => false)
-
-async function copyToCwd(fileName: string) {
-  const newFilePath = path.join(process.cwd(), fileName)
-  const exists = await fileExists(newFilePath)
-  if (!exists) {
-    await fs.copyFile(path.join(binariesDirPath, fileName), newFilePath)
-  }
-}
-async function copyDLLsForWindows() {
-  const promises = ['libcrypto-1_1-x64.dll', 'libssl-1_1-x64.dll', 'zlib1.dll'].map(fileName => copyToCwd(fileName))
-  return Promise.all(promises)
-}
-
-const tdlibPath = path.join(binariesDirPath, {
+const tdlibPath = path.join(BINARIES_DIR_PATH, {
   darwin: `${process.arch}_libtdjson.dylib`,
   linux: `${process.arch}_libtdjson.so`,
   win32: `${process.arch}_libtdjson.dll`,
@@ -159,7 +146,7 @@ export default class TelegramAPI implements PlatformAPI {
       throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
     }
 
-    if (process.platform === 'win32') {
+    if (IS_WINDOWS) {
       await copyDLLsForWindows()
     }
 
