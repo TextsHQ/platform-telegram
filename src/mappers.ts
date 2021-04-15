@@ -168,8 +168,7 @@ export function mapMessage(msg: TGMessage) {
     textAttributes: undefined,
     senderID: String(getSenderID(msg)),
     isSender: msg.isOutgoing,
-    attachments: [],
-    reactions: [],
+    attachments: undefined,
     isErrored: msg.sendingState?._ === 'messageSendingStateFailed',
     isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
     linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
@@ -181,6 +180,7 @@ export function mapMessage(msg: TGMessage) {
     mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
   }
   const pushSticker = (sticker: Sticker, loop: boolean = undefined) => {
+    mapped.attachments = mapped.attachments || []
     mapped.attachments.push({
       id: String(sticker.sticker.id),
       srcURL: getAssetURL(sticker.sticker),
@@ -205,6 +205,7 @@ export function mapMessage(msg: TGMessage) {
     case 'messagePhoto': {
       setFormattedText(msg.content.caption)
       const photo = msg.content.photo.sizes.slice(-1)[0]
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(photo.photo.id),
         srcURL: getAssetURL(photo.photo),
@@ -216,6 +217,7 @@ export function mapMessage(msg: TGMessage) {
     case 'messageVideo': {
       setFormattedText(msg.content.caption)
       const { video } = msg.content
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(video.video.id),
         srcURL: getAssetURL(video.video),
@@ -229,6 +231,7 @@ export function mapMessage(msg: TGMessage) {
     case 'messageAudio': {
       setFormattedText(msg.content.caption)
       const { audio } = msg.content
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(audio.audio.id),
         srcURL: getAssetURL(audio.audio),
@@ -241,6 +244,7 @@ export function mapMessage(msg: TGMessage) {
     case 'messageDocument': {
       setFormattedText(msg.content.caption)
       const { document } = msg.content
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(document.document.id),
         type: MessageAttachmentType.UNKNOWN,
@@ -254,6 +258,7 @@ export function mapMessage(msg: TGMessage) {
     case 'messageVideoNote': {
       const { videoNote } = msg.content
       mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(videoNote.video.id),
         srcURL: getAssetURL(videoNote.video),
@@ -264,6 +269,7 @@ export function mapMessage(msg: TGMessage) {
     case 'messageVoiceNote': {
       setFormattedText(msg.content.caption)
       const { voiceNote } = msg.content
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(voiceNote.voice.id),
         srcURL: getAssetURL(voiceNote.voice),
@@ -274,6 +280,7 @@ export function mapMessage(msg: TGMessage) {
     case 'messageAnimation': {
       setFormattedText(msg.content.caption)
       const { animation } = msg.content
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(animation.animation.id),
         srcURL: getAssetURL(animation.animation),
@@ -292,6 +299,7 @@ export function mapMessage(msg: TGMessage) {
     }
     case 'messageContact': {
       const { contact } = msg.content
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(contact.userId),
         type: MessageAttachmentType.UNKNOWN,
