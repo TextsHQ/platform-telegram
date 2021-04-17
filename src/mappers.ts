@@ -184,7 +184,7 @@ export function mapMessage(msg: TGMessage) {
     mapped.attachments.push({
       id: String(sticker.sticker.id),
       srcURL: getAssetURL(sticker.sticker),
-      mimeType: 'image/tgs',
+      mimeType: sticker.isAnimated ? 'image/tgs' : undefined,
       type: MessageAttachmentType.IMG,
       isGif: true,
       isSticker: true,
