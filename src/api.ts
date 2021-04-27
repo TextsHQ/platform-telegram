@@ -262,8 +262,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private asyncMapThread = async (chat: Chat) => {
     const participants = await this._getParticipants(chat)
-    const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
-    this.onEvent(presenceEvents)
+    // const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
+    // this.onEvent(presenceEvents)
     return mapThread(chat, participants, this.accountInfo.accountID)
   }
 
