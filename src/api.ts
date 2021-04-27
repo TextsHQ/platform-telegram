@@ -163,6 +163,8 @@ export default class TelegramAPI implements PlatformAPI {
       apiId: API_ID,
       apiHash: API_HASH,
       command: tdlibPath,
+      applicationVersion: texts.constants.APP_VERSION,
+      systemVersion: `${os.platform()} ${os.release()}`,
       logVerbosityLevel: texts.IS_DEV ? 2 : 0,
       useChatInfoDatabase: true,
       useSecretChats: true,
