@@ -1,6 +1,7 @@
 import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
-import { formatDuration } from 'date-fns'
+import { formatDuration, addSeconds } from 'date-fns'
+import { MUTED_FOREVER_CONSTANT } from './constants'
 import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion } from 'airgram'
 
 /**
@@ -531,6 +532,12 @@ export function mapUserPresence(userId: number, status: UserStatusUnion): UserPr
   }
 }
 
+export const mapMuteFor = (seconds: number) => {
+  if (seconds >= MUTED_FOREVER_CONSTANT) return 'forever'
+  if (seconds === 0) return
+  return addSeconds(new Date(), seconds)
+}
+
 export function mapThread(thread: Chat, members: TGUser[], accountID: string): Thread {
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage)] : []
   const imgFile = thread.photo?.small
@@ -541,6 +548,7 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
     timestamp: messages[0]?.timestamp || new Date(),
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: !thread.permissions.canSendMessages,
+    mutedUntil: mapMuteFor(thread.notificationSettings.muteFor),
     imgURL: imgFile ? getAssetURLWithAccountID(accountID, imgFile) : undefined,
     title: thread.title,
     messages: {

@@ -10,8 +10,8 @@ import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMess
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
 
-import { API_ID, API_HASH, BINARIES_DIR_PATH } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence } from './mappers'
+import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor } from './mappers'
 import { fileExists } from './util'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
@@ -324,6 +324,18 @@ export default class TelegramAPI implements PlatformAPI {
         this.superGroupIdToChatId.delete(update.supergroup.id)
       }
     })
+    this.airgram.on(UPDATE.updateChatNotificationSettings, async ({ update }) => {
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        objectIDs: {},
+        mutationType: 'update',
+        objectName: 'thread',
+        entries: [{
+          id: update.chatId.toString(),
+          mutedUntil: mapMuteFor(update.notificationSettings.muteFor),
+        }],
+      }])
+    })
     this.airgram.on(UPDATE.updateNewMessage, async ({ update }) => {
       this.onUpdateNewMessage(update.message)
     })
@@ -502,6 +514,19 @@ export default class TelegramAPI implements PlatformAPI {
     })
     const chat = toObject(res)
     return this.asyncMapThread(chat)
+  }
+
+  updateThread = async (threadID: string, updates: Partial<Thread>) => {
+    if ('mutedUntil' in updates) {
+      await this.airgram.api.setChatNotificationSettings({
+        chatId: +threadID,
+        notificationSettings: {
+          _: 'chatNotificationSettings',
+          muteFor: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0,
+        },
+      })
+      return true
+    }
   }
 
   deleteThread = async (threadID: string) => {
