@@ -274,6 +274,7 @@ export default class TelegramAPI implements PlatformAPI {
         // here. And update.chat.lastMessage seems to be always null, which will
         // mess up thread timestamp.
         // If the chat has no position, no need to show it in thread list.
+        texts.log('ignoring updateNewChat, get threads:', this.getThreadsDone, 'position:', update.chat.positions.length)
         return
       }
       const thread = await this.asyncMapThread(update.chat)
@@ -492,9 +493,7 @@ export default class TelegramAPI implements PlatformAPI {
   createThread = async (userIDs: string[], title?: string) => {
     if (userIDs.length === 0) return
     if (userIDs.length === 1) {
-      const chatResponse = await this.airgram.api.createPrivateChat({
-        userId: +userIDs[0],
-      })
+      const chatResponse = await this.airgram.api.createPrivateChat({ userId: +userIDs[0] })
       return this.asyncMapThread(toObject(chatResponse))
     }
     const res = await this.airgram.api.createNewBasicGroupChat({
@@ -554,7 +553,7 @@ export default class TelegramAPI implements PlatformAPI {
         }
         const membersRes = await this.airgram.api.getSupergroupMembers({
           supergroupId: chat.type.supergroupId,
-          limit: 256, // random limit
+          limit: 256, // todo, random limit
         })
         const { members } = toObject(membersRes)
         return mapMembers(members)
@@ -562,6 +561,14 @@ export default class TelegramAPI implements PlatformAPI {
       default:
         return []
     }
+  }
+
+  private loadChats = async (chatIds: number[]) => {
+    const chats = await Promise.all(chatIds.map(async chatId => {
+      const chatResponse = await this.airgram.api.getChat({ chatId })
+      return toObject(chatResponse)
+    }))
+    return chats
   }
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
@@ -572,14 +579,11 @@ export default class TelegramAPI implements PlatformAPI {
       limit,
       offsetChatId: +cursor,
       offsetOrder: (cursor && this.lastChat)
-        ? this.lastChat.positions.find(x => x.list._ === 'chatListMain').order
+        ? this.lastChat.positions.find(x => x.list._ === 'chatListMain')?.order
         : MAX_SIGNED_64BIT_NUMBER,
     })
     const { chatIds } = toObject(chatsResponse)
-    const chats = await Promise.all(chatIds.map(async chatId => {
-      const chatResponse = await this.airgram.api.getChat({ chatId })
-      return toObject(chatResponse)
-    }))
+    const chats = await this.loadChats(chatIds)
     this.lastChat = chats[chats.length - 1]
     const items = await Promise.all(chats.map(this.asyncMapThread))
     const hasMore = items.length === limit
@@ -700,10 +704,7 @@ export default class TelegramAPI implements PlatformAPI {
     texts.log('get asset', type, fileIdStr)
     if (type !== 'file') throw new Error('unknown asset type')
     const fileId = +fileIdStr
-    await this.airgram.api.downloadFile({
-      fileId,
-      priority: 32,
-    })
+    await this.airgram.api.downloadFile({ fileId, priority: 32 })
     return new Promise<string>(resolve => {
       this.getAssetResolvers.set(fileId, resolve)
     })
