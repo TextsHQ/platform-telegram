@@ -473,6 +473,14 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       mapped.isAction = true
       mapped.parseTemplate = true
       break
+    case 'messagePaymentSuccessful':
+      mapped.text = `You have successfully transfered ${msg.content.currency} ${msg.content.totalAmount}`
+      mapped.linkedMessageID = String(msg.content.invoiceMessageId)
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      break
+    case 'messageUnsupported':
+      mapped.textHeading = 'Unsupported Telegram message'
   }
   return mapped
 }
