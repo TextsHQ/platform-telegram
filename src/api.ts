@@ -92,7 +92,7 @@ async function getInputMessageContent(msgContent: MessageContent): Promise<Input
     return getFileInput(msgContent, filePath, formattedTextInput)
   }
   if (fileBuffer) {
-    const tmpFilePath = path.join(os.tmpdir(), fileName || Math.random().toString(36))
+    const tmpFilePath = path.join(os.tmpdir(), `${fileName}.${Math.random().toString(36)}`)
     await fs.writeFile(tmpFilePath, fileBuffer)
     return getFileInput(msgContent, tmpFilePath, formattedTextInput)
     // TODO fs.unlink(tmpFilePath).catch(() => {})
