@@ -11,7 +11,7 @@ import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } fr
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons } from './mappers'
 import { fileExists } from './util'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
@@ -247,7 +247,7 @@ export default class TelegramAPI implements PlatformAPI {
       // Sent message is handled in updateMessageSendSucceeded.
       return
     }
-    const message = mapMessage(tgMessage)
+    const message = mapMessage(tgMessage, this.accountInfo.accountID)
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -342,7 +342,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
       const resolve = this.sendMessageResolvers.get(update.oldMessageId)
       if (!resolve) return console.warn('unable to find promise resolver for update.updateMessageSendSucceeded', update.oldMessageId)
-      resolve([mapMessage(update.message)])
+      resolve([mapMessage(update.message, this.accountInfo.accountID)])
       this.sendMessageResolvers.delete(update.oldMessageId)
     })
     this.airgram.on(UPDATE.updateDeleteMessages, async ({ update }) => {
@@ -442,6 +442,35 @@ export default class TelegramAPI implements PlatformAPI {
         ],
       }
       this.onEvent([event])
+    })
+    this.airgram.on(UPDATE.updateMessageEdited, async ({ update }) => {
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
+        entries: [{
+          id: String(update.messageId),
+          editedTimestamp: update.editDate ? new Date(update.editDate * 1000) : undefined,
+          buttons: getMessageButtons(update.replyMarkup, this.accountInfo.accountID, update.chatId, update.messageId)
+        }],
+      }])
+    })
+    this.airgram.on(UPDATE.updateMessageContent, async ({ update }) => {
+      // we should be mapping only update.newContent here
+      // this saves us from refactoring mapMessage
+      const res = await this.airgram.api.getMessage({
+        chatId: update.chatId,
+        messageId: update.messageId,
+      })
+      const message = toObject(res)
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
+        entries: [mapMessage(message, this.accountInfo.accountID)],
+      }])
     })
   }
 
@@ -641,7 +670,7 @@ export default class TelegramAPI implements PlatformAPI {
       messages.push(...toObject(res).messages)
     }
     return {
-      items: mapMessages(messages).reverse(),
+      items: mapMessages(messages, this.accountInfo.accountID).reverse(),
       hasMore: messages.length >= 20,
     }
   }
@@ -733,5 +762,27 @@ export default class TelegramAPI implements PlatformAPI {
     return new Promise<string>(resolve => {
       this.getAssetResolvers.set(fileId, resolve)
     })
+  }
+
+  handleDeepLink = async (link: string) => {
+    const [,,,, type, chatID, messageID, data] = link.split('/')
+    if (type !== 'callback') return
+    const res = await this.airgram.api.getCallbackQueryAnswer({
+      chatId: +chatID,
+      messageId: +messageID,
+      payload: {
+        _: 'callbackQueryPayloadData',
+        data,
+      }
+    })
+    const answer = toObject(res)
+    if (!answer.text) return
+    this.onEvent([{
+      type: ServerEventType.TOAST,
+      toast: {
+        // todo answer.url
+        text: answer.text,
+      },
+    }])
   }
 }

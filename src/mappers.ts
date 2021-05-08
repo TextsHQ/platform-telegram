@@ -87,22 +87,27 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
   }
 }
 
-function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion) {
+function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion, accountID: string, chatID: number, messageID: number) {
   switch (row._) {
     case 'inlineKeyboardButtonTypeUrl':
       return row.url
     case 'inlineKeyboardButtonTypeSwitchInline':
       return 'texts://fill-textarea?text=' + encodeURIComponent(row.query)
+    case 'inlineKeyboardButtonTypeCallback':
+      return `texts://platform-callback/${accountID}/callback/${chatID}/${messageID}/${'data' in row ? row.data : ''}`
+    // case 'inlineKeyboardButtonTypeCallbackGame':
+    // case 'inlineKeyboardButtonTypeCallbackWithPassword':
+    //   return 'texts://platform-callback/' + row.data
   }
 }
 
-function getButtons(replyMarkup: ReplyMarkupUnion) {
+export function getMessageButtons(replyMarkup: ReplyMarkupUnion, accountID: string, chatID: number, messageID: number) {
   if (!replyMarkup) return
   switch (replyMarkup._) {
     case 'replyMarkupInlineKeyboard':
       return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => ({
         label: row.text,
-        linkURL: getButtonLinkURL(row.type),
+        linkURL: getButtonLinkURL(row.type, accountID, chatID, messageID),
       })))
     case 'replyMarkupShowKeyboard':
       return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => {
@@ -157,7 +162,7 @@ function getSenderID(msg: TGMessage) {
   return msg.sender.chatId === msg.chatId ? '$thread' : msg.sender.chatId
 }
 
-export function mapMessage(msg: TGMessage) {
+export function mapMessage(msg: TGMessage, accountID: string) {
   const mapped: Message = {
     _original: JSON.stringify(msg),
     id: String(msg.id),
@@ -173,7 +178,7 @@ export function mapMessage(msg: TGMessage) {
     isErrored: msg.sendingState?._ === 'messageSendingStateFailed',
     isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
     linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
-    buttons: getButtons(msg.replyMarkup),
+    buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId, msg.id),
     expiresInSeconds: msg.ttlExpiresIn,
   }
   const setFormattedText = (ft: FormattedText) => {
@@ -539,7 +544,7 @@ export const mapMuteFor = (seconds: number) => {
 }
 
 export function mapThread(thread: Chat, members: TGUser[], accountID: string): Thread {
-  const messages = thread.lastMessage ? [mapMessage(thread.lastMessage)] : []
+  const messages = thread.lastMessage ? [mapMessage(thread.lastMessage, accountID)] : []
   const imgFile = thread.photo?.small
   const t: Thread = {
     _original: JSON.stringify([thread, members]),
@@ -564,4 +569,5 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
   return t
 }
 
-export const mapMessages = (messages: TGMessage[]) => messages.map(mapMessage)
+export const mapMessages = (messages: TGMessage[], accountID: string) =>
+  messages.map(m => mapMessage(m, accountID))
