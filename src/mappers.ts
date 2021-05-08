@@ -90,6 +90,7 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
 function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion, accountID: string, chatID: number, messageID: number) {
   switch (row._) {
     case 'inlineKeyboardButtonTypeUrl':
+    case 'inlineKeyboardButtonTypeLoginUrl':
       return row.url
     case 'inlineKeyboardButtonTypeSwitchInline':
       return 'texts://fill-textarea?text=' + encodeURIComponent(row.query)
