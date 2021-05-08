@@ -289,7 +289,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
       this.onEvent([event])
     })
-    this.airgram.on(UPDATE.updateSecretChat, async ({ update }) => {
+    this.airgram.on(UPDATE.updateSecretChat, ({ update }) => {
       if (update.secretChat.state._ === SECRET_CHAT_STATE.secretChatStateClosed) {
         // Secret chat is accepted by another device or closed.
         const chatId = this.secretChatIdToChatId.get(update.secretChat.id)
@@ -298,7 +298,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.secretChatIdToChatId.delete(update.secretChat.id)
       }
     })
-    this.airgram.on(UPDATE.updateBasicGroup, async ({ update }) => {
+    this.airgram.on(UPDATE.updateBasicGroup, ({ update }) => {
       const { status } = update.basicGroup
       if (
         status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
@@ -311,7 +311,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.basicGroupIdToChatId.delete(update.basicGroup.id)
       }
     })
-    this.airgram.on(UPDATE.updateSupergroup, async ({ update }) => {
+    this.airgram.on(UPDATE.updateSupergroup, ({ update }) => {
       const { status } = update.supergroup
       if (
         status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
@@ -324,7 +324,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.superGroupIdToChatId.delete(update.supergroup.id)
       }
     })
-    this.airgram.on(UPDATE.updateChatNotificationSettings, async ({ update }) => {
+    this.airgram.on(UPDATE.updateChatNotificationSettings, ({ update }) => {
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
         objectIDs: {},
@@ -336,16 +336,16 @@ export default class TelegramAPI implements PlatformAPI {
         }],
       }])
     })
-    this.airgram.on(UPDATE.updateNewMessage, async ({ update }) => {
+    this.airgram.on(UPDATE.updateNewMessage, ({ update }) => {
       this.onUpdateNewMessage(update.message)
     })
-    this.airgram.on(UPDATE.updateMessageSendSucceeded, async ({ update }) => {
+    this.airgram.on(UPDATE.updateMessageSendSucceeded, ({ update }) => {
       const resolve = this.sendMessageResolvers.get(update.oldMessageId)
       if (!resolve) return console.warn('unable to find promise resolver for update.updateMessageSendSucceeded', update.oldMessageId)
       resolve([mapMessage(update.message, this.accountInfo.accountID)])
       this.sendMessageResolvers.delete(update.oldMessageId)
     })
-    this.airgram.on(UPDATE.updateDeleteMessages, async ({ update }) => {
+    this.airgram.on(UPDATE.updateDeleteMessages, ({ update }) => {
       if (!update.isPermanent) {
         return
       }
@@ -361,7 +361,7 @@ export default class TelegramAPI implements PlatformAPI {
         },
       ])
     })
-    this.airgram.on(UPDATE.updateUserChatAction, async ({ update }) => {
+    this.airgram.on(UPDATE.updateUserChatAction, ({ update }) => {
       switch (update.action._) {
         case 'chatActionTyping': {
           return this.onEvent([{
@@ -382,7 +382,7 @@ export default class TelegramAPI implements PlatformAPI {
         default:
       }
     })
-    this.airgram.on(UPDATE.updateFile, async ({ update }) => {
+    this.airgram.on(UPDATE.updateFile, ({ update }) => {
       const resolve = this.getAssetResolvers.get(update.file.id)
       if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', update.file.id)
       if (update.file.local.isDownloadingCompleted && update.file.local.path) {
@@ -390,7 +390,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.getAssetResolvers.delete(update.file.id)
       }
     })
-    this.airgram.on(UPDATE.updateChatIsMarkedAsUnread, async ({ update }) => {
+    this.airgram.on(UPDATE.updateChatIsMarkedAsUnread, ({ update }) => {
       const threadID = update.chatId.toString()
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
@@ -405,7 +405,7 @@ export default class TelegramAPI implements PlatformAPI {
         ],
       }])
     })
-    this.airgram.on(UPDATE.updateChatReadInbox, async ({ update }) => {
+    this.airgram.on(UPDATE.updateChatReadInbox, ({ update }) => {
       if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       this.onEvent([{
@@ -421,11 +421,11 @@ export default class TelegramAPI implements PlatformAPI {
         ],
       }])
     })
-    this.airgram.on(UPDATE.updateUserStatus, async ({ update }) => {
+    this.airgram.on(UPDATE.updateUserStatus, ({ update }) => {
       if (!this.getThreadsDone) return
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
-    this.airgram.on(UPDATE.updateChatReadOutbox, async ({ update }) => {
+    this.airgram.on(UPDATE.updateChatReadOutbox, ({ update }) => {
       if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
@@ -443,7 +443,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
       this.onEvent([event])
     })
-    this.airgram.on(UPDATE.updateMessageEdited, async ({ update }) => {
+    this.airgram.on(UPDATE.updateMessageEdited, ({ update }) => {
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
