@@ -2,7 +2,7 @@ import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAt
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
-import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion } from 'airgram'
+import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo } from 'airgram'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
@@ -153,10 +153,12 @@ function mapMessageLink(webPage: WebPage) {
   return link
 }
 
-function* getTextFooter(msg: TGMessage) {
-  if (msg.interactionInfo?.viewCount) yield `${msg.interactionInfo!.viewCount.toLocaleString()} ${msg.interactionInfo!.viewCount === 1 ? 'view' : 'views'}`
-  if (msg.interactionInfo?.forwardCount) yield `${msg.interactionInfo!.forwardCount.toLocaleString()} ${msg.interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
+function* getTextFooter(interactionInfo: MessageInteractionInfo) {
+  if (interactionInfo?.viewCount) yield `${interactionInfo!.viewCount.toLocaleString()} ${interactionInfo!.viewCount === 1 ? 'view' : 'views'}`
+  if (interactionInfo?.forwardCount) yield `${interactionInfo!.forwardCount.toLocaleString()} ${interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
 }
+
+export const mapTextFooter = (interactionInfo: MessageInteractionInfo) => [...getTextFooter(interactionInfo)].join(' · ')
 
 function getSenderID(msg: TGMessage) {
   if (msg.sender._ === 'messageSenderUser') return msg.sender.userId
@@ -171,7 +173,7 @@ export function mapMessage(msg: TGMessage, accountID: string) {
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
     forwardedCount: msg.forwardInfo?.date ? 1 : undefined,
-    textFooter: [...getTextFooter(msg)].join(' · '),
+    textFooter: mapTextFooter(msg.interactionInfo),
     textAttributes: undefined,
     senderID: String(getSenderID(msg)),
     isSender: msg.isOutgoing,

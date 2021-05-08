@@ -11,7 +11,7 @@ import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } fr
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter } from './mappers'
 import { fileExists } from './util'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
@@ -470,6 +470,18 @@ export default class TelegramAPI implements PlatformAPI {
         objectName: 'message',
         objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
         entries: [mapMessage(message, this.accountInfo.accountID)],
+      }])
+    })
+    this.airgram.on('updateMessageInteractionInfo', ({ update }) => {
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
+        entries: [{
+          id: String(update.messageId),
+          textFooter: mapTextFooter(update.interactionInfo),
+        }],
       }])
     })
   }
