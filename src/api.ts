@@ -125,6 +125,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private getAssetResolvers = new Map<number, GetAssetResolveFunction>()
 
+  private fileIdToPath = new Map<number, string>()
+
   private loginEventCallback: Function
 
   private connStateChangeCallback: OnConnStateChangeCallback
@@ -386,7 +388,9 @@ export default class TelegramAPI implements PlatformAPI {
       const resolve = this.getAssetResolvers.get(update.file.id)
       if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', update.file.id)
       if (update.file.local.isDownloadingCompleted && update.file.local.path) {
-        resolve(`file://${update.file.local.path}`)
+        const filePath =`file://${update.file.local.path}`
+        this.fileIdToPath.set(update.file.id, filePath)
+        resolve(filePath)
         this.getAssetResolvers.delete(update.file.id)
       }
     })
@@ -766,13 +770,33 @@ export default class TelegramAPI implements PlatformAPI {
     if (threadID) await this.airgram.api.openChat({ chatId: +threadID })
   }
 
+  /**
+   * The frontend will request twice for each fileId, the first time for the
+   * wave form, the second time for the <audio> element.
+   */
   getAsset = async (type: string, fileIdStr: string) => {
     texts.log('get asset', type, fileIdStr)
     if (type !== 'file') throw new Error('unknown asset type')
     const fileId = +fileIdStr
-    await this.airgram.api.downloadFile({ fileId, priority: 32 })
+    const filePath = this.fileIdToPath.get(fileId)
+    if (filePath) {
+      // Download has finished, this is the second request for fileId.
+      this.fileIdToPath.delete(fileId)
+      return filePath
+    }
+    const pendingResolve = this.getAssetResolvers.get(fileId)
     return new Promise<string>(resolve => {
-      this.getAssetResolvers.set(fileId, resolve)
+      if (pendingResolve) {
+        // Download has not finished, this is the second request for fileId.
+        this.getAssetResolvers.set(fileId, url => {
+          pendingResolve(url)
+          resolve(url)
+        })
+      } else {
+        // This is the first request for fileId.
+        this.airgram.api.downloadFile({ fileId, priority: 32 })
+        this.getAssetResolvers.set(fileId, resolve)
+      }
     })
   }
 
