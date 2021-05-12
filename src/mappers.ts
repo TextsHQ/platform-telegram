@@ -392,6 +392,7 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       mapped.text = '{{sender}} joined Telegram'
       mapped.isAction = true
       mapped.parseTemplate = true
+      mapped.silent = true
       break
     case 'messageChatChangeTitle':
       mapped.text = `{{sender}} changed the thread title to "${msg.content.title}"`
