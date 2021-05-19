@@ -1,0 +1,22 @@
+diff --git a/node_modules/tdweb/dist/tdweb.js b/node_modules/tdweb/dist/tdweb.js
+index 2b13b7f..32a2d7e 100644
+--- a/node_modules/tdweb/dist/tdweb.js
++++ b/node_modules/tdweb/dist/tdweb.js
+@@ -1614,7 +1614,7 @@ function indexed_db_onMessage(channelState, fn, time) {
+   readNewMessages(channelState);
+ }
+ function indexed_db_canBeUsed() {
+-  if (browser_default.a) return false;
++  // if (browser_default.a) return false;
+   var idb = getIdb();
+   if (!idb) return false;
+   return true;
+@@ -1818,7 +1818,7 @@ function chooseMethod(options) {
+ 
+   var chooseMethods = METHODS;
+ 
+-  if (!options.webWorkerSupport && !browser_default.a) {
++  if (0 && !options.webWorkerSupport && !browser_default.a) {
+     // prefer localstorage over idb when no webworker-support needed
+     chooseMethods = METHODS.filter(function (m) {
+       return m.type !== 'idb';
