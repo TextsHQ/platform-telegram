@@ -706,6 +706,15 @@ export default class TelegramAPI implements PlatformAPI {
     })
   }
 
+  editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
+    const res = await this.airgram.api.editMessageText({
+      chatId: +threadID,
+      messageId: +messageID,
+      inputMessageContent: await getInputMessageContent(msgContent),
+    })
+    return !isError(toObject(res))
+  }
+
   forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[], userIDs?: string[]): Promise<boolean> => {
     const resArr = await Promise.all(threadIDs.map(async toThreadID => {
       const res = await this.airgram.api.forwardMessages({
