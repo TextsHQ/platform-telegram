@@ -708,6 +708,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
+    if (!msgContent.text || /^\s+$/.test(msgContent.text)) msgContent.text = '.'
     const res = await this.airgram.api.editMessageText({
       chatId: +threadID,
       messageId: +messageID,
