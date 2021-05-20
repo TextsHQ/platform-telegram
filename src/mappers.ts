@@ -2,7 +2,7 @@ import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAt
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
-import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo } from 'airgram'
+import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion } from 'airgram'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
@@ -163,6 +163,16 @@ export const mapTextFooter = (interactionInfo: MessageInteractionInfo) => [...ge
 function getSenderID(msg: TGMessage) {
   if (msg.sender._ === 'messageSenderUser') return msg.sender.userId
   return msg.sender.chatId === msg.chatId ? '$thread' : msg.sender.chatId
+}
+
+export function mapMessageUpdateText(messageID: string, newContent: MessageContentUnion) {
+  if (newContent._ !== 'messageText') return
+  return {
+    id: messageID,
+    text: newContent.text.text,
+    textAttributes: mapTextAttributes(newContent.text.text, newContent.text.entities),
+    links: newContent.webPage ? [mapMessageLink(newContent.webPage)] : undefined,
+  }
 }
 
 export function mapMessage(msg: TGMessage, accountID: string) {
