@@ -448,7 +448,6 @@ export default class TelegramAPI implements PlatformAPI {
       this.onEvent([event])
     })
     this.airgram.on(UPDATE.updateMessageEdited, ({ update }) => {
-      if (!update.replyMarkup) return
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
