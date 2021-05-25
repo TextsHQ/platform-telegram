@@ -561,7 +561,7 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage, accountID)] : []
   const imgFile = thread.photo?.small
   const t: Thread = {
-    _original: JSON.stringify([thread, members]),
+    _original: JSON.stringify(thread),
     id: String(thread.id),
     type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
     timestamp: messages[0]?.timestamp || new Date(),
