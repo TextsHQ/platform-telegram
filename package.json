@@ -12,6 +12,9 @@
       "pre-commit": "true || yarn lint --fix"
     }
   },
+  "nativeDeps": {
+    "airgram": "^3.3.0"
+  },
   "dependencies": {
     "@airgram/constants": "^3.0.0",
     "airgram": "^3.3.0",
