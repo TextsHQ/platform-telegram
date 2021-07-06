@@ -27,7 +27,7 @@ export async function copyDLLsForWindows() {
   const cwd = process.cwd()
   // if the app was started by windows autorun, this would be thrown
   // Error: EPERM: operation not permitted, copyfile 'C:\Users\$user\AppData\Local\Programs\jack\resources\app\build\platform-telegram\zlib1.dll' -> 'C:\Windows\System32\zlib1.dll']
-  if (cwd.includes(':\\Windows\\System32')) return
+  if (cwd.toLowerCase().includes(':\\windows\\system32')) return
   const promises = ['libcrypto-1_1-x64.dll', 'libssl-1_1-x64.dll', 'zlib1.dll'].map(fileName => copyFileFromBinaries(cwd, fileName))
   return Promise.all(promises)
 }
