@@ -564,7 +564,7 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
     _original: JSON.stringify(thread),
     id: String(thread.id),
     type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
-    timestamp: messages[0]?.timestamp || new Date(),
+    timestamp: messages[0]?.timestamp,
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: !thread.permissions.canSendMessages,
     mutedUntil: mapMuteFor(thread.notificationSettings.muteFor),
