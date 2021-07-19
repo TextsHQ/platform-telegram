@@ -11,7 +11,7 @@ import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } fr
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
 import { fileExists } from './util'
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
@@ -360,25 +360,8 @@ export default class TelegramAPI implements PlatformAPI {
       ])
     })
     this.airgram.on(UPDATE.updateUserChatAction, ({ update }) => {
-      switch (update.action._) {
-        case 'chatActionTyping': {
-          return this.onEvent([{
-            type: ServerEventType.PARTICIPANT_TYPING,
-            typing: true,
-            threadID: update.chatId.toString(),
-            participantID: update.userId.toString(),
-            durationMs: 180_000,
-          }])
-        }
-        case 'chatActionCancel':
-          return this.onEvent([{
-            type: ServerEventType.PARTICIPANT_TYPING,
-            typing: false,
-            threadID: update.chatId.toString(),
-            participantID: update.userId.toString(),
-          }])
-        default:
-      }
+      const event = mapUserAction(update)
+      if (event) this.onEvent([event])
     })
     this.airgram.on(UPDATE.updateFile, ({ update }) => {
       const resolve = this.getAssetResolvers.get(update.file.id)
@@ -738,9 +721,10 @@ export default class TelegramAPI implements PlatformAPI {
 
   sendActivityIndicator = async (type: ActivityType, threadID: string) => {
     const _ = {
-      [ActivityType.NONE]: 'chatActionCancel', // todo review
+      [ActivityType.NONE]: 'chatActionCancel',
       [ActivityType.TYPING]: 'chatActionTyping',
       [ActivityType.RECORDING_VOICE]: 'ChatActionRecordingVoiceNoteInput',
+      [ActivityType.RECORDING_VIDEO]: 'ChatActionRecordingVideoInput',
     }[type]
     if (!_) return
     await this.airgram.api.sendChatAction({

@@ -1,8 +1,8 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
-import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion } from 'airgram'
+import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateUserChatAction } from 'airgram'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
@@ -585,3 +585,70 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
 
 export const mapMessages = (messages: TGMessage[], accountID: string) =>
   messages.map(m => mapMessage(m, accountID))
+
+// https://github.com/evgeny-nadymov/telegram-react/blob/afd90f19b264895806359c23f985edccda828aca/src/Utils/Chat.js#L445
+export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
+  const threadID = update.chatId.toString()
+  const participantID = update.userId.toString()
+  const customActivity = (customLabel: string): UserActivityEvent => ({
+    type: ServerEventType.USER_ACTIVITY,
+    threadID,
+    participantID,
+    activityType: ActivityType.CUSTOM,
+    customLabel,
+    durationMs: 10 * 60_000, // 10 mins
+  })
+  switch (update.action._) {
+    case 'chatActionTyping': {
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.TYPING,
+        durationMs: 3 * 60_000, // 3 mins
+      }
+    }
+    case 'chatActionRecordingVoiceNote': {
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.RECORDING_VOICE,
+        durationMs: 5 * 60_000, // 5 mins
+      }
+    }
+    case 'chatActionRecordingVideo':
+    case 'chatActionRecordingVideoNote': {
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.RECORDING_VIDEO,
+        durationMs: 10 * 60_000, // 10 mins
+      }
+    }
+    case 'chatActionChoosingContact':
+      return customActivity('choosing contact')
+    case 'chatActionChoosingLocation':
+      return customActivity('choosing location')
+    case 'chatActionStartPlayingGame':
+      return customActivity('playing a game')
+    case 'chatActionUploadingDocument':
+      return customActivity('uploading a document' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingPhoto':
+      return customActivity('uploading a photo' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingVideo':
+      return customActivity('uploading a video' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingVideoNote':
+      return customActivity('uploading a video note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingVoiceNote':
+      return customActivity('uploading a voice note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionCancel':
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.NONE,
+      }
+  }
+}
