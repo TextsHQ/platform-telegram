@@ -250,12 +250,14 @@ export default class TelegramAPI implements PlatformAPI {
       return
     }
     const message = mapMessage(tgMessage, this.accountInfo.accountID)
+    const threadID = tgMessage.chatId.toString()
+    this.emitParticipantsFromMessages(threadID, [message])
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'message',
       objectIDs: {
-        threadID: tgMessage.chatId.toString(),
+        threadID,
       },
       entries: [message],
     }
@@ -644,6 +646,20 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
+  private emitParticipantsFromMessages = async (threadID, messages: Message[]) => {
+    const members = await Promise.all(messages.map(m => this._getUser(+m.senderID)))
+    const event: ServerEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'upsert',
+      objectName: 'participant',
+      objectIDs: {
+        threadID,
+      },
+      entries: members.map(m => mapUser(m, this.accountInfo.accountID)),
+    }
+    this.onEvent([event])
+  }
+
   private loadChats = async (chatIds: number[]) => {
     const chats = await Promise.all(chatIds.map(async chatId => {
       const chatResponse = await this.airgram.api.getChat({ chatId })
@@ -704,8 +720,10 @@ export default class TelegramAPI implements PlatformAPI {
       })
       messages.push(...toObject(res).messages)
     }
+    const items = mapMessages(messages, this.accountInfo.accountID).reverse()
+    this.emitParticipantsFromMessages(threadID, items)
     return {
-      items: mapMessages(messages, this.accountInfo.accountID).reverse(),
+      items,
       hasMore: messages.length >= 20,
     }
   }
