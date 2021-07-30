@@ -141,6 +141,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private superGroupIdToChatId = new Map<number, number>()
 
+  private superGroupThreads = new Set<string>()
+
   private session: Session
 
   private me: TGUser
@@ -265,11 +267,16 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private asyncMapThread = async (chat: Chat) => {
-    // Intentionally not using `await` to not block getThreads.
-    this.getAndEmitParticipants(chat)
+    let participants = []
+    if (chat.type._ == "chatTypeSupergroup") {
+      // Intentionally not using `await` to not block getThreads.
+      this.getAndEmitParticipants(chat)
+    } else {
+      participants = await this._getParticipants(chat)
+    }
     // const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
     // this.onEvent(presenceEvents)
-    return mapThread(chat, [], this.accountInfo.accountID)
+    return mapThread(chat, participants, this.accountInfo.accountID)
 
   }
 
@@ -614,6 +621,7 @@ export default class TelegramAPI implements PlatformAPI {
         return mapMembers(members)
       }
       case 'chatTypeSupergroup': {
+        this.superGroupThreads.add(chat.id.toString())
         this.superGroupIdToChatId.set(chat.type.supergroupId, chat.id)
         const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
         const supergroup = toObject(supergroupRes)
@@ -647,6 +655,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitParticipantsFromMessages = async (threadID, messages: Message[]) => {
+    if (!this.superGroupThreads.has(threadID)) {
+      // Only need to emit participant for supergroup.
+      return
+    }
     const members = await Promise.all(messages.map(m => this._getUser(+m.senderID)))
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
