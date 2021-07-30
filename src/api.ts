@@ -264,7 +264,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private asyncMapThread = async (chat: Chat) => {
     // Intentionally not using `await` to not block getThreads.
-    this.getAndEmitParticipants(chat)
+    const thread = mapThread(chat, [], this.accountInfo.accountID)
+    this.getAndEmitParticipants(chat, thread)
+    return thread
     // const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
     // this.onEvent(presenceEvents)
     return mapThread(chat, [], this.accountInfo.accountID)
@@ -630,17 +632,17 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private getAndEmitParticipants = async (chat: ChatUnion) => {
+  private getAndEmitParticipants = async (chat: ChatUnion, thread: Thread) => {
     const members = await this._getParticipants(chat)
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
-      mutationType: 'update',
-      objectName: 'thread',
+      mutationType: 'upsert',
+      objectName: 'participant',
       objectIDs: {
-        threadID: String(chat.id),
+        threadID: thread.id,
       },
       entries: [{
-        id: String(chat.id),
+        ...thread,
         participants: {
           hasMore: false,
           items: members.map(m => mapUser(m, this.accountInfo.accountID)),
