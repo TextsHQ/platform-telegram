@@ -5,11 +5,10 @@ import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
 import { promises as fs } from 'fs'
-import { performance } from 'perf_hooks'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
@@ -28,9 +27,6 @@ function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T 
   }
   return response
 }
-
-const perfNow = texts.IS_DEV ? () => performance.now() : () => 0
-const devLog = texts.IS_DEV ? (...args) => console.log(...args) : () => {}
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
@@ -291,7 +287,7 @@ export default class TelegramAPI implements PlatformAPI {
         // here. And update.chat.lastMessage seems to be always null, which will
         // mess up thread timestamp.
         // If the chat has no position, no need to show it in thread list.
-        texts.log('position:', update.chat.positions.length)
+        texts.log(`[updateNewChat] ignoring ${update.chat.title} with no position`)
         return
       }
       const thread = await this.asyncMapThread(update.chat)
@@ -643,21 +639,22 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private getAndEmitParticipants = async (chat: ChatUnion) => {
-    const members = await this._getParticipants(chat)
-    if (!members.length) {
-      return
-    }
-    const event: ServerEvent = {
+  private upsertParticipants(threadID: string, entries: Participant[]) {
+    this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'participant',
       objectIDs: {
-        threadID: String(chat.id),
+        threadID,
       },
-      entries: members.map(m => mapUser(m, this.accountInfo.accountID)),
-    }
-    this.onEvent([event])
+      entries,
+    }])
+  }
+
+  private getAndEmitParticipants = async (chat: ChatUnion) => {
+    const members = await this._getParticipants(chat)
+    if (!members.length) return
+    this.upsertParticipants(String(chat.id), members.map(m => mapUser(m, this.accountInfo.accountID)))
   }
 
   private emitParticipantsFromMessages = async (threadID, messages: Message[]) => {
@@ -667,17 +664,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
     const senderIDs = [...new Set(messages.map(m => +m.senderID))]
     const members = await Promise.all(senderIDs.map(x => this._getUser(x)))
-    devLog('participants:', members.map(m => m.id))
-    const event: ServerEvent = {
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'upsert',
-      objectName: 'participant',
-      objectIDs: {
-        threadID,
-      },
-      entries: members.map(m => mapUser(m, this.accountInfo.accountID)),
-    }
-    this.onEvent([event])
+    this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
   }
 
   private loadChats = async (chatIds: number[]) => {
@@ -689,11 +676,9 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
-    const z0 = perfNow()
     const { cursor, direction } = pagination || { cursor: null, direction: null }
     if (inboxName !== InboxName.NORMAL) return
     const limit = 25
-    let t0 = perfNow()
     const chatsResponse = await this.airgram.api.getChats({
       limit,
       offsetChatId: +cursor,
@@ -701,20 +686,14 @@ export default class TelegramAPI implements PlatformAPI {
         ? this.lastChat.positions.find(x => x.list._ === 'chatListMain')?.order
         : MAX_SIGNED_64BIT_NUMBER,
     })
-    devLog('PERF: [getChats] took', perfNow() - t0)
     const { chatIds } = toObject(chatsResponse)
-    t0 = perfNow()
     const chats = await this.loadChats(chatIds)
-    devLog('PERF: [loadChats] took', perfNow() - t0)
     this.lastChat = chats[chats.length - 1]
-    t0 = perfNow()
     const items = await Promise.all(chats.map(this.asyncMapThread))
-    devLog('PERF: [asyncMapThread] took', perfNow() - t0)
     const hasMore = items.length === limit
     if (!hasMore) {
       this.registerUpdateListeners()
     }
-    devLog('PERF: [getThreads] took', perfNow() - z0)
     return {
       items,
       oldestCursor: items[items.length - 1]?.id,
