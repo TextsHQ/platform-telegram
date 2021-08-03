@@ -8,7 +8,7 @@ import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
@@ -117,7 +117,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private authState: AuthorizationStateUnion
 
-  private getThreadsDone = false
+  private updateListenersRegistered = false
 
   private lastChat: ChatUnion = null
 
@@ -136,6 +136,8 @@ export default class TelegramAPI implements PlatformAPI {
   private basicGroupIdToChatId = new Map<number, number>()
 
   private superGroupIdToChatId = new Map<number, number>()
+
+  private superGroupThreads = new Set<string>()
 
   private session: Session
 
@@ -246,12 +248,14 @@ export default class TelegramAPI implements PlatformAPI {
       return
     }
     const message = mapMessage(tgMessage, this.accountInfo.accountID)
+    const threadID = tgMessage.chatId.toString()
+    this.emitParticipantsFromMessages(threadID, [message])
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'message',
       objectIDs: {
-        threadID: tgMessage.chatId.toString(),
+        threadID,
       },
       entries: [message],
     }
@@ -259,20 +263,31 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private asyncMapThread = async (chat: Chat) => {
-    const participants = await this._getParticipants(chat)
+    let participants = []
+    if (chat.type._ == "chatTypeSupergroup") {
+      // Intentionally not using `await` to not block getThreads.
+      this.getAndEmitParticipants(chat)
+    } else {
+      participants = await this._getParticipants(chat)
+    }
     // const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
     // this.onEvent(presenceEvents)
     return mapThread(chat, participants, this.accountInfo.accountID)
+
   }
 
   private registerUpdateListeners() {
+    if (this.updateListenersRegistered) {
+      return
+    }
+
     this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
-      if (!this.getThreadsDone || !update.chat.positions.length) {
+      if (!update.chat.positions.length) {
         // Existing threads will be handled by getThreads, no need to duplicate
         // here. And update.chat.lastMessage seems to be always null, which will
         // mess up thread timestamp.
         // If the chat has no position, no need to show it in thread list.
-        texts.log('ignoring updateNewChat, get threads:', this.getThreadsDone, 'position:', update.chat.positions.length)
+        texts.log(`[updateNewChat] ignoring ${update.chat.title} with no position`)
         return
       }
       const thread = await this.asyncMapThread(update.chat)
@@ -389,7 +404,6 @@ export default class TelegramAPI implements PlatformAPI {
       }])
     })
     this.airgram.on(UPDATE.updateChatReadInbox, ({ update }) => {
-      if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
@@ -405,11 +419,9 @@ export default class TelegramAPI implements PlatformAPI {
       }])
     })
     this.airgram.on(UPDATE.updateUserStatus, ({ update }) => {
-      if (!this.getThreadsDone) return
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
     this.airgram.on(UPDATE.updateChatReadOutbox, ({ update }) => {
-      if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
       const event: StateSyncEvent = {
@@ -479,6 +491,8 @@ export default class TelegramAPI implements PlatformAPI {
         }],
       }])
     })
+
+    this.updateListenersRegistered = true
   }
 
   private emitDeleteThread(chatId: number) {
@@ -496,7 +510,6 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    this.registerUpdateListeners()
     this.me = toObject(await this.airgram.api.getMe())
   }
 
@@ -606,22 +619,52 @@ export default class TelegramAPI implements PlatformAPI {
         return mapMembers(members)
       }
       case 'chatTypeSupergroup': {
+        this.superGroupThreads.add(chat.id.toString())
         this.superGroupIdToChatId.set(chat.type.supergroupId, chat.id)
-        const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
-        const supergroup = toObject(supergroupRes)
-        if (!supergroup.canGetMembers) {
-          return []
-        }
-        const membersRes = await this.airgram.api.getSupergroupMembers({
-          supergroupId: chat.type.supergroupId,
-          limit: 256, // todo, random limit
-        })
-        const { members } = toObject(membersRes)
-        return mapMembers(members)
+        return []
+        // const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
+        // const supergroup = toObject(supergroupRes)
+        // if (!supergroup.canGetMembers) {
+        //   return []
+        // }
+        // const membersRes = await this.airgram.api.getSupergroupMembers({
+        //   supergroupId: chat.type.supergroupId,
+        //   limit: 256, // todo, random limit
+        // })
+        // const { members } = toObject(membersRes)
+        // return mapMembers(members)
       }
       default:
         return []
     }
+  }
+
+  private upsertParticipants(threadID: string, entries: Participant[]) {
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'upsert',
+      objectName: 'participant',
+      objectIDs: {
+        threadID,
+      },
+      entries,
+    }])
+  }
+
+  private getAndEmitParticipants = async (chat: ChatUnion) => {
+    const members = await this._getParticipants(chat)
+    if (!members.length) return
+    this.upsertParticipants(String(chat.id), members.map(m => mapUser(m, this.accountInfo.accountID)))
+  }
+
+  private emitParticipantsFromMessages = async (threadID, messages: Message[]) => {
+    if (!this.superGroupThreads.has(threadID)) {
+      // Only need to emit participant for supergroup.
+      return
+    }
+    const senderIDs = [...new Set(messages.map(m => +m.senderID))]
+    const members = await Promise.all(senderIDs.map(x => this._getUser(x)))
+    this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
   }
 
   private loadChats = async (chatIds: number[]) => {
@@ -649,7 +692,7 @@ export default class TelegramAPI implements PlatformAPI {
     const items = await Promise.all(chats.map(this.asyncMapThread))
     const hasMore = items.length === limit
     if (!hasMore) {
-      this.getThreadsDone = true
+      this.registerUpdateListeners()
     }
     return {
       items,
@@ -676,8 +719,10 @@ export default class TelegramAPI implements PlatformAPI {
       })
       messages.push(...toObject(res).messages)
     }
+    const items = mapMessages(messages, this.accountInfo.accountID).reverse()
+    this.emitParticipantsFromMessages(threadID, items)
     return {
-      items: mapMessages(messages, this.accountInfo.accountID).reverse(),
+      items,
       hasMore: messages.length >= 20,
     }
   }
