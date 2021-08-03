@@ -121,7 +121,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private authState: AuthorizationStateUnion
 
-  private getThreadsDone = false
+  private updateListenersRegistered = false
 
   private lastChat: ChatUnion = null
 
@@ -281,13 +281,17 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private registerUpdateListeners() {
+    if (this.updateListenersRegistered) {
+      return
+    }
+
     this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
-      if (!this.getThreadsDone || !update.chat.positions.length) {
+      if (!update.chat.positions.length) {
         // Existing threads will be handled by getThreads, no need to duplicate
         // here. And update.chat.lastMessage seems to be always null, which will
         // mess up thread timestamp.
         // If the chat has no position, no need to show it in thread list.
-        texts.log('ignoring updateNewChat, get threads:', this.getThreadsDone, 'position:', update.chat.positions.length)
+        texts.log('position:', update.chat.positions.length)
         return
       }
       const thread = await this.asyncMapThread(update.chat)
@@ -404,7 +408,6 @@ export default class TelegramAPI implements PlatformAPI {
       }])
     })
     this.airgram.on(UPDATE.updateChatReadInbox, ({ update }) => {
-      if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
@@ -420,11 +423,9 @@ export default class TelegramAPI implements PlatformAPI {
       }])
     })
     this.airgram.on(UPDATE.updateUserStatus, ({ update }) => {
-      if (!this.getThreadsDone) return
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
     this.airgram.on(UPDATE.updateChatReadOutbox, ({ update }) => {
-      if (!this.getThreadsDone) return
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
       const event: StateSyncEvent = {
@@ -494,6 +495,8 @@ export default class TelegramAPI implements PlatformAPI {
         }],
       }])
     })
+
+    this.updateListenersRegistered = true
   }
 
   private emitDeleteThread(chatId: number) {
@@ -511,7 +514,6 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    this.registerUpdateListeners()
     this.me = toObject(await this.airgram.api.getMe())
   }
 
@@ -623,17 +625,18 @@ export default class TelegramAPI implements PlatformAPI {
       case 'chatTypeSupergroup': {
         this.superGroupThreads.add(chat.id.toString())
         this.superGroupIdToChatId.set(chat.type.supergroupId, chat.id)
-        const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
-        const supergroup = toObject(supergroupRes)
-        if (!supergroup.canGetMembers) {
-          return []
-        }
-        const membersRes = await this.airgram.api.getSupergroupMembers({
-          supergroupId: chat.type.supergroupId,
-          limit: 256, // todo, random limit
-        })
-        const { members } = toObject(membersRes)
-        return mapMembers(members)
+        return []
+        // const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
+        // const supergroup = toObject(supergroupRes)
+        // if (!supergroup.canGetMembers) {
+        //   return []
+        // }
+        // const membersRes = await this.airgram.api.getSupergroupMembers({
+        //   supergroupId: chat.type.supergroupId,
+        //   limit: 256, // todo, random limit
+        // })
+        // const { members } = toObject(membersRes)
+        // return mapMembers(members)
       }
       default:
         return []
@@ -642,6 +645,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private getAndEmitParticipants = async (chat: ChatUnion) => {
     const members = await this._getParticipants(chat)
+    if (!members.length) {
+      return
+    }
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -704,7 +710,7 @@ export default class TelegramAPI implements PlatformAPI {
     perfLog('PERF: [asyncMapThread] took', perfNow() - t0)
     const hasMore = items.length === limit
     if (!hasMore) {
-      this.getThreadsDone = true
+      this.registerUpdateListeners()
     }
     perfLog('PERF: [getThreads] took', perfNow() - z0)
     return {
