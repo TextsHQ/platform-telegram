@@ -30,7 +30,7 @@ function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T 
 }
 
 const perfNow = texts.IS_DEV ? () => performance.now() : () => 0
-const perfLog = texts.IS_DEV ? (...args) => console.log(...args) : () => {}
+const devLog = texts.IS_DEV ? (...args) => console.log(...args) : () => {}
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
@@ -665,7 +665,9 @@ export default class TelegramAPI implements PlatformAPI {
       // Only need to emit participant for supergroup.
       return
     }
-    const members = await Promise.all(messages.map(m => this._getUser(+m.senderID)))
+    const senderIDs = [...new Set(messages.map(m => +m.senderID))]
+    const members = await Promise.all(senderIDs.map(x => this._getUser(x)))
+    devLog('participants:', members.map(m => m.id))
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -699,20 +701,20 @@ export default class TelegramAPI implements PlatformAPI {
         ? this.lastChat.positions.find(x => x.list._ === 'chatListMain')?.order
         : MAX_SIGNED_64BIT_NUMBER,
     })
-    perfLog('PERF: [getChats] took', perfNow() - t0)
+    devLog('PERF: [getChats] took', perfNow() - t0)
     const { chatIds } = toObject(chatsResponse)
     t0 = perfNow()
     const chats = await this.loadChats(chatIds)
-    perfLog('PERF: [loadChats] took', perfNow() - t0)
+    devLog('PERF: [loadChats] took', perfNow() - t0)
     this.lastChat = chats[chats.length - 1]
     t0 = perfNow()
     const items = await Promise.all(chats.map(this.asyncMapThread))
-    perfLog('PERF: [asyncMapThread] took', perfNow() - t0)
+    devLog('PERF: [asyncMapThread] took', perfNow() - t0)
     const hasMore = items.length === limit
     if (!hasMore) {
       this.registerUpdateListeners()
     }
-    perfLog('PERF: [getThreads] took', perfNow() - z0)
+    devLog('PERF: [getThreads] took', perfNow() - z0)
     return {
       items,
       oldestCursor: items[items.length - 1]?.id,
