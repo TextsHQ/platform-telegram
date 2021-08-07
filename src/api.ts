@@ -1,6 +1,6 @@
 // this should be the first import to fix PATH env variable on windows
 // eslint-disable-next-line
-import './windows'
+import { copyDLLsForWindows, IS_WINDOWS } from './windows'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
@@ -148,6 +148,10 @@ export default class TelegramAPI implements PlatformAPI {
     const tdlibExists = await fileExists(tdlibPath)
     if (!tdlibExists) {
       throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
+    }
+
+    if (IS_WINDOWS) {
+      await copyDLLsForWindows()
     }
 
     this.accountInfo = accountInfo
