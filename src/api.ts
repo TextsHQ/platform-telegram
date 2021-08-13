@@ -271,6 +271,12 @@ export default class TelegramAPI implements PlatformAPI {
     if (chat.type._ == "chatTypeSupergroup") {
       // Intentionally not using `await` to not block getThreads.
       this.getAndEmitParticipants(chat)
+      if (chat.lastMessage) {
+        setTimeout(() => {
+          const message = mapMessage(chat.lastMessage, this.accountInfo.accountID)
+          this.emitParticipantsFromMessages(chat.id.toString(), [message])
+        })
+      }
     } else {
       participants = await this._getParticipants(chat)
     }
