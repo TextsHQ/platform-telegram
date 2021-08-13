@@ -26,6 +26,7 @@ const info: PlatformInfo = {
     Attribute.CAN_MESSAGE_PHONE_NUMBER,
     Attribute.SHARES_CONTACTS,
     Attribute.SUBSCRIBE_TO_CONN_STATE_CHANGE,
+    Attribute.SUPPORTS_ARCHIVE,
     Attribute.SUPPORTS_DELETE_THREAD,
     Attribute.SUPPORTS_EDIT_MESSAGE,
     Attribute.SUPPORTS_FORWARD,
