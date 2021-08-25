@@ -615,12 +615,12 @@ export default class TelegramAPI implements PlatformAPI {
     switch (chat.type._) {
       case 'chatTypePrivate': {
         const participant = await this._getUser(chat.type.userId)
-        return [participant, this.me]
+        return [participant]
       }
       case 'chatTypeSecret': {
         this.secretChatIdToChatId.set(chat.type.secretChatId, chat.id)
         const participant = await this._getUser(chat.type.userId)
-        return [participant, this.me]
+        return [participant]
       }
       case 'chatTypeBasicGroup': {
         this.basicGroupIdToChatId.set(chat.type.basicGroupId, chat.id)
