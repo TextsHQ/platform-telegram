@@ -662,7 +662,7 @@ export default class TelegramAPI implements PlatformAPI {
       // Only need to emit participant for supergroup.
       return
     }
-    const senderIDs = [...new Set(messages.map(m => m.senderID === '$thread' ? null : +m.senderID).filter(Boolean))]
+    const senderIDs = [...new Set(messages.map(m => m.senderID.startsWith('$thread') ? null : +m.senderID).filter(Boolean))]
     const members = await Promise.all(senderIDs.map(x => this.getTGUser(x)))
     this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
   }
@@ -678,7 +678,7 @@ export default class TelegramAPI implements PlatformAPI {
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     const { cursor, direction } = pagination || { cursor: null, direction: null }
-    const limit = 25
+    const limit = 20
     const lastChat = cursor && toObject(await this.airgram.api.getChat({ chatId: +cursor }))
     const chatsResponse = await this.airgram.api.getChats({
       limit,
