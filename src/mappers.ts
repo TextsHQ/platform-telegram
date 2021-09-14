@@ -335,6 +335,16 @@ export function mapMessage(msg: TGMessage, accountID: string) {
       mapped.text = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
       break
     }
+    case 'messageVenue': {
+      const { venue } = msg.content
+      mapped.textHeading = '📍 Venue'
+      mapped.text = [
+        venue.title,
+        venue.address,
+        `https://www.google.com/maps?q=${venue.location.latitude},${venue.location.longitude}`,
+      ].join('\n')
+      break
+    }
     case 'messageDice':
       if (mapped.textHeading) mapped.textHeading += '\n'
       else mapped.textHeading = ''
