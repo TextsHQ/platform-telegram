@@ -675,6 +675,11 @@ export default class TelegramAPI implements PlatformAPI {
     return chats
   }
 
+  getThread = async (threadID: string) => {
+    const chatResponse = await this.airgram.api.getChat({ chatId: +threadID })
+    return this.asyncMapThread(toObject(chatResponse))
+  }
+
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     const { cursor, direction } = pagination || { cursor: null, direction: null }
