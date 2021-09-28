@@ -13,6 +13,7 @@ import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Mes
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
 import { fileExists } from './util'
+import TelegramAPI from './lib/telegram'
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
@@ -108,7 +109,7 @@ const tdlibPath = path.join(BINARIES_DIR_PATH, {
   win32: `${process.arch}_libtdjson.dll`,
 }[process.platform])
 
-export default class TelegramAPI implements PlatformAPI {
+export default class Telegram implements PlatformAPI {
   private airgram: Airgram
 
   private accountInfo: AccountInfo
@@ -136,6 +137,8 @@ export default class TelegramAPI implements PlatformAPI {
   private session: Session
 
   private me: TGUser
+
+  private api: TelegramAPI = new TelegramAPI()
 
   init = async (session: Session, accountInfo: AccountInfo) => {
     texts.log({ tdlibPath })
@@ -206,37 +209,39 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
-    const mapError = (message: string) => {
-      if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
-      if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
-      if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
-      return message
-    }
-    const { phoneNumber, code, password } = creds.custom || {}
-    switch (this.authState._) {
-      case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
-        const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-        return { type: 'wait' }
-      }
-      case AUTHORIZATION_STATE.authorizationStateWaitCode: {
-        const res = await this.airgram.api.checkAuthenticationCode({ code })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-        return { type: 'wait' }
-      }
-      case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
-        const res = await this.airgram.api.checkAuthenticationPassword({ password })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-        return { type: 'wait' }
-      }
-      case AUTHORIZATION_STATE.authorizationStateReady: {
-        await this.afterLogin()
-        return { type: 'success' }
-      }
-    }
+    await this.api.login()
+    
+    // const mapError = (message: string) => {
+    //   if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
+    //   if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
+    //   if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
+    //   return message
+    // }
+    // const { phoneNumber, code, password } = creds.custom || {}
+    // switch (this.authState._) {
+    //   case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
+    //     const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
+    //     const data = res.response
+    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+    //     return { type: 'wait' }
+    //   }
+    //   case AUTHORIZATION_STATE.authorizationStateWaitCode: {
+    //     const res = await this.airgram.api.checkAuthenticationCode({ code })
+    //     const data = res.response
+    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+    //     return { type: 'wait' }
+    //   }
+    //   case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
+    //     const res = await this.airgram.api.checkAuthenticationPassword({ password })
+    //     const data = res.response
+    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+    //     return { type: 'wait' }
+    //   }
+    //   case AUTHORIZATION_STATE.authorizationStateReady: {
+    //     await this.afterLogin()
+    //     return { type: 'success' }
+    //   }
+    // }
     return { type: 'error', errorMessage: this.authState._ }
   }
 
