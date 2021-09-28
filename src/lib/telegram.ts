@@ -9,7 +9,6 @@ export default class TelegramAPI {
 
   constructor () {
     this.api = new MTProto({
-      test: true,
       api_id: API_ID,
       api_hash: API_HASH,
       storageOptions: {
@@ -112,10 +111,11 @@ export default class TelegramAPI {
   }
 
   getThreads = async () => {
-    const threads = await this.call('channels.GetChannels', {
-      id: [0x40f202fd],
-    });
-
-    return threads
+    try {
+      const threads = await this.call('contacts.GetSaved', {});
+      return threads
+    } catch (error) {
+      return []
+    }
   }
 }
