@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent, CurrentUser } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
@@ -662,3 +662,12 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
       }
   }
 }
+
+export const mapCurrentUser = ({ user }: { user: any; profile_photo: any }): CurrentUser => ({
+  id: user?.id,
+  username: user?.username,
+  fullName: user?.first_name,
+  displayText: user?.first_name,
+  // TODO: map profile photo (it is received as Uint8Array instead of url)
+  // imgURL: ,
+})
