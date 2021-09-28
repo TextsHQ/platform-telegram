@@ -5,7 +5,8 @@
   "scripts": {
     "postinstall": "yarn tsc || true",
     "build": "yarn tsc",
-    "lint": "eslint src --ext ts,tsx,js,jsx --cache"
+    "lint": "eslint src --ext ts,tsx,js,jsx --cache",
+    "rebuild": "electron-rebuild -v 14.0.1 -a arm64"
   },
   "husky": {
     "hooks": {
@@ -21,6 +22,7 @@
     "airgram": "^3.3.0",
     "bluebird": "^3.7.2",
     "date-fns": "^2.18.0",
+    "electron-rebuild": "^3.2.3",
     "lodash": "^4.17.21",
     "react": "https://github.com/TextsHQ/react-global-shim",
     "react-phone-number-input": "^3.1.16",
