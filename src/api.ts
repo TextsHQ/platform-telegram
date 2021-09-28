@@ -6,18 +6,19 @@ import os from 'os'
 import crypto from 'crypto'
 import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
+import type MTProto from '@mtproto/core'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser } from './mappers'
 import { fileExists } from './util'
 import TelegramAPI from './lib/telegram'
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
-type Session = { dbKey: string }
+type Session = { client: MTProto }
 type LoginEventCallback = (authState: any) => void
 
 const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
@@ -140,109 +141,96 @@ export default class Telegram implements PlatformAPI {
 
   private api: TelegramAPI = new TelegramAPI()
 
+  private currentUser: any = null
+
+  private loginMetadata: Record<string, any> = { state: 'authorizationStateWaitPhoneNumber' }
+
   init = async (session: Session, accountInfo: AccountInfo) => {
-    texts.log({ tdlibPath })
-    const tdlibExists = await fileExists(tdlibPath)
-    if (!tdlibExists) {
-      throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
-    }
+    const { client } = session || {}
+    if (!session || !client) return
 
-    if (IS_WINDOWS) {
-      await copyDLLsForWindows()
-    }
-
-    this.accountInfo = accountInfo
-    if (session) {
-      this.session = session
-    } else {
-      this.session = {
-        dbKey: crypto.randomBytes(32).toString('hex')
-      }
-    }
-    this.airgram = new Airgram({
-      databaseEncryptionKey: this.session.dbKey,
-      apiId: API_ID,
-      apiHash: API_HASH,
-      command: tdlibPath,
-      // deviceModel: undefined,
-      applicationVersion: texts.constants.APP_VERSION,
-      systemVersion: `${os.platform()} ${os.release()}`,
-      logVerbosityLevel: texts.IS_DEV ? 2 : 0,
-      useFileDatabase: true,
-      useChatInfoDatabase: true,
-      useMessageDatabase: true,
-      useSecretChats: true,
-      enableStorageOptimizer: true,
-      ignoreFileNames: false,
-      databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
-      filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
-    })
-    this.airgram.on(UPDATE.updateAuthorizationState, ({ update }) => {
-      this.authState = update.authorizationState
-      this.loginEventCallback?.(update.authorizationState._)
-      if (texts.IS_DEV) console.log(update)
-      if (this.authState._ === AUTHORIZATION_STATE.authorizationStateClosed) {
-        this.connStateChangeCallback({
-          status: ConnectionStatus.UNAUTHORIZED
-        })
-        throw new ReAuthError('Session closed')
-      }
-    })
-    if (session) await this.afterLogin()
-    // if (texts.IS_DEV) {
-    //   this.airgram.use((ctx, next) => {
-    //     if ('update' in ctx) {
-    //       console.log(`[${ctx._}]`, JSON.stringify(ctx.update))
-    //     }
-    //     return next()
-    //   })
-    // }
+    this.api.setInstance(client)
+    await this.afterAuth()
   }
+
+  getCurrentUser = () => mapCurrentUser(this.currentUser)
+
+  // FIXME: try to find a way to serialize this
+  serializeSession = () => ({ api: this.api.getInstance() })
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
-    this.loginEventCallback(this.authState?._)
+    this.loginEventCallback(this.loginMetadata.state)
   }
 
   onConnectionStateChange = (onEvent: OnConnStateChangeCallback) => {
     this.connStateChangeCallback = onEvent
   }
 
-  login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
-    await this.api.login()
-    
-    // const mapError = (message: string) => {
-    //   if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
-    //   if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
-    //   if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
-    //   return message
-    // }
-    // const { phoneNumber, code, password } = creds.custom || {}
-    // switch (this.authState._) {
-    //   case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
-    //     const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
-    //     const data = res.response
-    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-    //     return { type: 'wait' }
-    //   }
-    //   case AUTHORIZATION_STATE.authorizationStateWaitCode: {
-    //     const res = await this.airgram.api.checkAuthenticationCode({ code })
-    //     const data = res.response
-    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-    //     return { type: 'wait' }
-    //   }
-    //   case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
-    //     const res = await this.airgram.api.checkAuthenticationPassword({ password })
-    //     const data = res.response
-    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-    //     return { type: 'wait' }
-    //   }
-    //   case AUTHORIZATION_STATE.authorizationStateReady: {
-    //     await this.afterLogin()
-    //     return { type: 'success' }
-    //   }
-    // }
-    return { type: 'error', errorMessage: this.authState._ }
+  afterAuth = async (): Promise<void> => {
+    const currentUser = await this.api.getCurrentUser()
+    this.currentUser = currentUser
+  }
+
+  login = async (credentials: LoginCreds = {}): Promise<LoginResult> => {
+    const { phoneNumber, code, firstName, lastName } = credentials.custom
+    const { state } = this.loginMetadata
+
+    try {
+      if (state === 'authorizationStateWaitPhoneNumber') {
+        const nextStep = 'authorizationStateWaitCode'
+        const codeHash = await this.api.getPhoneCodeHash(phoneNumber)
+  
+        this.loginEventCallback?.(nextStep)
+        this.loginMetadata = { state: nextStep, codeHash }
+  
+        return { type: 'wait' }
+      }
+  
+      if (state === 'authorizationStateWaitCode') {
+        const res = await this.api.login({
+          code, 
+          phone: phoneNumber, 
+          codeHash: this.loginMetadata.codeHash,
+        })
+        
+        const nextStep = res?.error && res?.code === 'auth.authorizationSignUpRequired' 
+          ? 'authorizationSignUp'
+          : 'authorizationStateReady'
+  
+        this.loginEventCallback?.(nextStep)
+        this.loginMetadata = { ...this.loginMetadata, state: nextStep }
+  
+        return { type: 'wait' }
+      }
+
+      if (state === 'authorizationSignUp') {
+        const nextStep = 'authorizationStateReady'
+  
+        await this.api.register({
+          code, 
+          phone: phoneNumber, 
+          codeHash: this.loginMetadata.codeHash,
+          firstName,
+          lastName,
+        })
+
+        this.loginEventCallback?.(nextStep)
+        this.loginMetadata = { ...this.loginMetadata, state: nextStep }
+
+        return { type: 'wait' }
+      }
+  
+      if (state === 'authorizationStateReady') {
+        await this.afterAuth()
+        return { type: 'success' }
+      }
+
+      // This is an unknown error
+      return { type: 'error', errorMessage: 'Error.' }
+    } catch (error) {
+      return { type: 'error', errorMessage: 'Error.' }
+    }
   }
 
   private onUpdateNewMessage = (tgMessage: TGMessage) => {
@@ -283,241 +271,6 @@ export default class Telegram implements PlatformAPI {
     return thread
   }
 
-  private registerUpdateListeners() {
-    this.airgram.on(UPDATE.updateMessageSendSucceeded, ({ update }) => {
-      const resolve = this.sendMessageResolvers.get(update.oldMessageId)
-      if (!resolve) {
-        return console.warn('update.updateMessageSendSucceeded: unable to find promise resolver for', update.oldMessageId)
-      }
-      resolve([mapMessage(update.message, this.accountInfo.accountID)])
-      this.sendMessageResolvers.delete(update.oldMessageId)
-    })
-
-    this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
-      if (!update.chat.positions.length) {
-        // Existing threads will be handled by getThreads, no need to duplicate
-        // here. And update.chat.lastMessage seems to be always null, which will
-        // mess up thread timestamp.
-        // If the chat has no position, no need to show it in thread list.
-        texts.log(`[updateNewChat] ignoring ${update.chat.title} (${update.chat.id}) with no position`)
-        return
-      }
-      const thread = await this.asyncMapThread(update.chat)
-      const event: ServerEvent = {
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'upsert',
-        objectName: 'thread',
-        objectIDs: {
-          threadID: thread.id,
-        },
-        entries: [thread],
-      }
-      this.onEvent([event])
-    })
-    this.airgram.on(UPDATE.updateSecretChat, ({ update }) => {
-      if (update.secretChat.state._ === SECRET_CHAT_STATE.secretChatStateClosed) {
-        // Secret chat is accepted by another device or closed.
-        const chatId = this.secretChatIdToChatId.get(update.secretChat.id)
-        if (!chatId) return
-        this.emitDeleteThread(chatId)
-        this.secretChatIdToChatId.delete(update.secretChat.id)
-      }
-    })
-    this.airgram.on(UPDATE.updateBasicGroup, ({ update }) => {
-      const { status } = update.basicGroup
-      if (
-        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
-          status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned ||
-          (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
-      ) {
-        const chatId = this.basicGroupIdToChatId.get(update.basicGroup.id)
-        if (!chatId) return
-        this.emitDeleteThread(chatId)
-        this.basicGroupIdToChatId.delete(update.basicGroup.id)
-      }
-    })
-    this.airgram.on(UPDATE.updateSupergroup, ({ update }) => {
-      const { status } = update.supergroup
-      if (
-        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
-          status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned ||
-          (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
-      ) {
-        const chatId = this.superGroupIdToChatId.get(update.supergroup.id)
-        if (!chatId) return
-        this.emitDeleteThread(chatId)
-        this.superGroupIdToChatId.delete(update.supergroup.id)
-      }
-    })
-    this.airgram.on(UPDATE.updateChatNotificationSettings, ({ update }) => {
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        objectIDs: {},
-        mutationType: 'update',
-        objectName: 'thread',
-        entries: [{
-          id: update.chatId.toString(),
-          mutedUntil: mapMuteFor(update.notificationSettings.muteFor),
-        }],
-      }])
-    })
-    this.airgram.on(UPDATE.updateNewMessage, ({ update }) => {
-      this.onUpdateNewMessage(update.message)
-    })
-    this.airgram.on(UPDATE.updateDeleteMessages, ({ update }) => {
-      if (!update.isPermanent) {
-        return
-      }
-      this.onEvent([
-        {
-          type: ServerEventType.STATE_SYNC,
-          objectIDs: {
-            threadID: update.chatId.toString(),
-          },
-          mutationType: 'delete',
-          objectName: 'message',
-          entries: update.messageIds.map(x => x.toString()),
-        },
-      ])
-    })
-    this.airgram.on(UPDATE.updateUserChatAction, ({ update }) => {
-      const event = mapUserAction(update)
-      if (event) this.onEvent([event])
-    })
-    this.airgram.on(UPDATE.updateFile, ({ update }) => {
-      const resolve = this.getAssetResolvers.get(update.file.id)
-      if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', update.file.id)
-      if (update.file.local.isDownloadingCompleted && update.file.local.path) {
-        const filePath =`file://${update.file.local.path}`
-        this.fileIdToPath.set(update.file.id, filePath)
-        resolve(filePath)
-        this.getAssetResolvers.delete(update.file.id)
-      }
-    })
-    this.airgram.on(UPDATE.updateChatIsMarkedAsUnread, ({ update }) => {
-      const threadID = update.chatId.toString()
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'thread',
-        objectIDs: { threadID },
-        entries: [
-          {
-            id: threadID,
-            isUnread: update.isMarkedAsUnread,
-          },
-        ],
-      }])
-    })
-    this.airgram.on(UPDATE.updateChatReadInbox, ({ update }) => {
-      const threadID = update.chatId.toString()
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'thread',
-        objectIDs: { threadID },
-        entries: [
-          {
-            id: threadID,
-            isUnread: update.unreadCount > 0,
-          },
-        ],
-      }])
-    })
-    this.airgram.on(UPDATE.updateUserStatus, ({ update }) => {
-      this.onEvent([mapUserPresence(update.userId, update.status)])
-    })
-    this.airgram.on(UPDATE.updateChatReadOutbox, ({ update }) => {
-      const threadID = update.chatId.toString()
-      const messageID = update.lastReadOutboxMessageId.toString()
-      const event: StateSyncEvent = {
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID, messageID },
-        entries: [
-          {
-            id: messageID,
-            seen: true,
-          },
-        ],
-      }
-      this.onEvent([event])
-    })
-    this.airgram.on(UPDATE.updateMessageEdited, ({ update }) => {
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
-        entries: [{
-          id: String(update.messageId),
-          editedTimestamp: update.editDate ? new Date(update.editDate * 1000) : undefined,
-          buttons: getMessageButtons(update.replyMarkup, this.accountInfo.accountID, update.chatId, update.messageId)
-        }],
-      }])
-    })
-    this.airgram.on(UPDATE.updateMessageContent, async ({ update }) => {
-      const messageID = String(update.messageId)
-      const threadID = String(update.chatId)
-      // since most of the time we get `messageText` updates, we only handle that here and inefficiently fetch the whole message in other cases
-      // we should be handling all other message content types after refactoring mapMessage()
-      if (update.newContent._ === 'messageText') {
-        this.onEvent([{
-          type: ServerEventType.STATE_SYNC,
-          mutationType: 'update',
-          objectName: 'message',
-          objectIDs: { threadID, messageID },
-          entries: [mapMessageUpdateText(messageID, update.newContent)],
-        }])
-        return
-      }
-      const res = await this.airgram.api.getMessage({
-        chatId: update.chatId,
-        messageId: update.messageId,
-      })
-      const message = toObject(res)
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID, messageID },
-        entries: [mapMessage(message, this.accountInfo.accountID)],
-      }])
-    })
-    this.airgram.on('updateMessageInteractionInfo', ({ update }) => {
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
-        entries: [{
-          id: String(update.messageId),
-          textFooter: mapTextFooter(update.interactionInfo),
-        }],
-      }])
-    })
-  }
-
-  private emitDeleteThread(chatId: number) {
-    const threadID = chatId.toString()
-    const event: ServerEvent = {
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'delete',
-      objectName: 'thread',
-      objectIDs: {
-        threadID,
-      },
-      entries: [threadID],
-    }
-    this.onEvent([event])
-  }
-
-  private afterLogin = async () => {
-    this.me = toObject(await this.airgram.api.getMe())
-    this.registerUpdateListeners()
-  }
-
   logout = async () => {
     await this.airgram?.api.logOut()
     return new Promise<void>(resolve => {
@@ -527,22 +280,13 @@ export default class Telegram implements PlatformAPI {
     })
   }
 
-  dispose = async () => {
-    await this.airgram.api.close()
-  }
-
-  getCurrentUser = (): CurrentUser => ({
-    ...mapUser(this.me, this.accountInfo.accountID),
-    displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phoneNumber),
-  })
+  dispose = async () => {}
 
   private onEvent: OnServerEventCallback = () => {}
 
   subscribeToEvents = (onEvent: OnServerEventCallback) => {
     this.onEvent = onEvent
   }
-
-  serializeSession = () => this.session
 
   searchUsers = async (query: string) => {
     const res = await this.airgram.api.searchContacts({
@@ -690,6 +434,11 @@ export default class Telegram implements PlatformAPI {
     const { cursor, direction } = pagination || { cursor: null, direction: null }
     const limit = 20
     const lastChat = cursor && toObject(await this.airgram.api.getChat({ chatId: +cursor }))
+
+    const channels = await this.api.getThreads()
+    console.log({ channels })
+
+
     const chatsResponse = await this.airgram.api.getChats({
       limit,
       offsetChatId: +cursor,
