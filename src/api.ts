@@ -1,6 +1,7 @@
 // this should be the first import to fix PATH env variable on windows
 // eslint-disable-next-line
 import { copyDLLsForWindows, IS_WINDOWS } from './windows'
+import type { Api } from 'telegram'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
@@ -141,22 +142,21 @@ export default class Telegram implements PlatformAPI {
 
   private api: TelegramAPI = new TelegramAPI()
 
-  private currentUser: any = null
+  private currentUser: Api.TypeUserFull = null
 
   private loginMetadata: Record<string, any> = { state: 'authorizationStateWaitPhoneNumber' }
 
-  init = async (session: Session, accountInfo: AccountInfo) => {
-    const { client } = session || {}
-    if (!session || !client) return
+  init = async (data: { session: string }, accountInfo: AccountInfo) => {
+    const { session } = data || {}
 
-    this.api.setInstance(client)
-    await this.afterAuth()
+    await this.api.init(session || '')
+    if (session) await this.afterAuth()
   }
 
   getCurrentUser = () => mapCurrentUser(this.currentUser)
 
   // FIXME: try to find a way to serialize this
-  serializeSession = () => ({ api: this.api.getInstance() })
+  serializeSession = () => ({ session: this.api.getSessionSerialized() })
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
@@ -188,15 +188,13 @@ export default class Telegram implements PlatformAPI {
       }
   
       if (state === 'authorizationStateWaitCode') {
-        const res = await this.api.login({
+        await this.api.login({
           code, 
           phone: phoneNumber, 
           codeHash: this.loginMetadata.codeHash,
         })
         
-        const nextStep = res?.error && res?.code === 'auth.authorizationSignUpRequired' 
-          ? 'authorizationSignUp'
-          : 'authorizationStateReady'
+        const nextStep = 'authorizationStateReady'
   
         this.loginEventCallback?.(nextStep)
         this.loginMetadata = { ...this.loginMetadata, state: nextStep }
@@ -229,6 +227,7 @@ export default class Telegram implements PlatformAPI {
       // This is an unknown error
       return { type: 'error', errorMessage: 'Error.' }
     } catch (error) {
+      console.log(error)
       return { type: 'error', errorMessage: 'Error.' }
     }
   }
@@ -435,24 +434,17 @@ export default class Telegram implements PlatformAPI {
     const limit = 20
     const lastChat = cursor && toObject(await this.airgram.api.getChat({ chatId: +cursor }))
 
+    console.time('LoadThreads')
+
     const channels = await this.api.getThreads()
-    console.log({ channels })
+    // console.log({ channels })
 
+    console.timeEnd('LoadThreads')
 
-    const chatsResponse = await this.airgram.api.getChats({
-      limit,
-      offsetChatId: +cursor,
-      offsetOrder: cursor
-        ? lastChat.positions.find(chatPosition => chatPosition.list._ === 'chatListMain')?.order
-        : MAX_SIGNED_64BIT_NUMBER,
-    })
-    const { chatIds } = toObject(chatsResponse)
-    const chats = await this.loadChats(chatIds)
-    const items = await Promise.all(chats.map(this.asyncMapThread))
     return {
-      items,
-      oldestCursor: items[items.length - 1]?.id,
-      hasMore: items.length > 0, // items.length === limit is inaccurate
+      items: [],
+      oldestCursor: '',
+      hasMore: false,
     }
   }
 

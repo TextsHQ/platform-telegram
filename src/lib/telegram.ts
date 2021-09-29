@@ -1,84 +1,55 @@
-import MTProto from '@mtproto/core'
+// import MTProto from '@mtproto/core'
+import { TelegramClient, Api } from "telegram";
+import { StringSession } from "telegram/sessions";
 import path from 'path'
 import { sleep } from '@mtproto/core/src/utils/common'
 
-import { API_HASH, API_ID } from '../constants';
+import { API_HASH as apiHash, API_ID as apiId } from '../constants';
 
 export default class TelegramAPI {
-  api: MTProto
+  api: TelegramClient
 
-  constructor () {
-    this.api = new MTProto({
-      api_id: API_ID,
-      api_hash: API_HASH,
-      storageOptions: {
-        // FIXME: use texts path
-        path: path.resolve(__dirname, './data/1.json'),
-      },
+  session: StringSession
+
+  constructor () {}
+
+  init = async (session = '') => {
+    this.session = new StringSession(session)
+
+    this.api = new TelegramClient(this.session, apiId, apiHash, {
+      connectionRetries: 5,
     });
+
+    if (session) await this.api.connect();
   }
 
-  setInstance = (apiInstance: MTProto) => this.api = apiInstance
-
-  getInstance = () => null
-
-  /**
-   * @see https://mtproto-core.js.org/docs/setup-handle-errors
-   */
-  call = async (method, params, options = {}): Promise<any> => {
-    try {
-      const result = await this.api.call(method, params, options);
-      return result;
-    } catch (error) {
-      const { error_code, error_message } = error;
-
-      if (error_code === 420) {
-        const seconds = Number(error_message.split('FLOOD_WAIT_')[1]);
-        const ms = seconds * 1000;
-
-        await sleep(ms);
-
-        return this.call(method, params, options);
-      }
-
-      if (error_code === 303) {
-        const [type, dcIdAsString] = error_message.split('_MIGRATE_');
-        const dcId = Number(dcIdAsString);
-
-        if (type === 'PHONE') await this.api.setDefaultDc(dcId);
-        else Object.assign(options, { dcId });
-
-        return this.call(method, params, options);
-      }
-
-      if (error_code === 500 && error_message === 'AUTH_RESTART') {
-        return this.call(method, params, options);
-      }
-
-      console.log(error)
-      throw new Error(error)
-    }
-  }
+  getSessionSerialized = () => this.session.save()
 
   getPhoneCodeHash = async (phoneNumber: string): Promise<string> => {
-    const { phone_code_hash } = await this.call('auth.sendCode', {
-      phone_number: phoneNumber,
-      settings: { _: 'codeSettings' },
-    });
+    await this.api.connect()
 
-    return phone_code_hash
+    const res = await this.api.invoke(
+      new Api.auth.SendCode({
+        phoneNumber,
+        apiHash,
+        apiId,
+        settings: new Api.CodeSettings({
+          allowFlashcall: true,
+          currentNumber: true,
+          allowAppHash: true,
+        }),
+      })
+    );
+
+    return res?.phoneCodeHash
   }
   
   login = async ({ code, phone, codeHash }: { code: string; phone: string; codeHash: string; }) => {
-    const signInResult = await this.call('auth.signIn', {
-      phone_code: code,
-      phone_number: phone,
-      phone_code_hash: codeHash,
+    const signInResult = await this.api.start({
+      phoneNumber: phone,
+      phoneCode: async () => code,
+      onError: (err) => console.log(err),
     });
-
-    if (signInResult._ === 'auth.authorizationSignUpRequired') {
-      return { error: true, code: 'auth.authorizationSignUpRequired' }
-    }
 
     return signInResult
   }
@@ -90,20 +61,15 @@ export default class TelegramAPI {
     firstName: string; 
     lastName: string; 
   }) => {
-    await this.call('auth.signUp', {
-      phone_number: credentials.phone,
-      phone_code_hash: credentials.codeHash,
-      first_name: credentials.firstName,
-      last_name: credentials.lastName,
-    });
+    return null
   }
 
-  getCurrentUser = async (): Promise<any> => {
+  getCurrentUser = async (): Promise<Api.UserFull> => {
     try {
-      const user = await this.call('users.getFullUser', {
-        id: { _: 'inputUserSelf' },
-      });
-  
+      const user = await this.api.invoke(
+        new Api.users.GetFullUser({ id: new Api.InputUserSelf() })
+      );
+
       return user
     } catch (error) {
       return null
@@ -112,8 +78,10 @@ export default class TelegramAPI {
 
   getThreads = async () => {
     try {
-      const threads = await this.call('contacts.GetSaved', {});
-      return threads
+      const threads = await this.api.invoke(
+        new Api.messages.GetAllChats({ exceptIds: [] })
+      )
+      return threads.chats
     } catch (error) {
       return []
     }
