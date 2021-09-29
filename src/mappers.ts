@@ -2,6 +2,7 @@ import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAt
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
+import type { Api } from 'telegram'
 import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateUserChatAction } from 'airgram'
 
 /**
@@ -663,11 +664,11 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
   }
 }
 
-export const mapCurrentUser = ({ user }: { user: any; profile_photo: any }): CurrentUser => ({
-  id: user?.id,
+export const mapCurrentUser = ({ user }: { user: Api.User}): CurrentUser => ({
+  id: String(user?.id),
   username: user?.username,
-  fullName: user?.first_name,
-  displayText: user?.first_name,
+  fullName: user?.firstName,
+  displayText: `@${user?.username}`,
   // TODO: map profile photo (it is received as Uint8Array instead of url)
   // imgURL: ,
 })
