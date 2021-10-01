@@ -672,3 +672,33 @@ export const mapCurrentUser = ({ user }: { user: Api.User}): CurrentUser => ({
   // TODO: map profile photo (it is received as Uint8Array instead of url)
   // imgURL: ,
 })
+
+const mapUserThread = (thread: Api.User): Thread => ({
+  _original: JSON.stringify(thread),
+  id: String(thread.id),
+  type: 'single',
+  timestamp: new Date(),
+  isUnread: false,
+  isReadOnly: false,
+  title: thread?.username,
+  messages: { items: [], hasMore: true },
+  participants: { items: [], hasMore: false },
+})
+
+const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
+
+export const mapProtoThread = (thread: Api.Chat | Api.User): Thread => {
+  if (isUserThread(thread)) return mapUserThread(thread)
+
+  return {
+    _original: JSON.stringify(thread),
+    id: String(thread.id),
+    type:  thread?.participantsCount > 1 ? 'group' : 'single',
+    timestamp: new Date(),
+    isUnread: false,
+    isReadOnly: false,
+    title: thread?.title,
+    messages: { items: [], hasMore: true },
+    participants: { items: [], hasMore: false },
+  }
+}
