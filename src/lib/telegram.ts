@@ -1,16 +1,15 @@
-// import MTProto from '@mtproto/core'
+import type { MessageContent, OnServerEventCallback } from "@textshq/platform-sdk";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
-import path from 'path'
-import { sleep } from '@mtproto/core/src/utils/common'
 
 import { API_HASH as apiHash, API_ID as apiId } from '../constants';
+import { mapParticipant, mapProtoMessage } from "../mappers";
 
 export default class TelegramAPI {
   api: TelegramClient
-
   session: StringSession
-
+  onEvent: OnServerEventCallback
+  threads: ((Api.TypeChat | Api.TypeUser) & { messages?: Api.Message[] })[]
   topPeers: any[]
 
   constructor () {}
@@ -26,6 +25,8 @@ export default class TelegramAPI {
   }
 
   getSessionSerialized = () => this.session.save()
+
+  setOnEvent = (callback: OnServerEventCallback) => this.onEvent = callback
 
   getPhoneCodeHash = async (phoneNumber: string): Promise<string> => {
     await this.api.connect()
@@ -78,6 +79,19 @@ export default class TelegramAPI {
     }
   }
 
+  sendMessage = async (threadID: string, message: MessageContent): Promise<boolean> => {
+    try {
+      const res = await this.api.sendMessage(Number(threadID), {
+        // FIXME: Support files
+        message: message.text,
+      })
+
+      return true
+    } catch (error) {
+      return false
+    }
+  }
+
   getTopPeers = async (): Promise<any[]> => {
     const result = await this.api.invoke(
       new Api.contacts.GetTopPeers({
@@ -94,20 +108,94 @@ export default class TelegramAPI {
 
     // @ts-expect-error
     const topPeers = [...result.users, ...result.chats]
+    
+    for (const top of topPeers) {
+      const messages = await this.api.getMessages(Number(top.id), { limit: 1 })
+      // @ts-expect-error
+      top.messages = messages.map(mapProtoMessage)
+    }
+    
     this.topPeers = topPeers
-
     return topPeers
   }
 
-  getThreads = async (): Promise<Api.TypeChat[]> => {
-    try {
-      const threads = await this.api.invoke(
-        new Api.messages.GetAllChats({ exceptIds: [] })
-      )
+  getUserInfo = async (userId: number): Promise<any> => {
+    const info = await this.api.invoke(
+      new Api.users.GetFullUser({
+        id: userId,
+      })
+    );
 
-      return [...threads.chats]
+    return info
+  }
+
+  getParticipants = async (entity: Api.Chat | Api.Channel): Promise<Api.User[]> => {
+    const participants = await this.api.getParticipants(entity, {})
+    return participants
+  }
+
+  getContacts = async (): Promise<void> => {
+    // @ts-expect-error
+    const res: Api.contacts.Contacts = await this.api.invoke(new Api.contacts.GetContacts({}));
+    this.threads = [...(this.threads || []), ...res?.users]
+  }
+
+  getChats = async (): Promise<void> => {
+    const res = await this.api.invoke(new Api.messages.GetAllChats({ exceptIds: [] }))
+    this.threads = [...(this.threads || []), ...res?.chats]
+  }
+
+  getNextChats = (): (Api.TypeChat | Api.TypeUser)[] => {
+    const nextChats = this.threads?.filter((chat) => !chat.messages).slice(0, 5)
+    return [...(nextChats || [])]
+  }
+
+  getThreads = async (): Promise<(Api.TypeChat | Api.TypeUser)[]> => {
+    try {
+      if (!this.threads) {
+        await this.getChats()
+        await this.getContacts()
+      }
+
+      const next = this.getNextChats()
+      // FIXME: this isn't the best way to handle this, this should be better handled
+      for (const chat of next) {
+        const messages = await this.api.getMessages(Number(chat.id), { limit: 1 })
+        const thread = this.threads.find((thread) => thread.id === chat.id)
+        // @ts-expect-error
+        thread.messages = messages.map(mapProtoMessage) || []
+        // @ts-expect-error
+        chat.messages = messages.map(mapProtoMessage) || []
+      }
+
+      return next
     } catch (error) {
       return []
     }
   }
+
+  getMessages = async (id: string, offsetId: number): Promise<Api.Message[]> => {
+    const messages = await this.api.getMessages(Number(id), {
+      limit: 20,
+      offsetId,
+      maxId: offsetId,
+    });
+
+    // for (const message of messages) {
+    //   // @ts-expect-error
+    //   const { user } = await this.getUserInfo(message.fromId.userId)
+    //   const participant = mapParticipant(user)
+
+    //   this.onEvent([{
+    //     type: ServerEventType.STATE_SYNC,
+    //     mutationType: 'upsert',
+    //     objectName: 'participant',
+    //     objectIDs: { threadID: id },
+    //     entries: [participant],
+    //   }])
+    // }
+
+    // @ts-expect-error
+    return messages.sort((a, b) => a.date - b.date)
+  } 
 }
