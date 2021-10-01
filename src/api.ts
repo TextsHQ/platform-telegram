@@ -13,7 +13,7 @@ import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } fr
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser, mapProtoThread } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser, mapProtoThread, mapProtoMessage } from './mappers'
 import { fileExists } from './util'
 import TelegramAPI from './lib/telegram'
 
@@ -285,6 +285,7 @@ export default class Telegram implements PlatformAPI {
 
   subscribeToEvents = (onEvent: OnServerEventCallback) => {
     this.onEvent = onEvent
+    this.api.setOnEvent(onEvent)
   }
 
   searchUsers = async (query: string) => {
@@ -430,9 +431,6 @@ export default class Telegram implements PlatformAPI {
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
-    const { cursor, direction } = pagination || { cursor: null, direction: null }
-    console.time('LoadThreads')
-
     // This is added to speed up the initial load.
     if (!this.api.topPeers) {
       const topPeers = await this.api.getTopPeers()
@@ -441,58 +439,33 @@ export default class Telegram implements PlatformAPI {
       return { items, hasMore: true }
     }
 
-    const channels = await this.api.getThreads()
-    const items = channels.map(mapProtoThread)
-
-    console.timeEnd('LoadThreads')
+    const threads = await this.api.getThreads()
+    const items = threads.map(mapProtoThread)
 
     return {
       items,
-      oldestCursor: '',
-      hasMore: false,
+      hasMore: items.length > 0,
     }
   }
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
-    const { cursor, direction } = pagination || { cursor: null, direction: null }
-    const limit = 20
-    const messagesResponse = await this.airgram.api.getChatHistory({
-      limit,
-      chatId: +threadID,
-      fromMessageId: +cursor || 0,
-    })
-    const { messages } = toObject(messagesResponse)
-    // When fromMessageId is 0, getChatHistory returns only one message.
-    // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
-    if (!cursor && messages.length === 1) {
-      const res = await this.airgram.api.getChatHistory({
-        limit,
-        chatId: +threadID,
-        fromMessageId: messages[0].id,
-      })
-      messages.push(...toObject(res).messages)
-    }
-    const items = mapMessages(messages, this.accountInfo.accountID).reverse()
-    this.emitParticipantsFromMessages(threadID, items)
+    const { cursor } = pagination || { cursor: null, direction: null }
+    
+    const messages = await this.api.getMessages(threadID, Number(cursor))
+    const oldestCursor = String(messages[0]?.id)
+    
+    const items = messages.map(mapProtoMessage)
+
     return {
       items,
-      hasMore: items.length > 0, // items.length === limit is inaccurate
+      oldestCursor,
+      hasMore: items.length > 0,
     }
   }
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
-    const inputMessageContent = await getInputMessageContent(msgContent)
-    if (!inputMessageContent) return false
-    const res = await this.airgram.api.sendMessage({
-      chatId: Number(threadID),
-      messageThreadId: 0,
-      replyToMessageId: +quotedMessageID || 0,
-      inputMessageContent,
-    })
-    return new Promise<Message[]>(resolve => {
-      const tmpId = toObject(res).id
-      this.sendMessageResolvers.set(tmpId, resolve)
-    })
+    const res = await this.api.sendMessage(threadID, msgContent)
+    return res
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
