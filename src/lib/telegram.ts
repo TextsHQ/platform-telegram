@@ -11,6 +11,8 @@ export default class TelegramAPI {
 
   session: StringSession
 
+  topPeers: any[]
+
   constructor () {}
 
   init = async (session = '') => {
@@ -76,12 +78,34 @@ export default class TelegramAPI {
     }
   }
 
-  getThreads = async () => {
+  getTopPeers = async (): Promise<any[]> => {
+    const result = await this.api.invoke(
+      new Api.contacts.GetTopPeers({
+        correspondents: true,
+        botsPm: true,
+        botsInline: true,
+        phoneCalls: true,
+        forwardUsers: true,
+        forwardChats: true,
+        groups: true,
+        channels: true,
+      })
+    );
+
+    // @ts-expect-error
+    const topPeers = [...result.users, ...result.chats]
+    this.topPeers = topPeers
+
+    return topPeers
+  }
+
+  getThreads = async (): Promise<Api.TypeChat[]> => {
     try {
       const threads = await this.api.invoke(
         new Api.messages.GetAllChats({ exceptIds: [] })
       )
-      return threads.chats
+
+      return [...threads.chats]
     } catch (error) {
       return []
     }
