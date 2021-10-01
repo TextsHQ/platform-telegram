@@ -13,7 +13,7 @@ import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } fr
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser, mapProtoThread } from './mappers'
 import { fileExists } from './util'
 import TelegramAPI from './lib/telegram'
 
@@ -431,18 +431,23 @@ export default class Telegram implements PlatformAPI {
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     const { cursor, direction } = pagination || { cursor: null, direction: null }
-    const limit = 20
-    const lastChat = cursor && toObject(await this.airgram.api.getChat({ chatId: +cursor }))
-
     console.time('LoadThreads')
 
+    // This is added to speed up the initial load.
+    if (!this.api.topPeers) {
+      const topPeers = await this.api.getTopPeers()
+      const items = topPeers.map(mapProtoThread)
+
+      return { items, hasMore: true }
+    }
+
     const channels = await this.api.getThreads()
-    // console.log({ channels })
+    const items = channels.map(mapProtoThread)
 
     console.timeEnd('LoadThreads')
 
     return {
-      items: [],
+      items,
       oldestCursor: '',
       hasMore: false,
     }
