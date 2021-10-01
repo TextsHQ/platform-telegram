@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent, CurrentUser } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent, CurrentUser, Participant } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
@@ -572,7 +572,7 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage, accountID)] : []
   const imgFile = thread.photo?.small
   const t: Thread = {
-    _original: JSON.stringify(thread),
+    _original: JSON.stringify({ ...thread, messages: [] }),
     id: String(thread.id),
     type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
     timestamp: messages[0]?.timestamp,
@@ -673,32 +673,62 @@ export const mapCurrentUser = ({ user }: { user: Api.User}): CurrentUser => ({
   // imgURL: ,
 })
 
-const mapUserThread = (thread: Api.User): Thread => ({
-  _original: JSON.stringify(thread),
+export const mapProtoMessage = (message: Api.Message): Message => ({
+    // _original: message,
+    id: String(message.id),
+    timestamp: new Date(message.date * 1000),
+    editedTimestamp: message.editDate ? new Date(message.editDate * 1000) : undefined,
+    text: message.message,
+    forwardedCount: message.forwards || undefined,
+    // textFooter: mapTextFooter(messag.interactionInfo),
+    textAttributes: undefined,
+    // @ts-expect-error
+    senderID: String(message.fromId?.userId),
+    isSender: message.out,
+    attachments: undefined,
+    // isErrored: message.sta?._ === 'messageSendingStateFailed',
+    // isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
+    // linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
+    // buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId, msg.id),
+    // expiresInSeconds: message.,
+})
+
+export const mapParticipant = (user: Api.User): Participant => ({
+    id: String(user.id),
+    username: user.username,
+    phoneNumber: user.phone ? '+' + user.phone : undefined,
+    isVerified: user.verified,
+    fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
+    // TODO: Map profile photo
+    // imgURL: '',
+}) 
+
+const mapUserThread = (thread: Api.User & { messages?: Message[] }): Thread => ({
+  _original: JSON.stringify({ ...thread, messages: [] }),
   id: String(thread.id),
   type: 'single',
-  timestamp: new Date(),
+  timestamp: thread.messages[thread.messages?.length - 1]?.timestamp || undefined,
   isUnread: false,
   isReadOnly: false,
   title: thread?.username,
-  messages: { items: [], hasMore: true },
-  participants: { items: [], hasMore: false },
+  messages: { items: thread.messages || [], hasMore: true },
+  participants: { items: [mapParticipant(thread)], hasMore: false },
 })
 
 const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
 
-export const mapProtoThread = (thread: Api.Chat | Api.User): Thread => {
+export const mapProtoThread = (thread: (Api.Chat & { messages?: Message[] }) | Api.User): Thread => {
   if (isUserThread(thread)) return mapUserThread(thread)
 
   return {
-    _original: JSON.stringify(thread),
+    _original: JSON.stringify({ ...thread, messages: [] }),
     id: String(thread.id),
     type:  thread?.participantsCount > 1 ? 'group' : 'single',
-    timestamp: new Date(),
+    timestamp: new Date(thread?.date * 1000),
     isUnread: false,
     isReadOnly: false,
     title: thread?.title,
-    messages: { items: [], hasMore: true },
+    messages: { items: thread.messages || [], hasMore: true },
     participants: { items: [], hasMore: false },
   }
 }
