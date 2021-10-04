@@ -173,7 +173,7 @@ export default class Telegram implements PlatformAPI {
   }
 
   login = async (credentials: LoginCreds = {}): Promise<LoginResult> => {
-    const { phoneNumber, code, firstName, lastName } = credentials.custom
+    const { phoneNumber, code, firstName, lastName, password, passwordCode } = credentials.custom
     const { state } = this.loginMetadata
 
     try {
@@ -188,19 +188,34 @@ export default class Telegram implements PlatformAPI {
       }
   
       if (state === 'authorizationStateWaitCode') {
-        await this.api.login({
-          code, 
-          phone: phoneNumber, 
-          codeHash: this.loginMetadata.codeHash,
-        })
-        
-        const nextStep = 'authorizationStateReady'
-  
-        this.loginEventCallback?.(nextStep)
-        this.loginMetadata = { ...this.loginMetadata, state: nextStep }
-  
-        return { type: 'wait' }
+        try {
+          await this.api.login({ code, phone: phoneNumber, password: password || undefined })
+          
+          const nextStep = 'authorizationStateReady'
+          this.loginEventCallback?.(nextStep)
+          this.loginMetadata = { ...this.loginMetadata, state: nextStep }
+    
+          return { type: 'wait' }
+        } catch (error) {
+          console.log(error)
+
+          if (error.message === 'Account has 2FA enabled.') {
+            return { type: 'error', errorMessage: '2FA activated, you need to include your password' }
+          }
+
+          return { type: 'error', errorMessage: 'Error.' }
+        }
       }
+
+      // if (state === 'authorizationStateWaitPassword') {
+      //   await this.api.loginWithPassword({ code: passwordCode, phone: phoneNumber, password })
+
+      //   const nextStep = 'authorizationStateReady'
+      //   this.loginEventCallback?.(nextStep)
+      //   this.loginMetadata = { ...this.loginMetadata, state: nextStep }
+  
+      //   return { type: 'wait' }
+      // }
 
       if (state === 'authorizationSignUp') {
         const nextStep = 'authorizationStateReady'

@@ -28,6 +28,10 @@ export default class TelegramAPI {
 
   setOnEvent = (callback: OnServerEventCallback) => this.onEvent = callback
 
+  logout = async (): Promise<void> => {
+    // await this.api.
+  }
+
   getPhoneCodeHash = async (phoneNumber: string): Promise<string> => {
     await this.api.connect()
 
@@ -47,11 +51,14 @@ export default class TelegramAPI {
     return res?.phoneCodeHash
   }
   
-  login = async ({ code, phone, codeHash }: { code: string; phone: string; codeHash: string; }) => {
+  login = async ({ code, phone, password = undefined }: { code: string; phone: string; password?: string }) => {
     const signInResult = await this.api.start({
       phoneNumber: phone,
       phoneCode: async () => code,
-      onError: (err) => console.log(err),
+      password: password ? async () => password : undefined,
+      onError: (err) => {
+        throw new Error(err.message)
+      }
     });
 
     return signInResult
