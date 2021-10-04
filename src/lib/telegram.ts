@@ -204,5 +204,25 @@ export default class TelegramAPI {
 
     // @ts-expect-error
     return messages.sort((a, b) => a.date - b.date)
-  } 
+  }
+
+  editMessage = async (id: string, messageContent: MessageContent): Promise<boolean> => {
+    try {
+      await this.api.invoke(new Api.messages.EditMessage({
+        id: Number(id),
+        message: messageContent.text,
+        // FIXME: Support media
+        // noWebpage: true,
+        // peer: new Api.InputPeer({...}),
+        // media: new Api.InputMedia({...}),
+        // replyMarkup: new Api.ReplyMarkup({...}),
+        // entities: [new Api.MessageEntity({...})],
+        // scheduleDate: 1557612,
+      }));
+
+      return true
+    } catch (error) {
+      return false
+    }
+  }
 }

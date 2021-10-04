@@ -237,26 +237,6 @@ export default class Telegram implements PlatformAPI {
     }
   }
 
-  private onUpdateNewMessage = (tgMessage: TGMessage) => {
-    if (tgMessage.sendingState) {
-      // Sent message is handled in updateMessageSendSucceeded.
-      return
-    }
-    const message = mapMessage(tgMessage, this.accountInfo.accountID)
-    const threadID = tgMessage.chatId.toString()
-    this.emitParticipantsFromMessages(threadID, [message])
-    const event: ServerEvent = {
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'upsert',
-      objectName: 'message',
-      objectIDs: {
-        threadID,
-      },
-      entries: [message],
-    }
-    this.onEvent([event])
-  }
-
   private asyncMapThread = async (chat: Chat) => {
     const isSuperGroup = chat.type._ == 'chatTypeSupergroup'
     const participants: TGUser[] = isSuperGroup ? [] : await this._getParticipants(chat)
@@ -275,9 +255,7 @@ export default class Telegram implements PlatformAPI {
     return thread
   }
 
-  logout = async () => {
-    await this.api.logout()
-  }
+  logout = async () => this.api.logout()
 
   dispose = async () => {}
 
@@ -469,13 +447,8 @@ export default class Telegram implements PlatformAPI {
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
-    if (!msgContent.text || /^\s+$/.test(msgContent.text)) msgContent.text = '.'
-    const res = await this.airgram.api.editMessageText({
-      chatId: +threadID,
-      messageId: +messageID,
-      inputMessageContent: await getInputMessageContent(msgContent),
-    })
-    return !isError(toObject(res))
+    const res = await this.api.editMessage(messageID, msgContent)
+    return res
   }
 
   forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[], userIDs?: string[]): Promise<boolean> => {
