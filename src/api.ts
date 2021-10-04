@@ -197,8 +197,8 @@ export default class Telegram implements PlatformAPI {
     
           return { type: 'wait' }
         } catch (error) {
-          console.log(error)
-
+          // TODO: handle 2FA in a separated state. For now this handled this way because Telegram
+          // throws an error if the user tries to login with code and then with password
           if (error.message === 'Account has 2FA enabled.') {
             return { type: 'error', errorMessage: '2FA activated, you need to include your password' }
           }
@@ -206,16 +206,6 @@ export default class Telegram implements PlatformAPI {
           return { type: 'error', errorMessage: 'Error.' }
         }
       }
-
-      // if (state === 'authorizationStateWaitPassword') {
-      //   await this.api.loginWithPassword({ code: passwordCode, phone: phoneNumber, password })
-
-      //   const nextStep = 'authorizationStateReady'
-      //   this.loginEventCallback?.(nextStep)
-      //   this.loginMetadata = { ...this.loginMetadata, state: nextStep }
-  
-      //   return { type: 'wait' }
-      // }
 
       if (state === 'authorizationSignUp') {
         const nextStep = 'authorizationStateReady'
