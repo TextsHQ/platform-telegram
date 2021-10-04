@@ -29,7 +29,7 @@ export default class TelegramAPI {
   setOnEvent = (callback: OnServerEventCallback) => this.onEvent = callback
 
   logout = async (): Promise<void> => {
-    // await this.api.
+    await this.api.invoke(new Api.auth.LogOut());
   }
 
   getPhoneCodeHash = async (phoneNumber: string): Promise<string> => {

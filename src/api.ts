@@ -286,12 +286,7 @@ export default class Telegram implements PlatformAPI {
   }
 
   logout = async () => {
-    await this.airgram?.api.logOut()
-    return new Promise<void>(resolve => {
-      rimraf(this.accountInfo?.dataDirPath, () => {
-        resolve()
-      })
-    })
+    await this.api.logout()
   }
 
   dispose = async () => {}
