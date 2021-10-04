@@ -447,7 +447,7 @@ export default class Telegram implements PlatformAPI {
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
-    const res = await this.api.editMessage(messageID, msgContent)
+    const res = await this.api.editMessage(threadID, messageID, msgContent)
     return res
   }
 
@@ -464,18 +464,7 @@ export default class Telegram implements PlatformAPI {
   }
 
   sendActivityIndicator = async (type: ActivityType, threadID: string) => {
-    const _ = {
-      [ActivityType.NONE]: 'chatActionCancel',
-      [ActivityType.TYPING]: 'chatActionTyping',
-      [ActivityType.RECORDING_VOICE]: 'ChatActionRecordingVoiceNoteInput',
-      [ActivityType.RECORDING_VIDEO]: 'ChatActionRecordingVideoInput',
-    }[type]
-    if (!_) return
-    await this.airgram.api.sendChatAction({
-      chatId: +threadID,
-      messageThreadId: 0,
-      action: { _ },
-    })
+    await this.api.sendTypingIndicator(type, threadID)
   }
 
   deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {

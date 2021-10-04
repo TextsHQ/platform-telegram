@@ -1,4 +1,5 @@
 import type { MessageContent, OnServerEventCallback } from "@textshq/platform-sdk";
+import { ActivityType } from "@textshq/platform-sdk";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
 
@@ -206,14 +207,14 @@ export default class TelegramAPI {
     return messages.sort((a, b) => a.date - b.date)
   }
 
-  editMessage = async (id: string, messageContent: MessageContent): Promise<boolean> => {
+  editMessage = async (threadID: string, messageID: string, messageContent: MessageContent): Promise<boolean> => {
     try {
       await this.api.invoke(new Api.messages.EditMessage({
-        id: Number(id),
+        id: Number(messageID),
         message: messageContent.text,
+        peer: new Api.InputPeerChat({ chatId: Number(threadID) }),
         // FIXME: Support media
         // noWebpage: true,
-        // peer: new Api.InputPeer({...}),
         // media: new Api.InputMedia({...}),
         // replyMarkup: new Api.ReplyMarkup({...}),
         // entities: [new Api.MessageEntity({...})],
@@ -224,5 +225,19 @@ export default class TelegramAPI {
     } catch (error) {
       return false
     }
+  }
+
+  sendTypingIndicator = async (activityAction: ActivityType, threadID: string): Promise<void> => {
+    const action = {
+      [ActivityType.TYPING]: new Api.SendMessageTypingAction(),
+    }[activityAction]
+
+    if (!action) return
+    
+    await this.api.invoke(new Api.messages.SetTyping({
+      peer: new Api.InputPeerChat({ chatId: Number(threadID) }),
+      topMsgId: Number(threadID),
+      action,
+    }));
   }
 }
