@@ -16,6 +16,7 @@ import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './c
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser, mapProtoThread, mapProtoMessage } from './mappers'
 import { fileExists } from './util'
 import TelegramAPI from './lib/telegram'
+import TelegramRealTime from './lib/real-time'
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
@@ -142,6 +143,8 @@ export default class Telegram implements PlatformAPI {
 
   private api: TelegramAPI = new TelegramAPI()
 
+  private realTime: TelegramRealTime
+
   private currentUser: Api.TypeUserFull = null
 
   private loginMetadata: Record<string, any> = { state: 'authorizationStateWaitPhoneNumber' }
@@ -264,6 +267,9 @@ export default class Telegram implements PlatformAPI {
   subscribeToEvents = (onEvent: OnServerEventCallback) => {
     this.onEvent = onEvent
     this.api.setOnEvent(onEvent)
+
+    this.realTime = new TelegramRealTime(this.api, this.onEvent)
+    this.realTime.subscribeToEvents()
   }
 
   searchUsers = async (query: string) => {
