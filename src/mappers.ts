@@ -703,17 +703,21 @@ export const mapParticipant = (user: Api.User): Participant => ({
     // imgURL: '',
 }) 
 
-const mapUserThread = (thread: Api.User & { messages?: Message[] }): Thread => ({
-  _original: JSON.stringify({ ...thread, messages: [] }),
-  id: String(thread.id),
-  type: 'single',
-  timestamp: thread.messages[thread.messages?.length - 1]?.timestamp || undefined,
-  isUnread: false,
-  isReadOnly: false,
-  title: thread?.username,
-  messages: { items: thread.messages || [], hasMore: true },
-  participants: { items: [mapParticipant(thread)], hasMore: false },
-})
+const mapUserThread = (thread: Api.User & { messages?: Message[] }): Thread => {
+  const participant = mapParticipant(thread)
+
+  return {
+    _original: JSON.stringify({ ...thread, messages: [] }),
+    id: String(thread.id),
+    type: 'single',
+    timestamp: thread.messages[thread.messages?.length - 1]?.timestamp || undefined,
+    isUnread: false,
+    isReadOnly: false,
+    title: participant.fullName,
+    messages: { items: thread.messages || [], hasMore: true },
+    participants: { items: [participant], hasMore: false },
+  }
+}
 
 export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
 
