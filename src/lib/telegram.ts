@@ -101,30 +101,35 @@ export default class TelegramAPI {
   }
 
   getTopPeers = async (): Promise<any[]> => {
-    const result = await this.api.invoke(
-      new Api.contacts.GetTopPeers({
-        correspondents: true,
-        botsPm: true,
-        botsInline: true,
-        phoneCalls: true,
-        forwardUsers: true,
-        forwardChats: true,
-        groups: true,
-        channels: true,
-      })
-    );
-
-    // @ts-expect-error
-    const topPeers = [...result.users, ...result.chats]
-    
-    for (const top of topPeers) {
-      const messages = await this.api.getMessages(Number(top.id), { limit: 1 })
+    try {
+      const result = await this.api.invoke(
+        new Api.contacts.GetTopPeers({
+          correspondents: true,
+          botsPm: true,
+          botsInline: true,
+          phoneCalls: true,
+          forwardUsers: true,
+          forwardChats: true,
+          groups: true,
+          channels: true,
+        })
+      );
+  
       // @ts-expect-error
-      top.messages = messages.map(mapProtoMessage)
+      const topPeers = [...result.users, ...result.chats]
+      
+      for (const top of topPeers) {
+        const messages = await this.api.getMessages(Number(top.id), { limit: 1 })
+        // @ts-expect-error
+        top.messages = messages.map(mapProtoMessage)
+      }
+      
+      this.topPeers = topPeers
+      return topPeers
+    } catch (error) {
+      this.topPeers = []
+      return []
     }
-    
-    this.topPeers = topPeers
-    return topPeers
   }
 
   getUserInfo = async (userId: number): Promise<any> => {
@@ -209,10 +214,15 @@ export default class TelegramAPI {
 
   editMessage = async (threadID: string, messageID: string, messageContent: MessageContent): Promise<boolean> => {
     try {
+      const thread = this.threads.find((t) => t.id === Number(threadID))
+
       await this.api.invoke(new Api.messages.EditMessage({
         id: Number(messageID),
         message: messageContent.text,
-        peer: new Api.InputPeerChat({ chatId: Number(threadID) }),
+        peer: isUserThread(thread) 
+          // @ts-expect-error
+          ? new Api.InputPeerUser({ userId: Number(threadID) })
+          : new Api.InputPeerChat({ chatId: Number(threadID) })
         // FIXME: Support media
         // noWebpage: true,
         // media: new Api.InputMedia({...}),
@@ -239,8 +249,7 @@ export default class TelegramAPI {
     const peer = isUserThread(thread) 
       // @ts-expect-error
       ? new Api.InputPeerUser({ userId: Number(threadID) })
-      // @ts-expect-error
-      : new Api.InputPeerChat({ channelId: Number(threadID) })
+      : new Api.InputPeerChat({ chatId: Number(threadID) })
     
     await this.api.invoke(new Api.messages.SetTyping({
       topMsgId: Number(threadID),
