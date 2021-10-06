@@ -4,7 +4,7 @@ import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
 
 import { API_HASH as apiHash, API_ID as apiId } from '../constants';
-import { mapParticipant, mapProtoMessage } from "../mappers";
+import { isUserThread, mapParticipant, mapProtoMessage } from "../mappers";
 
 export default class TelegramAPI {
   api: TelegramClient
@@ -232,11 +232,19 @@ export default class TelegramAPI {
       [ActivityType.TYPING]: new Api.SendMessageTypingAction(),
     }[activityAction]
 
-    if (!action) return
+    const thread = this.threads.find((t) => t.id === Number(threadID))
+
+    if (!thread || !action) return
+
+    const peer = isUserThread(thread) 
+      // @ts-expect-error
+      ? new Api.InputPeerUser({ userId: Number(threadID) })
+      // @ts-expect-error
+      : new Api.InputPeerChat({ channelId: Number(threadID) })
     
     await this.api.invoke(new Api.messages.SetTyping({
-      peer: new Api.InputPeerChat({ chatId: Number(threadID) }),
       topMsgId: Number(threadID),
+      peer,
       action,
     }));
   }
