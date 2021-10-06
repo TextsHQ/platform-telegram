@@ -715,7 +715,7 @@ const mapUserThread = (thread: Api.User & { messages?: Message[] }): Thread => (
   participants: { items: [mapParticipant(thread)], hasMore: false },
 })
 
-const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
+export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
 
 export const mapProtoThread = (thread: (Api.Chat & { messages?: Message[] }) | Api.User): Thread => {
   if (isUserThread(thread)) return mapUserThread(thread)
