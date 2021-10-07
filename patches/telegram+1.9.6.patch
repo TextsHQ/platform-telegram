@@ -1,0 +1,28 @@
+diff --git a/node_modules/telegram/client/TelegramClient.d.ts b/node_modules/telegram/client/TelegramClient.d.ts
+index 063c2d0..534f554 100644
+--- a/node_modules/telegram/client/TelegramClient.d.ts
++++ b/node_modules/telegram/client/TelegramClient.d.ts
+@@ -896,6 +896,8 @@ export declare class TelegramClient extends TelegramBaseClient {
+     /** @hidden */
+     _getResponseMessage(req: any, result: any, inputChat: any): Api.TypeMessage | import("../tl/custom/message").Message | Map<number, import("../tl/custom/message").Message> | (import("../tl/custom/message").Message | undefined)[] | undefined;
+     /** @hidden */
++    _getInputDialog(req: any): any
++    /** @hidden */
+     [inspect.custom](): {
+         [key: string]: any;
+     };
+diff --git a/node_modules/telegram/client/TelegramClient.js b/node_modules/telegram/client/TelegramClient.js
+index 80f0f01..eb7e66e 100644
+--- a/node_modules/telegram/client/TelegramClient.js
++++ b/node_modules/telegram/client/TelegramClient.js
+@@ -1083,6 +1083,10 @@ class TelegramClient extends telegramBaseClient_1.TelegramBaseClient {
+         return parseMethods._getResponseMessage(this, req, result, inputChat);
+     }
+     /** @hidden */
++    _getInputDialog(req) {
++        return userMethods._getInputDialog(this, req);
++    }
++    /** @hidden */
+     [util_1.inspect.custom]() {
+         return Helpers_1.betterConsoleLog(this);
+     }
