@@ -496,11 +496,8 @@ export default class Telegram implements PlatformAPI {
     return !isError(toObject(res))
   }
 
-  markAsUnread = (threadID: string) => {
-    this.airgram.api.toggleChatIsMarkedAsUnread({
-      chatId: +threadID,
-      isMarkedAsUnread: true,
-    })
+  markAsUnread = async (threadID: string) => {
+    await this.api.markAsUnread(threadID)
   }
 
   archiveThread = async (threadID: string, archived: boolean) => {

@@ -212,17 +212,23 @@ export default class TelegramAPI {
     return messages.sort((a, b) => a.date - b.date)
   }
 
+  _getPeer = (threadID: string) => {
+    const thread = this.threads.find((t) => t.id === Number(threadID))
+    if (!thread) return
+
+    return isUserThread(thread) 
+      ? new Api.InputPeerUser({ userId: Number(threadID), accessHash: thread.accessHash })
+      : new Api.InputPeerChat({ chatId: Number(threadID) })
+  }
+
   editMessage = async (threadID: string, messageID: string, messageContent: MessageContent): Promise<boolean> => {
     try {
-      const thread = this.threads.find((t) => t.id === Number(threadID))
+      const peer = this._getPeer(threadID)
 
       await this.api.invoke(new Api.messages.EditMessage({
         id: Number(messageID),
         message: messageContent.text,
-        peer: isUserThread(thread) 
-          // @ts-expect-error
-          ? new Api.InputPeerUser({ userId: Number(threadID) })
-          : new Api.InputPeerChat({ chatId: Number(threadID) })
+        peer
         // FIXME: Support media
         // noWebpage: true,
         // media: new Api.InputMedia({...}),
@@ -242,19 +248,25 @@ export default class TelegramAPI {
       [ActivityType.TYPING]: new Api.SendMessageTypingAction(),
     }[activityAction]
 
-    const thread = this.threads.find((t) => t.id === Number(threadID))
+    if (!action) return
 
-    if (!thread || !action) return
-
-    const peer = isUserThread(thread) 
-      // @ts-expect-error
-      ? new Api.InputPeerUser({ userId: Number(threadID) })
-      : new Api.InputPeerChat({ chatId: Number(threadID) })
+    const peer = this._getPeer(threadID)
     
     await this.api.invoke(new Api.messages.SetTyping({
       topMsgId: Number(threadID),
       peer,
       action,
+    }));
+  }
+
+  markAsUnread = async (threadID: string) => {
+    const peer = this._getPeer(threadID)
+   
+    this.api._getResponseMessage
+
+    await this.api.invoke(new Api.messages.MarkDialogUnread({
+      unread: true,
+      peer: new Api.InputDialogPeer({ peer }),
     }));
   }
 }
