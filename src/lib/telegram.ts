@@ -261,8 +261,6 @@ export default class TelegramAPI {
 
   markAsUnread = async (threadID: string) => {
     const peer = this._getPeer(threadID)
-   
-    this.api._getResponseMessage
 
     await this.api.invoke(new Api.messages.MarkDialogUnread({
       unread: true,
@@ -279,6 +277,21 @@ export default class TelegramAPI {
 
       return true
     } catch (error) {
+      return false
+    }
+  }
+
+  sendReadReceipt = async (threadID: string, messageID: string): Promise<boolean> => {
+    try {
+      const peer = this._getPeer(threadID)
+
+      await this.api.invoke(new Api.messages.ReadHistory({
+        maxId: Number(messageID),
+        peer,
+      }));
+
+      return true
+    } catch (error) {
       return false
     }
   }
