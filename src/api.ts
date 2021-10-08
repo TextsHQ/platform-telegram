@@ -13,7 +13,7 @@ import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } fr
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser, mapProtoThread, mapProtoMessage } from './mappers'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser, mapProtoThread, mapProtoMessage, mapParticipant } from './mappers'
 import { fileExists } from './util'
 import TelegramAPI from './lib/telegram'
 import TelegramRealTime from './lib/real-time'
@@ -273,29 +273,19 @@ export default class Telegram implements PlatformAPI {
   }
 
   searchUsers = async (query: string) => {
-    const res = await this.airgram.api.searchContacts({
-      query,
-      limit: 20,
-    })
-    const { userIds } = toObject(res)
-    return Promise.all(userIds.map(async userId => {
-      const user = await this.getTGUser(userId)
-      return mapUser(user, this.accountInfo.accountID)
-    }))
+    const res = await this.api.searchContacts(query)
+    const promises = res.map(mapParticipant)
+    const users = await Promise.all(promises)
+
+    return users
   }
 
   createThread = async (userIDs: string[], title?: string) => {
-    if (userIDs.length === 0) return
-    if (userIDs.length === 1) {
-      const chatResponse = await this.airgram.api.createPrivateChat({ userId: +userIDs[0] })
-      return this.asyncMapThread(toObject(chatResponse))
-    }
-    const res = await this.airgram.api.createNewBasicGroupChat({
-      userIds: userIDs.map(Number),
-      title,
-    })
-    const chat = toObject(res)
-    return this.asyncMapThread(chat)
+    const res = await this.api.createThread(userIDs, title)
+    const [firstThread] = res
+    const mappedThread = mapProtoThread(firstThread)
+
+    return mappedThread
   }
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
@@ -400,14 +390,6 @@ export default class Telegram implements PlatformAPI {
     this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
   }
 
-  private loadChats = async (chatIds: number[]) => {
-    const chats = await Promise.all(chatIds.map(async chatId => {
-      const chatResponse = await this.airgram.api.getChat({ chatId })
-      return toObject(chatResponse)
-    }))
-    return chats
-  }
-
   getThread = async (threadID: string) => {
     const chatResponse = await this.airgram.api.getChat({ chatId: +threadID })
     return this.asyncMapThread(toObject(chatResponse))
@@ -487,17 +469,10 @@ export default class Telegram implements PlatformAPI {
     await this.api.markAsUnread(threadID)
   }
 
-  archiveThread = async (threadID: string, archived: boolean) => {
-    toObject(await this.airgram.api.addChatToList({ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' }}))
-  }
-
-  private lastChatID: number
-
-  onThreadSelected = async (threadID: string) => {
-    if (this.lastChatID) await this.airgram.api.closeChat({ chatId: this.lastChatID })
-    this.lastChatID = +threadID
-    if (threadID) await this.airgram.api.openChat({ chatId: +threadID })
-  }
+  // TODO: Archive thread
+  // archiveThread = async (threadID: string, archived: boolean) => {
+  //   return
+  // }
 
   /**
    * The frontend will request twice for each fileId, the first time for the

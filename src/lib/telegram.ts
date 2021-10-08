@@ -268,7 +268,7 @@ export default class TelegramAPI {
     }));
   }
 
-  deleteMessage = async (messageID: string, forEveryone: boolean) => {
+  deleteMessage = async (messageID: string, forEveryone: boolean): Promise<boolean> => {
     try {
       await this.api.invoke(new Api.messages.DeleteMessages({
         revoke: forEveryone,
@@ -294,5 +294,32 @@ export default class TelegramAPI {
     } catch (error) {
       return false
     }
+  }
+
+  searchContacts = async (q: string): Promise<any[]> => {
+    const res = await this.api.invoke(new Api.contacts.Search({
+      q,
+      limit: 6849609,
+    })); 
+
+    return res.users
+  }
+
+  createThread = async (userIDs: string[], title?: string) => {
+    // TODO: Move this
+    // @ts-expect-error
+    const getAccessHash = id => this.threads.find((thread => thread.id === Number(id)))?.accessHash
+
+    const users = userIDs.map(id => new Api.InputUser({ 
+      userId: Number(id), 
+      accessHash: getAccessHash(id) 
+    }))
+
+    const res = await this.api.invoke(new Api.messages.CreateChat({
+      users,
+      title,
+    }));
+    // @ts-expect-error
+    return res?.chats
   }
 }
