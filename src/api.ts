@@ -473,13 +473,9 @@ export default class Telegram implements PlatformAPI {
     await this.api.sendTypingIndicator(type, threadID)
   }
 
-  deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
-    const res = await this.airgram.api.deleteMessages({
-      chatId: +threadID,
-      messageIds: [+messageID],
-      revoke: forEveryone,
-    })
-    return !isError(toObject(res))
+  deleteMessage = async (_, messageID: string, forEveryone: boolean) => {
+    const res = await this.api.deleteMessage(messageID, forEveryone)
+    return res
   }
 
   sendReadReceipt = async (threadID: string, messageID: string) => {

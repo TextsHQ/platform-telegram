@@ -269,4 +269,17 @@ export default class TelegramAPI {
       peer: new Api.InputDialogPeer({ peer }),
     }));
   }
+
+  deleteMessage = async (messageID: string, forEveryone: boolean) => {
+    try {
+      await this.api.invoke(new Api.messages.DeleteMessages({
+        revoke: forEveryone,
+        id: [Number(messageID)],
+      }));
+
+      return true
+    } catch (error) {
+      return false
+    }
+  }
 }
