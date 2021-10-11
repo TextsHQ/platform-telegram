@@ -2,6 +2,7 @@ import type { MessageContent, OnServerEventCallback } from "@textshq/platform-sd
 import { ActivityType } from "@textshq/platform-sdk";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
+import bigInt from "big-integer";
 
 import { API_HASH as apiHash, API_ID as apiId } from '../constants';
 import { isUserThread, mapParticipant, mapProtoMessage } from "../mappers";
@@ -321,5 +322,26 @@ export default class TelegramAPI {
     }));
     // @ts-expect-error
     return res?.chats
+  }
+
+  forwardMessage = async (fromThreadID: string, messageID: string, toThreadID: string): Promise<boolean> => {
+    try {
+      const fromPeer = this._getPeer(fromThreadID)
+      const toPeer = this._getPeer(toThreadID)
+
+      await this.api.invoke(new Api.messages.ForwardMessages({
+        silent: true,
+        background: true,
+        withMyScore: true,
+        fromPeer,
+        toPeer,
+        id: [Number(messageID)],
+        randomId: [bigInt(messageID)],
+      }));
+
+      return true
+    } catch (error) {
+      return false
+    }
   }
 }
