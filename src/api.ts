@@ -172,10 +172,7 @@ export default class Telegram implements PlatformAPI {
   }
 
   deleteThread = async (threadID: string) => {
-    await this.airgram.api.deleteChatHistory({
-      chatId: +threadID,
-      removeFromChatList: true,
-    })
+    await this.api.deleteThreadHistory(threadID)
   }
 
   getUser = async ({ userID }: { userID?: string; }) => {

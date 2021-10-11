@@ -344,4 +344,14 @@ export default class TelegramAPI {
       return false
     }
   }
+
+  deleteThreadHistory = async (threadID: string): Promise<void> => {
+    const peer = this._getPeer(threadID)
+    
+    await this.api.invoke(new Api.messages.DeleteHistory({
+      justClear: true,
+      revoke: true,
+      peer,
+    }));
+  }
 }
