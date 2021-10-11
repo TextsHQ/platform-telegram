@@ -1,29 +1,14 @@
-// this should be the first import to fix PATH env variable on windows
-// eslint-disable-next-line
-import { copyDLLsForWindows, IS_WINDOWS } from './windows'
 import type { Api } from 'telegram'
-import path from 'path'
-import os from 'os'
-import crypto from 'crypto'
-import { promises as fs } from 'fs'
-import rimraf from 'rimraf'
-import type MTProto from '@mtproto/core'
-import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
-import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
+import { Airgram, isError, TDLibError, ApiResponse, BaseTdObject } from 'airgram'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback } from '@textshq/platform-sdk'
 
-import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction, mapCurrentUser, mapProtoThread, mapProtoMessage, mapParticipant } from './mappers'
-import { fileExists } from './util'
+import { MUTED_FOREVER_CONSTANT } from './constants'
+import { mapCurrentUser, mapProtoThread, mapProtoMessage, mapParticipant } from './mappers'
 import TelegramAPI from './lib/telegram'
 import TelegramRealTime from './lib/real-time'
 
-type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
-type Session = { client: MTProto }
 type LoginEventCallback = (authState: any) => void
-
-const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 
 function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T {
   if (isError(response)) {
@@ -37,109 +22,14 @@ function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T 
   return response
 }
 
-function getFileInput(msgContent: MessageContent, filePath: string, caption?: FormattedTextInput): InputMessageContentInputUnion {
-  const fileInput: InputFileInputUnion = {
-    _: 'inputFileLocal',
-    path: filePath,
-  }
-  switch (msgContent.mimeType.split('/')[0]) {
-    case 'image':
-      return {
-        _: 'inputMessagePhoto',
-        photo: fileInput,
-        caption,
-      }
-    case 'audio':
-      if (msgContent.isRecordedAudio) {
-        return {
-          _: 'inputMessageVoiceNote',
-          voiceNote: fileInput,
-          caption,
-        }
-      }
-      return {
-        _: 'inputMessageAudio',
-        audio: fileInput,
-        caption,
-      }
-    case 'video':
-      if (msgContent.isGif) {
-        return {
-          _: 'inputMessageAnimation',
-          animation: fileInput,
-          caption,
-        }
-      }
-      return {
-        _: 'inputMessageVideo',
-        video: fileInput,
-        caption,
-      }
-    default:
-      return {
-        _: 'inputMessageDocument',
-        document: fileInput,
-        caption,
-      }
-  }
-}
-
-async function getInputMessageContent(msgContent: MessageContent): Promise<InputMessageContentInputUnion> {
-  const { text, filePath, fileBuffer, fileName } = msgContent
-  const formattedTextInput: FormattedTextInput = text ? {
-    _: 'formattedText',
-    text,
-  } : undefined
-  const textInput: InputMessageTextInput = text ? {
-    _: 'inputMessageText',
-    text: formattedTextInput,
-  } : undefined
-  if (filePath) {
-    return getFileInput(msgContent, filePath, formattedTextInput)
-  }
-  if (fileBuffer) {
-    const tmpFilePath = path.join(os.tmpdir(), `${Math.random().toString(36)}.${fileName}`)
-    await fs.writeFile(tmpFilePath, fileBuffer)
-    return getFileInput(msgContent, tmpFilePath, formattedTextInput)
-    // TODO fs.unlink(tmpFilePath).catch(() => {})
-  }
-  return textInput
-}
-
-const tdlibPath = path.join(BINARIES_DIR_PATH, {
-  darwin: `${process.arch}_libtdjson.dylib`,
-  linux: `${process.arch}_libtdjson.so`,
-  win32: `${process.arch}_libtdjson.dll`,
-}[process.platform])
-
 export default class Telegram implements PlatformAPI {
   private airgram: Airgram
-
-  private accountInfo: AccountInfo
-
-  private authState: AuthorizationStateUnion
-
-  private sendMessageResolvers = new Map<number, SendMessageResolveFunction>()
 
   private getAssetResolvers = new Map<number, GetAssetResolveFunction>()
 
   private fileIdToPath = new Map<number, string>()
 
   private loginEventCallback: LoginEventCallback
-
-  private connStateChangeCallback: OnConnStateChangeCallback
-
-  private secretChatIdToChatId = new Map<number, number>()
-
-  private basicGroupIdToChatId = new Map<number, number>()
-
-  private superGroupIdToChatId = new Map<number, number>()
-
-  private superGroupThreads = new Set<string>()
-
-  private session: Session
-
-  private me: TGUser
 
   private api: TelegramAPI = new TelegramAPI()
 
@@ -149,7 +39,7 @@ export default class Telegram implements PlatformAPI {
 
   private loginMetadata: Record<string, any> = { state: 'authorizationStateWaitPhoneNumber' }
 
-  init = async (data: { session: string }, accountInfo: AccountInfo) => {
+  init = async (data: { session: string }) => {
     const { session } = data || {}
 
     await this.api.init(session || '')
@@ -166,9 +56,7 @@ export default class Telegram implements PlatformAPI {
     this.loginEventCallback(this.loginMetadata.state)
   }
 
-  onConnectionStateChange = (onEvent: OnConnStateChangeCallback) => {
-    this.connStateChangeCallback = onEvent
-  }
+  onConnectionStateChange = (onEvent: OnConnStateChangeCallback) => {}
 
   afterAuth = async (): Promise<void> => {
     const currentUser = await this.api.getCurrentUser()
@@ -240,24 +128,6 @@ export default class Telegram implements PlatformAPI {
     }
   }
 
-  private asyncMapThread = async (chat: Chat) => {
-    const isSuperGroup = chat.type._ == 'chatTypeSupergroup'
-    const participants: TGUser[] = isSuperGroup ? [] : await this._getParticipants(chat)
-    const thread = mapThread(chat, participants, this.accountInfo.accountID)
-    if (isSuperGroup) {
-      // Intentionally not using `await` to not block getThreads.
-      this.getAndEmitParticipants(chat)
-      if (thread.messages.items.length) {
-        setTimeout(() => {
-          this.emitParticipantsFromMessages(chat.id.toString(), thread.messages.items)
-        }, 100) // todo revisit
-      }
-    }
-    // const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
-    // this.onEvent(presenceEvents)
-    return thread
-  }
-
   logout = async () => this.api.logout()
 
   dispose = async () => {}
@@ -308,91 +178,11 @@ export default class Telegram implements PlatformAPI {
     })
   }
 
-  private getTGUser = async (userId: number) => {
-    const res = await this.airgram.api.getUser({ userId })
-    return toObject(res)
-  }
+  getUser = async ({ userID }: { userID?: string; }) => {
+    if (!userID) return
 
-  getUser = async ({ username }: { username: string }) => {
-    if (!username) return
-    const res = await this.airgram.api.searchPublicChat({ username })
-    const chat = toObject(res)
-    if (isError(chat)) return
-    if (chat.type._ !== 'chatTypePrivate') return
-    const user = await this.getTGUser(chat.type.userId)
-    return mapUser(user, this.accountInfo.accountID)
-  }
-
-  private _getParticipants = async (chat: ChatUnion) => {
-    const mapMembers = (members: ChatMember[]) => Promise.all(members.map(member => this.getTGUser(member.userId)))
-    switch (chat.type._) {
-      case 'chatTypePrivate': {
-        const participant = await this.getTGUser(chat.type.userId)
-        return [participant]
-      }
-      case 'chatTypeSecret': {
-        this.secretChatIdToChatId.set(chat.type.secretChatId, chat.id)
-        const participant = await this.getTGUser(chat.type.userId)
-        return [participant]
-      }
-      case 'chatTypeBasicGroup': {
-        this.basicGroupIdToChatId.set(chat.type.basicGroupId, chat.id)
-        const res = await this.airgram.api.getBasicGroupFullInfo({ basicGroupId: chat.type.basicGroupId })
-        const { members } = toObject(res)
-        return mapMembers(members)
-      }
-      case 'chatTypeSupergroup': {
-        this.superGroupThreads.add(chat.id.toString())
-        this.superGroupIdToChatId.set(chat.type.supergroupId, chat.id)
-        return []
-        // const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
-        // const supergroup = toObject(supergroupRes)
-        // if (!supergroup.canGetMembers) {
-        //   return []
-        // }
-        // const membersRes = await this.airgram.api.getSupergroupMembers({
-        //   supergroupId: chat.type.supergroupId,
-        //   limit: 256, // todo, random limit
-        // })
-        // const { members } = toObject(membersRes)
-        // return mapMembers(members)
-      }
-      default:
-        return []
-    }
-  }
-
-  private upsertParticipants(threadID: string, entries: Participant[]) {
-    this.onEvent([{
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'upsert',
-      objectName: 'participant',
-      objectIDs: {
-        threadID,
-      },
-      entries,
-    }])
-  }
-
-  private getAndEmitParticipants = async (chat: ChatUnion) => {
-    const members = await this._getParticipants(chat)
-    if (!members.length) return
-    this.upsertParticipants(String(chat.id), members.map(m => mapUser(m, this.accountInfo.accountID)))
-  }
-
-  private emitParticipantsFromMessages = async (threadID: string, messages: Message[]) => {
-    if (!this.superGroupThreads.has(threadID)) {
-      // Only need to emit participant for supergroup.
-      return
-    }
-    const senderIDs = [...new Set(messages.map(m => m.senderID.startsWith('$thread') ? null : +m.senderID).filter(Boolean))]
-    const members = await Promise.all(senderIDs.map(x => this.getTGUser(x)))
-    this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
-  }
-
-  getThread = async (threadID: string) => {
-    const chatResponse = await this.airgram.api.getChat({ chatId: +threadID })
-    return this.asyncMapThread(toObject(chatResponse))
+    const res = await this.api.getUserInfo(Number(userID))
+    return mapParticipant(res.user)
   }
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {

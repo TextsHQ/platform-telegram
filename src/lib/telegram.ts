@@ -132,7 +132,7 @@ export default class TelegramAPI {
     }
   }
 
-  getUserInfo = async (userId: number): Promise<any> => {
+  getUserInfo = async (userId: number): Promise<Api.UserFull> => {
     const info = await this.api.invoke(
       new Api.users.GetFullUser({
         id: userId,
