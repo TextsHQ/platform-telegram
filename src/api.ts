@@ -193,9 +193,11 @@ export default class Telegram implements PlatformAPI {
     }
 
     const threads = await this.api.getThreads()
-    const items = threads.map(mapProtoThread)
+    const oldestCursor = String(threads[threads?.length - 1]?.id)
+    const items = threads?.map(mapProtoThread)
 
     return {
+      oldestCursor,
       items: items || [],
       // If there was an error it'll return "null" so that means there are more threads to load
       hasMore: items === null ? true : items?.length > 0,
