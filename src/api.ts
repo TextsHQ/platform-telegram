@@ -196,8 +196,9 @@ export default class Telegram implements PlatformAPI {
     const items = threads.map(mapProtoThread)
 
     return {
-      items,
-      hasMore: items.length > 0,
+      items: items || [],
+      // If there was an error it'll return "null" so that means there are more threads to load
+      hasMore: items === null ? true : items?.length > 0,
     }
   }
 
@@ -210,9 +211,10 @@ export default class Telegram implements PlatformAPI {
     const items = messages.map(mapProtoMessage)
 
     return {
-      items,
+      items: items || [],
       oldestCursor,
-      hasMore: items.length > 0,
+      // If there was an error it'll return "null" so that means there are more messages to load
+      hasMore: items === null ? true : items?.length > 0,
     }
   }
 

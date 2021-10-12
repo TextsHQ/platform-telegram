@@ -184,7 +184,7 @@ export default class TelegramAPI {
 
       return next
     } catch (error) {
-      return []
+      return null
     }
   }
 
@@ -214,7 +214,7 @@ export default class TelegramAPI {
   }
 
   _getPeer = (threadID: string) => {
-    const thread = this.threads.find((t) => t.id === Number(threadID))
+    const thread = this.threads?.find((t) => t.id === Number(threadID))
     if (!thread) return
 
     return isUserThread(thread) 
