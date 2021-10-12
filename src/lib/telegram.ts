@@ -4,8 +4,8 @@ import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
 import bigInt from "big-integer";
 
-import { API_HASH as apiHash, API_ID as apiId } from '../constants';
-import { isUserThread, mapParticipant, mapProtoMessage } from "../mappers";
+import { isUserThread, mapProtoMessage } from "../mappers";
+import { SEARCH_LIMIT, API_HASH as apiHash, API_ID as apiId } from "./constants";
 
 export default class TelegramAPI {
   api: TelegramClient
@@ -300,7 +300,7 @@ export default class TelegramAPI {
   searchContacts = async (q: string): Promise<any[]> => {
     const res = await this.api.invoke(new Api.contacts.Search({
       q,
-      limit: 6849609,
+      limit: SEARCH_LIMIT,
     })); 
 
     return res.users
