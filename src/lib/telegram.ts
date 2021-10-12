@@ -1,4 +1,4 @@
-import type { MessageContent, OnServerEventCallback } from "@textshq/platform-sdk";
+import { MessageContent, OnServerEventCallback, texts } from "@textshq/platform-sdk";
 import { ActivityType } from "@textshq/platform-sdk";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
@@ -84,6 +84,7 @@ export default class TelegramAPI {
 
       return user
     } catch (error) {
+      texts.log(error)
       return null
     }
   }
@@ -184,6 +185,7 @@ export default class TelegramAPI {
 
       return next
     } catch (error) {
+      texts.log(error)
       return null
     }
   }
