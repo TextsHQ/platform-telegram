@@ -71,21 +71,21 @@ export default class Telegram implements PlatformAPI {
       if (state === 'authorizationStateWaitPhoneNumber') {
         const nextStep = 'authorizationStateWaitCode'
         const codeHash = await this.api.getPhoneCodeHash(phoneNumber)
-  
+
         this.loginEventCallback?.(nextStep)
         this.loginMetadata = { state: nextStep, codeHash }
-  
+
         return { type: 'wait' }
       }
-  
+
       if (state === 'authorizationStateWaitCode') {
         try {
           await this.api.login({ code, phone: phoneNumber, password: password || undefined })
-          
+
           const nextStep = 'authorizationStateReady'
           this.loginEventCallback?.(nextStep)
           this.loginMetadata = { ...this.loginMetadata, state: nextStep }
-    
+
           return { type: 'wait' }
         } catch (error) {
           // TODO: handle 2FA in a separated state. For now this handled this way because Telegram
@@ -100,10 +100,10 @@ export default class Telegram implements PlatformAPI {
 
       if (state === 'authorizationSignUp') {
         const nextStep = 'authorizationStateReady'
-  
+
         await this.api.register({
-          code, 
-          phone: phoneNumber, 
+          code,
+          phone: phoneNumber,
           codeHash: this.loginMetadata.codeHash,
           firstName,
           lastName,
@@ -114,17 +114,17 @@ export default class Telegram implements PlatformAPI {
 
         return { type: 'wait' }
       }
-  
+
       if (state === 'authorizationStateReady') {
         await this.afterAuth()
         return { type: 'success' }
       }
 
       // This is an unknown error
-      return { type: 'error', errorMessage: 'Error.' }
+      return { type: 'error', errorMessage: 'Unknown Error' }
     } catch (error) {
       console.log(error)
-      return { type: 'error', errorMessage: 'Error.' }
+      return { type: 'error', errorMessage: 'Unknown Error' }
     }
   }
 
@@ -204,10 +204,10 @@ export default class Telegram implements PlatformAPI {
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor } = pagination || { cursor: null, direction: null }
-    
+
     const messages = await this.api.getMessages(threadID, Number(cursor))
     const oldestCursor = String(messages[0]?.id)
-    
+
     const items = messages.map(mapProtoMessage)
 
     return {
