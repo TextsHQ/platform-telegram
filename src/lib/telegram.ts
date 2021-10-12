@@ -52,7 +52,7 @@ export default class TelegramAPI {
 
     return res?.phoneCodeHash
   }
-  
+
   login = async ({ code, phone, password = undefined }: { code: string; phone: string; password?: string }) => {
     const signInResult = await this.api.start({
       phoneNumber: phone,
@@ -66,12 +66,12 @@ export default class TelegramAPI {
     return signInResult
   }
 
-  register = async (credentials: { 
-    code: string; 
-    phone: string; 
-    codeHash: string; 
-    firstName: string; 
-    lastName: string; 
+  register = async (credentials: {
+    code: string;
+    phone: string;
+    codeHash: string;
+    firstName: string;
+    lastName: string;
   }) => {
     return null
   }
@@ -98,6 +98,7 @@ export default class TelegramAPI {
 
       return true
     } catch (error) {
+      texts.error(error)
       return false
     }
   }
@@ -116,19 +117,20 @@ export default class TelegramAPI {
           channels: true,
         })
       );
-  
+
       // @ts-expect-error
       const topPeers = [...result.users, ...result.chats]
-      
+
       for (const top of topPeers) {
         const messages = await this.api.getMessages(Number(top.id), { limit: 1 })
         // @ts-expect-error
         top.messages = messages.map(mapProtoMessage)
       }
-      
+
       this.topPeers = topPeers
       return topPeers
     } catch (error) {
+      texts.error(error)
       this.topPeers = []
       return []
     }
@@ -185,7 +187,7 @@ export default class TelegramAPI {
 
       return next
     } catch (error) {
-      texts.log(error)
+      texts.error(error)
       return null
     }
   }
@@ -219,7 +221,7 @@ export default class TelegramAPI {
     const thread = this.threads?.find((t) => t.id === Number(threadID))
     if (!thread) return
 
-    return isUserThread(thread) 
+    return isUserThread(thread)
       ? new Api.InputPeerUser({ userId: Number(threadID), accessHash: thread.accessHash })
       : new Api.InputPeerChat({ chatId: Number(threadID) })
   }
@@ -242,6 +244,7 @@ export default class TelegramAPI {
 
       return true
     } catch (error) {
+      texts.error(error)
       return false
     }
   }
@@ -254,7 +257,7 @@ export default class TelegramAPI {
     if (!action) return
 
     const peer = this._getPeer(threadID)
-    
+
     await this.api.invoke(new Api.messages.SetTyping({
       topMsgId: Number(threadID),
       peer,
@@ -280,6 +283,7 @@ export default class TelegramAPI {
 
       return true
     } catch (error) {
+      texts.error(error)
       return false
     }
   }
@@ -303,7 +307,7 @@ export default class TelegramAPI {
     const res = await this.api.invoke(new Api.contacts.Search({
       q,
       limit: SEARCH_LIMIT,
-    })); 
+    }));
 
     return res.users
   }
@@ -313,9 +317,9 @@ export default class TelegramAPI {
     // @ts-expect-error
     const getAccessHash = id => this.threads.find((thread => thread.id === Number(id)))?.accessHash
 
-    const users = userIDs.map(id => new Api.InputUser({ 
-      userId: Number(id), 
-      accessHash: getAccessHash(id) 
+    const users = userIDs.map(id => new Api.InputUser({
+      userId: Number(id),
+      accessHash: getAccessHash(id)
     }))
 
     const res = await this.api.invoke(new Api.messages.CreateChat({
@@ -343,13 +347,14 @@ export default class TelegramAPI {
 
       return true
     } catch (error) {
+      texts.error(error)
       return false
     }
   }
 
   deleteThreadHistory = async (threadID: string): Promise<void> => {
     const peer = this._getPeer(threadID)
-    
+
     await this.api.invoke(new Api.messages.DeleteHistory({
       justClear: true,
       revoke: true,
