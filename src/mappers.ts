@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent, CurrentUser, Participant } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent, CurrentUser, Participant, MessageAttachment } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
@@ -673,24 +673,25 @@ export const mapCurrentUser = ({ user }: { user: Api.User}): CurrentUser => ({
   // imgURL: ,
 })
 
+const mapProtoAttachments = (data: Api.TypeMessageMedia): MessageAttachment[] => {
+  // TODO: Map proto attachments
+  // console.log({ data })
+  return []
+}
+
 export const mapProtoMessage = (message: Api.Message): Message => ({
-    // _original: message,
     id: String(message.id),
     timestamp: new Date(message.date * 1000),
     editedTimestamp: message.editDate ? new Date(message.editDate * 1000) : undefined,
     text: message.message,
-    forwardedCount: message.forwards || undefined,
+    forwardedCount: message.forwards || message.fwdFrom ? 1 : 0 || undefined,
     // textFooter: mapTextFooter(messag.interactionInfo),
     textAttributes: undefined,
     // @ts-expect-error
     senderID: String(message.fromId?.userId),
     isSender: message.out,
-    attachments: undefined,
-    // isErrored: message.sta?._ === 'messageSendingStateFailed',
-    // isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
-    // linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
-    // buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId, msg.id),
-    // expiresInSeconds: message.,
+    attachments: mapProtoAttachments(message.media),
+    linkedMessageID: message.replyTo?.replyToMsgId ? String(message.replyTo?.replyToMsgId) : undefined,
 })
 
 export const mapParticipant = (user: Api.User): Participant => ({
