@@ -1,23 +1,27 @@
-import { MessageContent, OnServerEventCallback, texts } from "@textshq/platform-sdk";
+import { promises as fs } from 'fs'
+import path from 'path'
+import { AccountInfo, MessageContent, OnServerEventCallback, texts } from "@textshq/platform-sdk";
 import { ActivityType } from "@textshq/platform-sdk";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
 import bigInt from "big-integer";
 
-import { isUserThread, mapProtoMessage } from "../mappers";
+import { isMessagePhoto, isUserThread, mapProtoMessage } from "../mappers";
 import { SEARCH_LIMIT, API_HASH as apiHash, API_ID as apiId } from "./constants";
 
 export default class TelegramAPI {
   api: TelegramClient
   session: StringSession
+  accountInfo: AccountInfo
   onEvent: OnServerEventCallback
   threads: ((Api.TypeChat | Api.TypeUser) & { messages?: Api.Message[] })[]
   topPeers: any[]
 
   constructor () {}
 
-  init = async (session = '') => {
+  init = async (session = '', accountInfo: AccountInfo) => {
     this.session = new StringSession(session)
+    this.accountInfo = accountInfo
 
     this.api = new TelegramClient(this.session, apiId, apiHash, {
       connectionRetries: 5,
@@ -81,6 +85,9 @@ export default class TelegramAPI {
       const user = await this.api.invoke(
         new Api.users.GetFullUser({ id: new Api.InputUserSelf() })
       );
+
+      const result = await this.api.downloadProfilePhoto(user)
+      await fs.writeFile(path.join(this.accountInfo.dataDirPath, 'profile-photos', `${user?.user?.id}.jpg`), result);
 
       return user
     } catch (error) {
@@ -183,6 +190,13 @@ export default class TelegramAPI {
         thread.messages = messages.map(mapProtoMessage) || []
         // @ts-expect-error
         chat.messages = messages.map(mapProtoMessage) || []
+        // TODO: MOVE THIS
+        if (isUserThread(chat)) {
+          const result = await this.api.downloadProfilePhoto(chat)
+          await fs
+            .writeFile(`${this.accountInfo.dataDirPath}/profile-photos/${chat?.id}.jpg`, result)
+            .catch(() => texts.log('ERROR: downloading photo'));
+        }
       }
 
       return next
@@ -194,11 +208,24 @@ export default class TelegramAPI {
 
   getMessages = async (id: string, offsetId: number): Promise<Api.Message[]> => {
     const messages = await this.api.getMessages(Number(id), {
-      limit: 20,
+      limit: 10,
       offsetId,
       maxId: offsetId,
     });
 
+    const photosPromises = messages
+      .filter(message => message.media && isMessagePhoto(message.media))
+      .map(async message => {
+        const result = await this.api.downloadMedia(message.media, {
+          workers: 1,
+        });
+        // FIXME: Move this and maybe download in background (using getAsset). This will
+        // stop messaging loading instead of loading in parallel
+        // @ts-expect-error
+        message.media?.data = result
+      })
+
+    await Promise.all(photosPromises)
     // for (const message of messages) {
     //   // @ts-expect-error
     //   const { user } = await this.getUserInfo(message.fromId.userId)
