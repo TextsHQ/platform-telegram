@@ -1,6 +1,8 @@
 import type { Api } from 'telegram'
+import mkdirp from 'mkdirp'
+import path from 'path'
 import { Airgram, isError, TDLibError, ApiResponse, BaseTdObject } from 'airgram'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, AccountInfo } from '@textshq/platform-sdk'
 
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { mapCurrentUser, mapProtoThread, mapProtoMessage, mapParticipant } from './mappers'
@@ -39,14 +41,21 @@ export default class Telegram implements PlatformAPI {
 
   private loginMetadata: Record<string, any> = { state: 'authorizationStateWaitPhoneNumber' }
 
-  init = async (data: { session: string }) => {
-    const { session } = data || {}
+  private accountInfo: AccountInfo
 
-    await this.api.init(session || '')
+  init = async (data: { session: string }, accountInfo: AccountInfo) => {
+    this.accountInfo = accountInfo
+    await mkdirp(path.join(this.accountInfo.dataDirPath, 'profile-photos'))
+    
+    const { session } = data || {}
+    await this.api.init(session || '', accountInfo)
     if (session) await this.afterAuth()
   }
 
-  getCurrentUser = () => mapCurrentUser(this.currentUser)
+  getCurrentUser = () => {
+    if (!this.currentUser) return null
+    return mapCurrentUser(this.currentUser)
+  }
 
   // FIXME: try to find a way to serialize this
   serializeSession = () => ({ session: this.api.getSessionSerialized() })
@@ -144,7 +153,7 @@ export default class Telegram implements PlatformAPI {
 
   searchUsers = async (query: string) => {
     const res = await this.api.searchContacts(query)
-    const promises = res.map(mapParticipant)
+    const promises = res.map((user) => mapParticipant(user, this.accountInfo.dataDirPath))
     const users = await Promise.all(promises)
 
     return users
@@ -153,7 +162,7 @@ export default class Telegram implements PlatformAPI {
   createThread = async (userIDs: string[], title?: string) => {
     const res = await this.api.createThread(userIDs, title)
     const [firstThread] = res
-    const mappedThread = mapProtoThread(firstThread)
+    const mappedThread = mapProtoThread(firstThread, this.accountInfo.dataDirPath)
 
     return mappedThread
   }
@@ -179,7 +188,7 @@ export default class Telegram implements PlatformAPI {
     if (!userID) return
 
     const res = await this.api.getUserInfo(Number(userID))
-    return mapParticipant(res.user)
+    return mapParticipant(res.user, this.accountInfo.dataDirPath)
   }
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
@@ -187,15 +196,15 @@ export default class Telegram implements PlatformAPI {
     // This is added to speed up the initial load.
     if (!this.api.topPeers) {
       const topPeers = await this.api.getTopPeers()
-      const oldestCursor = String(topPeers[topPeers?.length - 1]?.id)
-      const items = topPeers.map(mapProtoThread)
+      const oldestCursor = String(topPeers[topPeers?.length - 1]?.id) || 'peers'
+      const items = topPeers.map(thread => mapProtoThread(thread, this.accountInfo.dataDirPath))
 
       return { items, hasMore: true, oldestCursor }
     }
 
     const threads = await this.api.getThreads()
     const oldestCursor = String(threads[threads?.length - 1]?.id)
-    const items = threads?.map(mapProtoThread)
+    const items = threads?.map(thread => mapProtoThread(thread, this.accountInfo.dataDirPath))
 
     return {
       oldestCursor,
@@ -268,8 +277,8 @@ export default class Telegram implements PlatformAPI {
    * wave form, the second time for the <audio> element.
    */
   getAsset = async (type: string, fileIdStr: string) => {
-    texts.log('get asset', type, fileIdStr)
     if (type !== 'file') throw new Error('unknown asset type')
+
     const fileId = +fileIdStr
     const filePath = this.fileIdToPath.get(fileId)
     if (filePath) {
@@ -277,6 +286,7 @@ export default class Telegram implements PlatformAPI {
       this.fileIdToPath.delete(fileId)
       return filePath
     }
+
     const pendingResolve = this.getAssetResolvers.get(fileId)
     return new Promise<string>(resolve => {
       if (pendingResolve) {

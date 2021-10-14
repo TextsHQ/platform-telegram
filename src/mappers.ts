@@ -664,18 +664,31 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
   }
 }
 
-export const mapCurrentUser = ({ user }: { user: Api.User}): CurrentUser => ({
+export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
+export const isMessagePhoto = (attachment: any): attachment is Api.MessageMediaPhoto => attachment.className === 'MessageMediaPhoto'
+
+export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: string): CurrentUser => ({
   id: String(user?.id),
   username: user?.username,
   fullName: user?.firstName,
   displayText: `@${user?.username}`,
   // TODO: map profile photo (it is received as Uint8Array instead of url)
-  // imgURL: ,
+  imgURL: `file://${dataDirPath}/profile-photos/${user?.id}.jpg`
 })
 
 const mapProtoAttachments = (data: Api.TypeMessageMedia): MessageAttachment[] => {
-  // TODO: Map proto attachments
-  // console.log({ data })
+  if (!data) return []
+
+  if (isMessagePhoto(data)) {
+    return [{
+      id: String(data.photo.id),
+      type: MessageAttachmentType.IMG,
+      // FIXME: this is added because on the
+      // @ts-expect-error
+      data: data.data,
+    }]
+  }
+  // TODO: Map Other possible proto attachments
   return []
 }
 
@@ -690,22 +703,22 @@ export const mapProtoMessage = (message: Api.Message): Message => ({
     // @ts-expect-error
     senderID: String(message.fromId?.userId),
     isSender: message.out,
-    attachments: mapProtoAttachments(message.media),
+    attachments: message.media ? mapProtoAttachments(message.media) : [],
     linkedMessageID: message.replyTo?.replyToMsgId ? String(message.replyTo?.replyToMsgId) : undefined,
 })
 
-export const mapParticipant = (user: Api.User): Participant => ({
+export const mapParticipant = (user: Api.User, dataDirPath?: string): Participant => ({
     id: String(user.id),
     username: user.username,
     phoneNumber: user.phone ? '+' + user.phone : undefined,
     isVerified: user.verified,
     fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     // TODO: Map profile photo
-    // imgURL: '',
+    imgURL: `file://${dataDirPath}/profile-photos/${user?.id}.jpg`
 }) 
 
-const mapUserThread = (thread: Api.User & { messages?: Message[] }): Thread => {
-  const participant = mapParticipant(thread)
+const mapUserThread = (thread: Api.User & { messages?: Message[] }, dataDirPath?: string): Thread => {
+  const participant = mapParticipant(thread, dataDirPath)
 
   return {
     _original: JSON.stringify({ ...thread, messages: [] }),
@@ -717,13 +730,12 @@ const mapUserThread = (thread: Api.User & { messages?: Message[] }): Thread => {
     title: participant.fullName,
     messages: { items: thread.messages || [], hasMore: true },
     participants: { items: [participant], hasMore: false },
+    imgURL: `file://${dataDirPath}/profile-photos/${thread?.id}.jpg`
   }
 }
 
-export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
-
-export const mapProtoThread = (thread: (Api.Chat & { messages?: Message[] }) | Api.User): Thread => {
-  if (isUserThread(thread)) return mapUserThread(thread)
+export const mapProtoThread = (thread: (Api.Chat & { messages?: Message[] }) | Api.User, dataDirPath?: string): Thread => {
+  if (isUserThread(thread)) return mapUserThread(thread, dataDirPath)
 
   return {
     _original: JSON.stringify({ ...thread, messages: [] }),
@@ -733,6 +745,7 @@ export const mapProtoThread = (thread: (Api.Chat & { messages?: Message[] }) | 
     isUnread: false,
     isReadOnly: false,
     title: thread?.title,
+    imgURL: `file://${dataDirPath}/profile-photos/${thread?.id}.jpg`,
     messages: { items: thread.messages || [], hasMore: true },
     participants: { items: [], hasMore: false },
   }
