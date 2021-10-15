@@ -1,2 +1,2 @@
 * text=auto eol=lf
-binaries/* filter=lfs diff=lfs merge=lfs -text
+binaries/*/* filter=lfs diff=lfs merge=lfs -text
