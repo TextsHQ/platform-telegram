@@ -665,6 +665,7 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
 }
 
 export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
+export const isChannel = (thread: any): thread is Api.Channel => thread.className === 'Channel'
 export const isMessagePhoto = (attachment: any): attachment is Api.MessageMediaPhoto => attachment.className === 'MessageMediaPhoto'
 
 export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: string): CurrentUser => ({
