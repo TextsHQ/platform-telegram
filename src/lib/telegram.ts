@@ -208,7 +208,7 @@ export default class TelegramAPI {
 
   getMessages = async (id: string, offsetId: number): Promise<Api.Message[]> => {
     const messages = await this.api.getMessages(Number(id), {
-      limit: 10,
+      limit: 20,
       offsetId,
       maxId: offsetId,
     });
