@@ -3,11 +3,13 @@ import { promises as fs } from 'fs'
 import { fileExists } from './util'
 import { BINARIES_DIR_PATH } from './constants'
 
+const WIN_BINARIES_DIR_PATH = path.join(BINARIES_DIR_PATH, `${process.platform}-${process.arch}`)
+
 async function copyFileFromBinaries(dirPath: string, fileName: string) {
   const newFilePath = path.join(dirPath, fileName)
   const exists = await fileExists(newFilePath)
   if (!exists) {
-    await fs.copyFile(path.join(BINARIES_DIR_PATH, fileName), newFilePath)
+    await fs.copyFile(path.join(WIN_BINARIES_DIR_PATH, fileName), newFilePath)
   }
 }
 
@@ -35,5 +37,5 @@ export async function copyDLLsForWindows() {
 export const IS_WINDOWS = process.platform === 'win32'
 
 if (IS_WINDOWS) {
-  addToPath(BINARIES_DIR_PATH)
+  addToPath(WIN_BINARIES_DIR_PATH)
 }
