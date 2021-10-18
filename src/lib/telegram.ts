@@ -6,7 +6,7 @@ import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
 import bigInt from "big-integer";
 
-import { isMessagePhoto, isUserThread, mapProtoMessage } from "../mappers";
+import { isChannel, isMessagePhoto, isUserThread, mapProtoMessage } from "../mappers";
 import { SEARCH_LIMIT, API_HASH as apiHash, API_ID as apiId } from "./constants";
 
 export default class TelegramAPI {
@@ -169,7 +169,7 @@ export default class TelegramAPI {
     this.threads = [...(this.threads || []), ...res?.chats]
   }
 
-  getNextChats = (): (Api.TypeChat | Api.TypeUser)[] => {
+  getNextChats = (): (Api.TypeChat | Api.TypeUser | Api.Channel)[] => {
     const nextChats = this.threads?.filter((chat) => !chat.messages).slice(0, 5)
     return [...(nextChats || [])]
   }
@@ -192,6 +192,12 @@ export default class TelegramAPI {
         chat.messages = messages.map(mapProtoMessage) || []
         // TODO: MOVE THIS
         if (isUserThread(chat)) {
+          const result = await this.api.downloadProfilePhoto(chat)
+          await fs
+            .writeFile(`${this.accountInfo.dataDirPath}/profile-photos/${chat?.id}.jpg`, result)
+            .catch(() => texts.log('ERROR: downloading photo'));
+        // 
+        } else if (isChannel(chat) && chat?.photo) {
           const result = await this.api.downloadProfilePhoto(chat)
           await fs
             .writeFile(`${this.accountInfo.dataDirPath}/profile-photos/${chat?.id}.jpg`, result)
