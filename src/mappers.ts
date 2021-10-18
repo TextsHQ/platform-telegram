@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent, CurrentUser, Participant, MessageAttachment } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent, CurrentUser, Participant, MessageAttachment, texts } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
@@ -667,6 +667,7 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
 export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
 export const isChannel = (thread: any): thread is Api.Channel => thread.className === 'Channel'
 export const isMessagePhoto = (attachment: any): attachment is Api.MessageMediaPhoto => attachment.className === 'MessageMediaPhoto'
+export const isMessageService = (message: any): message is Api.MessageService => message.className === 'MessageService'
 
 export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: string): CurrentUser => ({
   id: String(user?.id),
@@ -693,11 +694,34 @@ const mapProtoAttachments = (data: Api.TypeMessageMedia): MessageAttachment[] =>
   return []
 }
 
-export const mapProtoMessage = (message: Api.Message): Message => ({
+const getMessageActionText = (action: Api.TypeMessageAction): string => {
+  switch (action.className) {
+    case 'MessageActionHistoryClear':
+      return 'History was cleared'
+    
+    case 'MessageActionChatCreate':
+      return 'Chat was created'
+    
+    default:
+      texts.log(`Action type not recognized: ${action.className}`)
+      return ''
+  }
+}
+
+export const mapProtoMessage = (message: Api.Message): Message => {
+  if (!message) return
+  
+  const isAction = Boolean(isMessageService(message) && message.action)
+  const text = isAction && isMessageService(message) 
+    ? getMessageActionText(message?.action) 
+    : message.message
+
+  return {
     id: String(message.id),
     timestamp: new Date(message.date * 1000),
     editedTimestamp: message.editDate ? new Date(message.editDate * 1000) : undefined,
-    text: message.message,
+    text,
+    isAction,
     forwardedCount: message.forwards || message.fwdFrom ? 1 : 0 || undefined,
     // textFooter: mapTextFooter(messag.interactionInfo),
     textAttributes: undefined,
@@ -706,7 +730,8 @@ export const mapProtoMessage = (message: Api.Message): Message => ({
     isSender: message.out,
     attachments: message.media ? mapProtoAttachments(message.media) : [],
     linkedMessageID: message.replyTo?.replyToMsgId ? String(message.replyTo?.replyToMsgId) : undefined,
-})
+}
+}
 
 export const mapParticipant = (user: Api.User, dataDirPath?: string): Participant => ({
     id: String(user.id),
