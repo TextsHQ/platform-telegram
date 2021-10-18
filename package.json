@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "main": "dist/index.js",
   "scripts": {
-    "prepare": "tsc",
+    "prepack": "tsc",
     "build": "yarn tsc",
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
