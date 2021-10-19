@@ -285,16 +285,28 @@ export default class TelegramAPI {
     try {
       const peer = this._getPeer(threadID)
 
+      let file = undefined;
+
+      if (messageContent.fileBuffer && !messageContent.filePath) {
+        const tempPath = path.join(this.accountInfo.dataDirPath, 'temp', `${threadID}_${Date.now()}`)
+        await fs.writeFile(tempPath, messageContent.fileBuffer);
+        const stats = await fs.stat(tempPath)
+
+        const toUpload = new CustomFile(messageContent.fileName, stats.size, tempPath, messageContent.fileBuffer);
+        file = await this.api.uploadFile({ file: toUpload, workers: 10 });
+
+        await fs.rm(tempPath)
+      } else if (messageContent.filePath) {
+        const stats = await fs.stat(messageContent.filePath)
+        const toUpload = new CustomFile(messageContent.fileName, stats.size, messageContent.filePath);
+        file = await this.api.uploadFile({ file: toUpload, workers: 10 });
+      }
+
       await this.api.invoke(new Api.messages.EditMessage({
         id: Number(messageID),
         message: messageContent.text,
-        peer
-        // FIXME: Support media
-        // noWebpage: true,
-        // media: new Api.InputMedia({...}),
-        // replyMarkup: new Api.ReplyMarkup({...}),
-        // entities: [new Api.MessageEntity({...})],
-        // scheduleDate: 1557612,
+        peer,
+        media: new Api.InputMediaDocument({ id: file.id }),
       }));
 
       return true
