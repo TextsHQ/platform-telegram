@@ -46,6 +46,7 @@ export default class Telegram implements PlatformAPI {
   init = async (data: { session: string }, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
     await mkdirp(path.join(this.accountInfo.dataDirPath, 'profile-photos'))
+    await mkdirp(path.join(this.accountInfo.dataDirPath, 'temp'))
     
     const { session } = data || {}
     await this.api.init(session || '', accountInfo)
@@ -197,7 +198,7 @@ export default class Telegram implements PlatformAPI {
     if (!this.api.topPeers) {
       const topPeers = await this.api.getTopPeers()
       const oldestCursor = String(topPeers[topPeers?.length - 1]?.id) || 'peers'
-      const items = topPeers.map(thread => mapProtoThread(thread, this.accountInfo.dataDirPath))
+      const items = topPeers.map(thread => mapProtoThread(thread, this.accountInfo.dataDirPath)) || []
 
       return { items, hasMore: true, oldestCursor }
     }
@@ -231,7 +232,7 @@ export default class Telegram implements PlatformAPI {
   }
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
-    const res = await this.api.sendMessage(threadID, msgContent)
+    const res = await this.api.sendMessage(threadID, msgContent, quotedMessageID)
     return res
   }
 
