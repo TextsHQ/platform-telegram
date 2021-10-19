@@ -737,11 +737,12 @@ export const mapProtoMessage = (message: Api.Message): Message => {
     forwardedCount: message.forwards || message.fwdFrom ? 1 : 0 || undefined,
     // textFooter: mapTextFooter(messag.interactionInfo),
     textAttributes: undefined,
-    // @ts-expect-error
-    senderID: String(message.fromId?.userId),
+    //@ts-expect-error
+    senderID: String(message.fromId?.userId || message.peerId?.userId),
     isSender: message.out,
     attachments: message.media ? mapProtoAttachments(message.media) : [],
     linkedMessageID: message.replyTo?.replyToMsgId ? String(message.replyTo?.replyToMsgId) : undefined,
+    seen: Boolean(message.mediaUnread),
 }
 }
 
@@ -751,7 +752,6 @@ export const mapParticipant = (user: Api.User, dataDirPath?: string): Participan
     phoneNumber: user.phone ? '+' + user.phone : undefined,
     isVerified: user.verified,
     fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
-    // TODO: Map profile photo
     imgURL: `file://${dataDirPath}/profile-photos/${user?.id}.jpg`
 }) 
 
@@ -763,8 +763,8 @@ const mapUserThread = (thread: Api.User & { messages?: Message[] }, dataDirPath?
     id: String(thread.id),
     type: 'single',
     timestamp: thread.messages[thread.messages?.length - 1]?.timestamp || undefined,
-    isUnread: false,
-    isReadOnly: false,
+    isUnread: thread.messages?.[0]?.seen === true,
+    isReadOnly: thread.restricted,
     title: participant.fullName,
     messages: { items: thread.messages || [], hasMore: true },
     participants: { items: [participant], hasMore: false },
@@ -772,7 +772,10 @@ const mapUserThread = (thread: Api.User & { messages?: Message[] }, dataDirPath?
   }
 }
 
-export const mapProtoThread = (thread: (Api.Chat & { messages?: Message[] }) | Api.User, dataDirPath?: string): Thread => {
+export const mapProtoThread = (
+  thread: (Api.Chat & { messages?: Message[] }) | Api.User, 
+  dataDirPath?: string,
+): Thread => {
   if (isUserThread(thread)) return mapUserThread(thread, dataDirPath)
 
   return {
@@ -780,8 +783,8 @@ export const mapProtoThread = (thread: (Api.Chat & { messages?: Message[] }) | 
     id: String(thread.id),
     type:  thread?.participantsCount > 1 ? 'group' : 'single',
     timestamp: new Date(thread?.date * 1000),
-    isUnread: false,
-    isReadOnly: false,
+    isUnread: thread.messages?.[0]?.seen === true,
+    isReadOnly: thread.left || thread.deactivated,
     title: thread?.title,
     imgURL: `file://${dataDirPath}/profile-photos/${thread?.id}.jpg`,
     messages: { items: thread.messages || [], hasMore: true },
