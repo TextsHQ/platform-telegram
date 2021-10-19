@@ -1,10 +1,11 @@
-import { promises as fs } from 'fs'
-import path from 'path'
+import bigInt from "big-integer";
+import path from 'path';
+import { promises as fs } from 'fs';
 import { AccountInfo, MessageContent, OnServerEventCallback, texts } from "@textshq/platform-sdk";
+import { CustomFile } from 'telegram/client/uploads';
 import { ActivityType } from "@textshq/platform-sdk";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
-import bigInt from "big-integer";
 
 import { isChannel, isMessagePhoto, isUserThread, mapProtoMessage } from "../mappers";
 import { SEARCH_LIMIT, API_HASH as apiHash, API_ID as apiId } from "./constants";
@@ -96,11 +97,30 @@ export default class TelegramAPI {
     }
   }
 
-  sendMessage = async (threadID: string, message: MessageContent): Promise<boolean> => {
+  sendMessage = async (threadID: string, message: MessageContent, quotedMessageID?: string): Promise<boolean> => {
     try {
-      const res = await this.api.sendMessage(Number(threadID), {
-        // FIXME: Support files
+      let file = undefined;
+
+      if (message.fileBuffer && !message.filePath) {
+        const tempPath = path.join(this.accountInfo.dataDirPath, 'temp', `${threadID}_${Date.now()}`)
+        await fs.writeFile(tempPath, message.fileBuffer);
+        const stats = await fs.stat(tempPath)
+
+        const toUpload = new CustomFile(message.fileName, stats.size, tempPath, message.fileBuffer);
+        file = await this.api.uploadFile({ file: toUpload, workers: 10 });
+
+        await fs.rm(tempPath)
+      } else if (message.filePath) {
+        const stats = await fs.stat(message.filePath)
+        const toUpload = new CustomFile(message.fileName, stats.size, message.filePath);
+        file = await this.api.uploadFile({ file: toUpload, workers: 10 });
+      }
+
+      await this.api.sendMessage(Number(threadID), {
         message: message.text,
+        replyTo: Number(quotedMessageID) || undefined,
+        file,
+        thumb: file,
       })
 
       return true
@@ -219,8 +239,8 @@ export default class TelegramAPI {
       maxId: offsetId,
     });
 
-    const photosPromises = messages
-      .filter(message => message.media && isMessagePhoto(message.media))
+    const attachmentPromises = messages
+      .filter(message => (message.media && isMessagePhoto(message.media)) || message.document)
       .map(async message => {
         const result = await this.api.downloadMedia(message.media, {
           workers: 1,
@@ -231,7 +251,9 @@ export default class TelegramAPI {
         message.media?.data = result
       })
 
-    await Promise.all(photosPromises)
+    await Promise.all(attachmentPromises)
+
+    // FIXME: Update threads participants
     // for (const message of messages) {
     //   // @ts-expect-error
     //   const { user } = await this.getUserInfo(message.fromId.userId)
