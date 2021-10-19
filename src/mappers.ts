@@ -675,7 +675,6 @@ export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: strin
   username: user?.username,
   fullName: user?.firstName,
   displayText: `@${user?.username}`,
-  // TODO: map profile photo (it is received as Uint8Array instead of url)
   imgURL: `file://${dataDirPath}/profile-photos/${user?.id}.jpg`
 })
 

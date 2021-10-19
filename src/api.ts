@@ -55,7 +55,7 @@ export default class Telegram implements PlatformAPI {
 
   getCurrentUser = () => {
     if (!this.currentUser) return null
-    return mapCurrentUser(this.currentUser)
+    return mapCurrentUser(this.currentUser, this.accountInfo.dataDirPath)
   }
 
   // FIXME: try to find a way to serialize this
