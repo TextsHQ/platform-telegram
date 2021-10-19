@@ -667,6 +667,7 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
 export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
 export const isChannel = (thread: any): thread is Api.Channel => thread.className === 'Channel'
 export const isMessagePhoto = (attachment: any): attachment is Api.MessageMediaPhoto => attachment.className === 'MessageMediaPhoto'
+export const isMessageDocument = (attachment: any): attachment is Api.MessageMediaDocument => attachment.className === 'MessageMediaDocument'
 export const isMessageService = (message: any): message is Api.MessageService => message.className === 'MessageService'
 
 export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: string): CurrentUser => ({
@@ -680,11 +681,22 @@ export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: strin
 
 const mapProtoAttachments = (data: Api.TypeMessageMedia): MessageAttachment[] => {
   if (!data) return []
-
+  // TODO: Refactor this to avoid duplicated code, this was done this way just to
+  // debug easily and for development purposes
   if (isMessagePhoto(data)) {
     return [{
       id: String(data.photo.id),
       type: MessageAttachmentType.IMG,
+      // FIXME: this is added because on the
+      // @ts-expect-error
+      data: data.data,
+    }]
+  }
+
+  if (isMessageDocument(data)) {
+    return [{
+      id: String(data.document.id),
+      type: MessageAttachmentType.UNKNOWN,
       // FIXME: this is added because on the
       // @ts-expect-error
       data: data.data,
