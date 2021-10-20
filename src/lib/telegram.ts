@@ -145,6 +145,8 @@ export default class TelegramAPI {
         })
       );
 
+      if (result.className == 'contacts.TopPeersDisabled') throw Error('Top peers are disabled')
+
       // @ts-expect-error
       const topPeers = [...result.users, ...result.chats]
 
@@ -159,7 +161,7 @@ export default class TelegramAPI {
     } catch (error) {
       texts.error(error)
       this.topPeers = []
-      return []
+      return null
     }
   }
 

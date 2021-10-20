@@ -197,10 +197,12 @@ export default class Telegram implements PlatformAPI {
     // This is added to speed up the initial load.
     if (!this.api.topPeers) {
       const topPeers = await this.api.getTopPeers()
-      const oldestCursor = String(topPeers[topPeers?.length - 1]?.id) || 'peers'
-      const items = topPeers.map(thread => mapProtoThread(thread, this.accountInfo.dataDirPath)) || []
+      if (topPeers) {
+        const oldestCursor = String(topPeers[topPeers?.length - 1]?.id) || 'peers'
+        const items = topPeers.map(thread => mapProtoThread(thread, this.accountInfo.dataDirPath)) || []
 
-      return { items, hasMore: true, oldestCursor }
+        return { items, hasMore: true, oldestCursor }
+      }
     }
 
     const threads = await this.api.getThreads()
