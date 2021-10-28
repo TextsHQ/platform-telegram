@@ -7,7 +7,8 @@ import { ActivityType } from "@textshq/platform-sdk";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions";
 
-import { isChannel, isMessagePhoto, isUserThread, mapProtoMessage } from "../mappers";
+import { IsObject } from "../util";
+import { mapProtoMessage } from "../mappers";
 import { SEARCH_LIMIT, API_HASH as apiHash, API_ID as apiId } from "./constants";
 
 export default class TelegramAPI {
@@ -145,7 +146,7 @@ export default class TelegramAPI {
         })
       );
 
-      if (result.className == 'contacts.TopPeersDisabled') throw Error('Top peers are disabled')
+      if (IsObject.topPeersDisabled(result)) throw Error('Top peers are disabled')
 
       // @ts-expect-error
       const topPeers = [...result.users, ...result.chats]
@@ -213,13 +214,12 @@ export default class TelegramAPI {
         // @ts-expect-error
         chat.messages = messages.map(mapProtoMessage) || []
         // TODO: MOVE THIS
-        if (isUserThread(chat)) {
+        if (IsObject.userThread(chat)) {
           const result = await this.api.downloadProfilePhoto(chat)
           await fs
             .writeFile(`${this.accountInfo.dataDirPath}/profile-photos/${chat?.id}.jpg`, result)
             .catch(() => texts.log('ERROR: downloading photo'));
-        // 
-        } else if (isChannel(chat) && chat?.photo) {
+        } else if (IsObject.channel(chat) && chat?.photo) {
           const result = await this.api.downloadProfilePhoto(chat)
           await fs
             .writeFile(`${this.accountInfo.dataDirPath}/profile-photos/${chat?.id}.jpg`, result)
@@ -242,7 +242,7 @@ export default class TelegramAPI {
     });
 
     const attachmentPromises = messages
-      .filter(message => (message.media && isMessagePhoto(message.media)) || message.document)
+      .filter(message => (message.media && IsObject.messagePhoto(message.media)) || message.document)
       .map(async message => {
         const result = await this.api.downloadMedia(message.media, {
           workers: 1,
@@ -278,7 +278,7 @@ export default class TelegramAPI {
     const thread = this.threads?.find((t) => t.id === Number(threadID))
     if (!thread) return
 
-    return isUserThread(thread)
+    return IsObject.userThread(thread)
       ? new Api.InputPeerUser({ userId: Number(threadID), accessHash: thread.accessHash })
       : new Api.InputPeerChat({ chatId: Number(threadID) })
   }

@@ -2,8 +2,10 @@ import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAt
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
+import { IsObject } from './util'
 import type { Api } from 'telegram'
 import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateUserChatAction } from 'airgram'
+import { VirtualClassName } from './types'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
@@ -664,12 +666,6 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
   }
 }
 
-export const isUserThread = (thread: any): thread is Api.User => thread.className === 'User'
-export const isChannel = (thread: any): thread is Api.Channel => thread.className === 'Channel'
-export const isMessagePhoto = (attachment: any): attachment is Api.MessageMediaPhoto => attachment.className === 'MessageMediaPhoto'
-export const isMessageDocument = (attachment: any): attachment is Api.MessageMediaDocument => attachment.className === 'MessageMediaDocument'
-export const isMessageService = (message: any): message is Api.MessageService => message.className === 'MessageService'
-
 export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: string): CurrentUser => ({
   id: String(user?.id),
   username: user?.username,
@@ -678,41 +674,99 @@ export const mapCurrentUser = ({ user }: { user: Api.User }, dataDirPath?: strin
   imgURL: `file://${dataDirPath}/profile-photos/${user?.id}.jpg`
 })
 
-const mapProtoAttachments = (data: Api.TypeMessageMedia): MessageAttachment[] => {
-  if (!data) return []
-  // TODO: Refactor this to avoid duplicated code, this was done this way just to
-  // debug easily and for development purposes
-  if (isMessagePhoto(data)) {
-    return [{
+const mapProtoAttachments = (data: Api.TypeMessageMedia): MessageAttachment | null => {
+  if (!data) return null
+
+  if (IsObject.messagePhoto(data)) {
+    return {
       id: String(data.photo.id),
       type: MessageAttachmentType.IMG,
-      // FIXME: this is added because on the
       // @ts-expect-error
       data: data.data,
-    }]
-  }
-
-  if (isMessageDocument(data)) {
-    return [{
+    }
+  } else if (IsObject.messageDocument(data) && IsObject.document(data.document)) {
+    const attachment: MessageAttachment = {
       id: String(data.document.id),
       type: MessageAttachmentType.UNKNOWN,
-      // FIXME: this is added because on the
       // @ts-expect-error
       data: data.data,
-    }]
+      fileSize: data.document.size,
+      mimeType: data.document.mimeType,
+    }
+
+    data.document.attributes.forEach((attr: any) => {
+      switch (attr.className) {
+        case VirtualClassName.DocumentAttributeImageSize:
+        case VirtualClassName.DocumentAttributeVideo: {
+          attachment.size = { width: attr.w, height: attr.h }
+          break
+        }
+
+        case VirtualClassName.DocumentAttributeSticker: {
+          attachment.caption = attr.alt
+          break
+        }
+
+        case VirtualClassName.DocumentAttributeFilename: {
+          attachment.fileName = attr.fileName
+          break
+        }
+
+        case VirtualClassName.DocumentAttributeAnimated: {
+          // TODO: DocumentAttributeAnimated
+          console.log(attr)
+        }
+
+        default: {
+          texts.error(`Unhandled attribute: ${attr.className}`)
+          break
+        }
+      }
+    })
+
+    switch (data.document.mimeType) {
+      // TODO: Handle other mimeTypes
+      case 'image/webp':
+      case 'application/x-tgsticker': {
+        attachment.type = MessageAttachmentType.IMG
+        attachment.isSticker = true
+        attachment.isGif = data.document.mimeType == 'application/x-tgsticker'
+        break
+      }
+
+      case 'video/mov':
+      case 'video/mp4': {
+        // TODO: Some files work fine, others don't?
+        attachment.type = MessageAttachmentType.VIDEO
+        break
+      }
+
+      default: {
+        texts.error(`Unhandled mimeType: ${data.document.mimeType}`)
+        break
+      }
+    }
+
+    return attachment
+  } else if (IsObject.messageMediaWebPage(data)) {
+    // TODO: MessageMediaWebPage
+    console.log(data)
+  } else {
+    texts.error(`Unhandled attachment: ${data.className}`)
   }
+
   // TODO: Map Other possible proto attachments
-  return []
+  return null
 }
 
 const getMessageActionText = (action: Api.TypeMessageAction): string => {
   switch (action.className) {
     case 'MessageActionHistoryClear':
       return 'History was cleared'
-    
+
     case 'MessageActionChatCreate':
       return 'Chat was created'
-    
+
     default:
       texts.log(`Action type not recognized: ${action.className}`)
       return ''
@@ -721,11 +775,14 @@ const getMessageActionText = (action: Api.TypeMessageAction): string => {
 
 export const mapProtoMessage = (message: Api.Message): Message => {
   if (!message) return
-  
-  const isAction = Boolean(isMessageService(message) && message.action)
-  const text = isAction && isMessageService(message) 
-    ? getMessageActionText(message?.action) 
+
+  const isAction = Boolean(IsObject.messageService(message) && message.action)
+  // TODO: Message styling
+  const text = isAction && IsObject.messageService(message)
+    ? getMessageActionText(message?.action)
     : message.message
+
+  const attachments = mapProtoAttachments(message.media)
 
   return {
     id: String(message.id),
@@ -739,10 +796,10 @@ export const mapProtoMessage = (message: Api.Message): Message => {
     //@ts-expect-error
     senderID: String(message.fromId?.userId || message.peerId?.userId),
     isSender: message.out,
-    attachments: message.media ? mapProtoAttachments(message.media) : [],
+    attachments: attachments ? [attachments] : [],
     linkedMessageID: message.replyTo?.replyToMsgId ? String(message.replyTo?.replyToMsgId) : undefined,
     seen: Boolean(message.mediaUnread),
-}
+  }
 }
 
 export const mapParticipant = (user: Api.User, dataDirPath?: string): Participant => ({
@@ -752,7 +809,7 @@ export const mapParticipant = (user: Api.User, dataDirPath?: string): Participan
     isVerified: user.verified,
     fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     imgURL: `file://${dataDirPath}/profile-photos/${user?.id}.jpg`
-}) 
+})
 
 const mapUserThread = (thread: Api.User & { messages?: Message[] }, dataDirPath?: string): Thread => {
   const participant = mapParticipant(thread, dataDirPath)
@@ -772,10 +829,10 @@ const mapUserThread = (thread: Api.User & { messages?: Message[] }, dataDirPath?
 }
 
 export const mapProtoThread = (
-  thread: (Api.Chat & { messages?: Message[] }) | Api.User, 
+  thread: (Api.Chat & { messages?: Message[] }) | Api.User,
   dataDirPath?: string,
 ): Thread => {
-  if (isUserThread(thread)) return mapUserThread(thread, dataDirPath)
+  if (IsObject.userThread(thread)) return mapUserThread(thread, dataDirPath)
 
   return {
     _original: JSON.stringify({ ...thread, messages: [] }),
