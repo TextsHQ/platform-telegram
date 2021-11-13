@@ -583,6 +583,7 @@ export default class TelegramAPI implements PlatformAPI {
       chatId: +threadID,
       removeFromChatList: true,
     })
+    await this.airgram.api.leaveChat({ chatId: +threadID })
   }
 
   reportThread = async (type: 'spam', threadID: string) => {
