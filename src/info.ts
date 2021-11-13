@@ -28,6 +28,7 @@ const info: PlatformInfo = {
     Attribute.SUBSCRIBE_TO_CONN_STATE_CHANGE,
     Attribute.SUPPORTS_ARCHIVE,
     Attribute.SUPPORTS_DELETE_THREAD,
+    Attribute.SUPPORTS_REPORT_THREAD,
     Attribute.SUPPORTS_EDIT_MESSAGE,
     Attribute.SUPPORTS_FORWARD,
     Attribute.SUPPORTS_LIVE_TYPING,

@@ -585,6 +585,17 @@ export default class TelegramAPI implements PlatformAPI {
     })
   }
 
+  reportThread = async (type: 'spam', threadID: string) => {
+    const res = await this.airgram.api.reportChat({
+      chatId: +threadID,
+      reason: {
+        _: 'chatReportReasonSpam',
+      },
+    })
+    await this.deleteThread(threadID)
+    return toObject(res)._ === 'ok'
+  }
+
   private getTGUser = async (userId: number) => {
     const res = await this.airgram.api.getUser({ userId })
     return toObject(res)
