@@ -8,7 +8,7 @@ import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant, User } from '@textshq/platform-sdk'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
@@ -554,9 +554,22 @@ export default class TelegramAPI implements PlatformAPI {
   createThread = async (userIDs: string[], title?: string) => {
     if (userIDs.length === 0) return
     if (userIDs.length === 1) {
-      const chatResponse = await this.airgram.api.createPrivateChat({ userId: +userIDs[0] })
-      return this.asyncMapThread(toObject(chatResponse))
+      try {
+        const res = await this.airgram.api.createPrivateChat({ userId: +userIDs[0] })
+        const obj = toObject(res)
+        return this.asyncMapThread(obj)
+      } catch (error) {
+        // FIXME: handle other errors. Now this will assume that the issue is that
+        // the thread is a group / supergroup and needs to call the join method 
+        const res = await this.airgram.api.joinChat({ chatId: +userIDs[0] })
+        toObject(res)
+        const chatRes = await this.airgram.api.getChat({ chatId: +userIDs[0] })
+        const chat = toObject(chatRes)
+
+        return this.asyncMapThread(chat)
+      }
     }
+
     const res = await this.airgram.api.createNewBasicGroupChat({
       userIds: userIDs.map(Number),
       title,
@@ -602,14 +615,26 @@ export default class TelegramAPI implements PlatformAPI {
     return toObject(res)
   }
 
-  getUser = async ({ username }: { username: string }) => {
+  getUser = async ({ username }: { username: string }): Promise<User> => {
     if (!username) return
     const res = await this.airgram.api.searchPublicChat({ username })
     const chat = toObject(res)
+
     if (isError(chat)) return
-    if (chat.type._ !== 'chatTypePrivate') return
-    const user = await this.getTGUser(chat.type.userId)
-    return mapUser(user, this.accountInfo.accountID)
+
+    const allowedTypes = ['chatTypePrivate', 'chatTypeSupergroup']
+    if (!allowedTypes.includes(chat.type._)) return
+
+    if (chat.type._ === 'chatTypePrivate') {
+      const user = await this.getTGUser(chat.type.userId)
+      return mapUser(user, this.accountInfo.accountID)
+    }
+
+    if (chat.type._ === 'chatTypeSupergroup') {
+      return { id: `${chat.id}` }
+    }
+
+    return
   }
 
   private _getParticipants = async (chat: ChatUnion) => {
