@@ -531,6 +531,7 @@ export function mapUser(user: TGUser, accountID: string): User {
 
 export function mapUserPresence(userId: number, status: UserStatusUnion): UserPresenceEvent {
   const presence: UserPresence = {
+    status: 'online',
     userID: userId.toString(),
     isActive: false,
     lastActive: null,
