@@ -149,13 +149,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
 
     this.accountInfo = accountInfo
-    if (session) {
-      this.session = session
-    } else {
-      this.session = {
-        dbKey: crypto.randomBytes(32).toString('hex')
-      }
-    }
+    this.session = session || { dbKey: crypto.randomBytes(32).toString('hex') }
     this.airgram = new Airgram({
       databaseEncryptionKey: this.session.dbKey,
       apiId: API_ID,
