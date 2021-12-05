@@ -12,10 +12,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@airgram/core@npm:^3.3.0":
-  version: 3.3.0
-  resolution: "@airgram/core@npm:3.3.0"
-  checksum: ff2ce13ca04b888bd9116e48c653fb8613cf54fd9ae7266bddd1398a7175489c519a2a0ccdb3053a618c5b497a2bd777f6cc923341aa9befea2e065a36f5c048
+"@airgram/constants@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "@airgram/constants@npm:3.2.0"
+  checksum: 7e6b8690c49599ff9064ea06d29d702c93bac4c58a8fa5057566fb90d4d1024fa40072175ad28be42d12f38896fb223d5bbed57435ae5790e70aaab2a5ade3bb
+  languageName: node
+  linkType: hard
+
+"@airgram/core@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "@airgram/core@npm:4.1.0"
+  checksum: c789c68f20b0947a5003ca48ad134031204d1280bf2e6639f45f2da3e28bb0277a0441d654d56cf28bbfc90e7cb9461e2085a503eff3fcf15a7cd2697f93da81
   languageName: node
   linkType: hard
 
@@ -296,11 +303,11 @@ __metadata:
     "@types/eslint": ^7.2.6
     "@types/lodash": ^4.14.168
     "@types/react": 17.0.2
-    "@types/react-phone-number-input": ^3.0.6
+    "@types/react-phone-number-input": ^3.0.13
     "@types/rimraf": ^3.0.0
-    airgram: ^3.3.0
+    airgram: ^4.0.0
     bluebird: ^3.7.2
-    date-fns: ^2.18.0
+    date-fns: ^2.27.0
     eslint: ^7.21.0
     husky: ^4.3.5
     lodash: ^4.17.21
@@ -408,7 +415,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-phone-number-input@npm:^3.0.6":
+"@types/react-phone-number-input@npm:^3.0.13":
   version: 3.0.13
   resolution: "@types/react-phone-number-input@npm:3.0.13"
   dependencies:
@@ -418,13 +425,13 @@ __metadata:
   linkType: hard
 
 "@types/react@npm:*":
-  version: 17.0.36
-  resolution: "@types/react@npm:17.0.36"
+  version: 17.0.37
+  resolution: "@types/react@npm:17.0.37"
   dependencies:
     "@types/prop-types": "*"
     "@types/scheduler": "*"
     csstype: ^3.0.2
-  checksum: feeaa484d5d7e354ba6830b06342dec6fd1a2ac87f73d21d3d4f2a3d311459de4090330a1e8af7275c8d1e7737b655a7550c8dd3dbc74ccf34ffd3fc824bbd12
+  checksum: e68b0d59aa69577fc6a6d654b25d5d8408625498f4c483f160b557fac21e840f6e8807cbde93e9f039949b6d624a019b1990d18499c1d65aecf3605c25e30242
   languageName: node
   linkType: hard
 
@@ -657,14 +664,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"airgram@npm:^3.3.0":
-  version: 3.3.0
-  resolution: "airgram@npm:3.3.0"
+"airgram@npm:^4.0.0":
+  version: 4.2.0
+  resolution: "airgram@npm:4.2.0"
   dependencies:
-    "@airgram/constants": ^3.1.0
-    "@airgram/core": ^3.3.0
+    "@airgram/constants": ^3.2.0
+    "@airgram/core": ^4.1.0
     ffi-napi: ^3.0.0
-  checksum: bacdda8de655b267a9bc2369a50699c2e5248634c8daead909c67e921593aba5c0f0a01f969dfab9e6cb1b0520f145eb1ea3c9f096745cab966b06fab616bd5d
+  checksum: 2e8173f4fef69ada48d3e49318571c02873243a5c07f6704377b53dfaa628b7751e8f95b103f301e6527539e7142124f6673452d474f494d65496aaaca576c55
   languageName: node
   linkType: hard
 
@@ -1119,10 +1126,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"date-fns@npm:^2.18.0":
-  version: 2.26.0
-  resolution: "date-fns@npm:2.26.0"
-  checksum: 49ad59bc788134a6552ef4e4af0d18792001c1ca0070d543de4f36aba5761058b6e6a57b8ca51dd3b0f07f3bd55376b8bc69602bd7940648ba3869c5253c6ae8
+"date-fns@npm:^2.27.0":
+  version: 2.27.0
+  resolution: "date-fns@npm:2.27.0"
+  checksum: db62036b3816eb0322c9532b353beac7f660a91e1a55dbd21c14893c621ebb8509f21c66ba287844dabd34dee0207edd54a9537bce6bb7cab9383dedc6b8bc90
   languageName: node
   linkType: hard
 
@@ -2146,11 +2153,11 @@ __metadata:
   linkType: hard
 
 "input-format@npm:^0.3.5":
-  version: 0.3.5
-  resolution: "input-format@npm:0.3.5"
+  version: 0.3.6
+  resolution: "input-format@npm:0.3.6"
   dependencies:
     prop-types: ^15.7.2
-  checksum: 6c564e613e9f7d648a0c2fb4a8b004704ea3de5a20bb91de7dd2a5076d97696d9428f3a56f96af20b513a6e12057a5bdd0c318baa105c9e1d600546f2d65d276
+  checksum: f4a533a09061238ee7a973d78e83c925c0ae358885d168c15738d21a9291907cbf882e4b346fb33b337c3305ed4ea7ced3075f991d49ae72a1aa044894809407
   languageName: node
   linkType: hard
 
@@ -2398,9 +2405,9 @@ __metadata:
   linkType: hard
 
 "libphonenumber-js@npm:^1.9.11":
-  version: 1.9.11
-  resolution: "libphonenumber-js@npm:1.9.11"
-  checksum: eca966a7697ecb0444d457c655a2aecfb9399eee01304aecb448a0cfd9f5dd532660eb287c0b2a02bce7b758bc1818979487ac713d7655d75a62bd125a9392c0
+  version: 1.9.44
+  resolution: "libphonenumber-js@npm:1.9.44"
+  checksum: cac1f8c4d37a35f1763720d5dbd247ce70a2f7a7d045ab2c99d75bdd170ed00ea8a38ddbd68b481fee3f57b9292218e412a20aa8a2a9b871091ed93809f61f95
   languageName: node
   linkType: hard
 

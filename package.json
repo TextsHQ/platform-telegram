@@ -13,13 +13,13 @@
     }
   },
   "nativeDeps": {
-    "airgram": "^3.3.0"
+    "airgram": "^4.0.0"
   },
   "dependencies": {
     "@airgram/constants": "^3.1.0",
-    "airgram": "^3.3.0",
+    "airgram": "^4.0.0",
     "bluebird": "^3.7.2",
-    "date-fns": "^2.18.0",
+    "date-fns": "^2.27.0",
     "lodash": "^4.17.21",
     "react": "https://github.com/TextsHQ/react-global-shim",
     "react-phone-number-input": "^3.1.16",
@@ -32,7 +32,7 @@
     "@types/eslint": "^7.2.6",
     "@types/lodash": "^4.14.168",
     "@types/react": "17.0.2",
-    "@types/react-phone-number-input": "^3.0.6",
+    "@types/react-phone-number-input": "^3.0.13",
     "@types/rimraf": "^3.0.0",
     "eslint": "^7.21.0",
     "husky": "^4.3.5",

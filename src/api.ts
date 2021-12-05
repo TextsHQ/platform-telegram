@@ -13,6 +13,7 @@ import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Mes
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
 import { fileExists } from './util'
+import { rangeRight, throttle } from 'lodash'
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
@@ -257,6 +258,7 @@ export default class TelegramAPI implements PlatformAPI {
   private asyncMapThread = async (chat: Chat) => {
     const isSuperGroup = chat.type._ == 'chatTypeSupergroup'
     const participants: TGUser[] = isSuperGroup ? [] : await this._getParticipants(chat)
+
     const thread = mapThread(chat, participants, this.accountInfo.accountID)
     if (isSuperGroup) {
       // Intentionally not using `await` to not block getThreads.
@@ -283,15 +285,10 @@ export default class TelegramAPI implements PlatformAPI {
     })
 
     this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
-      if (!update.chat.positions.length) {
-        // Existing threads will be handled by getThreads, no need to duplicate
-        // here. And update.chat.lastMessage seems to be always null, which will
-        // mess up thread timestamp.
-        // If the chat has no position, no need to show it in thread list.
-        texts.log(`[updateNewChat] ignoring ${update.chat.title} (${update.chat.id}) with no position`)
-        return
-      }
-      const thread = await this.asyncMapThread(update.chat)
+      texts.log(`[updateNewChat]`, update.chat.id, update.chat.title, update.chat.positions.length)
+      const chat = toObject(await this.airgram.api.getChat({ chatId: update.chat.id }))
+      if (!chat.positions.length) return
+      const thread = await this.asyncMapThread(chat)
       const event: ServerEvent = {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'upsert',
@@ -611,7 +608,6 @@ export default class TelegramAPI implements PlatformAPI {
     const mapMembers = (members: ChatMember[]) =>
       Promise.all(
         members.map(member =>
-          // @ts-expect-error bad typedef
           member.memberId._ === 'messageSenderUser' && this.getTGUser(member.memberId.userId)))
     switch (chat.type._) {
       case 'chatTypePrivate': {
@@ -678,38 +674,20 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
   }
 
-  private loadChats = async (chatIds: number[]) => {
-    const chats = await Promise.all(chatIds.map(async chatId => {
-      const chatResponse = await this.airgram.api.getChat({ chatId })
-      return toObject(chatResponse)
-    }))
-    return chats
-  }
-
   getThread = async (threadID: string) => {
     const chatResponse = await this.airgram.api.getChat({ chatId: +threadID })
     return this.asyncMapThread(toObject(chatResponse))
   }
 
-  getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
+  getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
-    const { cursor, direction } = pagination || { cursor: null, direction: null }
     const limit = 20
-    const lastChat = cursor && toObject(await this.airgram.api.getChat({ chatId: +cursor }))
-    const chatsResponse = await this.airgram.api.getChats({
-      limit,
-      offsetChatId: +cursor,
-      offsetOrder: cursor
-        ? lastChat.positions.find(chatPosition => chatPosition.list._ === 'chatListMain')?.order
-        : MAX_SIGNED_64BIT_NUMBER,
-    })
-    const { chatIds } = toObject(chatsResponse)
-    const chats = await this.loadChats(chatIds)
-    const items = await Promise.all(chats.map(this.asyncMapThread))
+    const res = await this.airgram.api.loadChats({ limit, chatList: { _: 'chatListMain' } })
+    const is404 = isError(res) && res.code === 404
     return {
-      items,
-      oldestCursor: items[items.length - 1]?.id,
-      hasMore: items.length > 0, // items.length === limit is inaccurate
+      items: [],
+      oldestCursor: '*',
+      hasMore: !is404,
     }
   }
 
