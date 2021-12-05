@@ -1,15 +1,18 @@
 import path from 'path'
 import { promises as fs } from 'fs'
-import { fileExists } from './util'
 import { BINARIES_DIR_PATH } from './constants'
 
 const WIN_BINARIES_DIR_PATH = path.join(BINARIES_DIR_PATH, `${process.platform}-${process.arch}`)
 
 async function copyFileFromBinaries(dirPath: string, fileName: string) {
   const newFilePath = path.join(dirPath, fileName)
-  const exists = await fileExists(newFilePath)
-  if (!exists) {
-    await fs.copyFile(path.join(WIN_BINARIES_DIR_PATH, fileName), newFilePath)
+  const srcFilePath = path.join(WIN_BINARIES_DIR_PATH, fileName)
+  const [newStat, srcStat] = await Promise.all([
+    fs.stat(newFilePath).catch(null),
+    fs.stat(srcFilePath),
+  ])
+  if (newStat?.size !== srcStat.size) {
+    await fs.copyFile(srcFilePath, newFilePath)
   }
 }
 
