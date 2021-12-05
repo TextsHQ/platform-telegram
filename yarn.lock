@@ -5,13 +5,6 @@ __metadata:
   version: 5
   cacheKey: 8
 
-"@airgram/constants@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "@airgram/constants@npm:3.0.0"
-  checksum: 3b3a6191038ea4a66a93c78012093512c76134866e8fd0437483167c5016dc5ea081adbd45244c803eedeb57bf4372b482ce026e1bb88685b52db0a16ae9c6cc
-  languageName: node
-  linkType: hard
-
 "@airgram/constants@npm:^3.1.0":
   version: 3.1.0
   resolution: "@airgram/constants@npm:3.1.0"
@@ -296,7 +289,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@textshq/platform-telegram@workspace:."
   dependencies:
-    "@airgram/constants": ^3.0.0
+    "@airgram/constants": ^3.1.0
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config"
     "@textshq/platform-sdk": "link:../platform-sdk"
     "@types/bluebird": ^3.5.33
@@ -314,7 +307,7 @@ __metadata:
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: ^3.1.16
     rimraf: ^3.0.2
-    typescript: ^4.2.2
+    typescript: ^4.5.2
   languageName: unknown
   linkType: soft
 
@@ -3700,23 +3693,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^4.2.2":
-  version: 4.2.2
-  resolution: "typescript@npm:4.2.2"
+"typescript@npm:^4.5.2":
+  version: 4.5.2
+  resolution: "typescript@npm:4.5.2"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: e035ade8bac05c23dbd30045122f7b0c6f63693c23c394b563161118c0bea66887ec470337d3e9f44e6459793332f741c731e86eeffd83ddebff23f70f71669b
+  checksum: 74f9ce65d532bdf5d0214b3f60cf37992180023388c87a11ee6f838a803067ef0b63c600fa501b0deb07f989257dce1e244c9635ed79feca40bbccf6e0aa1ebc
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@^4.2.2#~builtin<compat/typescript>":
-  version: 4.2.2
-  resolution: "typescript@patch:typescript@npm%3A4.2.2#~builtin<compat/typescript>::version=4.2.2&hash=ddd1e8"
+"typescript@patch:typescript@^4.5.2#~builtin<compat/typescript>":
+  version: 4.5.2
+  resolution: "typescript@patch:typescript@npm%3A4.5.2#~builtin<compat/typescript>::version=4.5.2&hash=ddd1e8"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: a2a96d1320ecf1732cab071e5dae680244d1ea725fe05a92f0417cf7f115eb66dc347457a5e8e0d8c0a466ac3bec67a06aacd63a4dcd2ac8ae6343d5a2190a73
+  checksum: 24a439e062a05e3285a4f0e8a40644116ecdca89f3e908bed01e5a01b9aee747e3bcf0e85fe9e017e5ebf0c0863437c39479f2616f55a244c2d82d37022cdc4f
   languageName: node
   linkType: hard
 
