@@ -1,8 +1,8 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
 import { MUTED_FOREVER_CONSTANT } from './constants'
-import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo } from 'airgram'
+import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateUserChatAction } from 'airgram'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
@@ -162,7 +162,17 @@ export const mapTextFooter = (interactionInfo: MessageInteractionInfo) => [...ge
 
 function getSenderID(msg: TGMessage) {
   if (msg.sender._ === 'messageSenderUser') return msg.sender.userId
-  return msg.sender.chatId === msg.chatId ? '$thread' : msg.sender.chatId
+  return msg.sender.chatId === msg.chatId ? '$thread' : `$thread_${msg.sender.chatId}`
+}
+
+export function mapMessageUpdateText(messageID: string, newContent: MessageContentUnion) {
+  if (newContent._ !== 'messageText') return
+  return {
+    id: messageID,
+    text: newContent.text.text,
+    textAttributes: mapTextAttributes(newContent.text.text, newContent.text.entities),
+    links: newContent.webPage ? [mapMessageLink(newContent.webPage)] : undefined,
+  }
 }
 
 export function mapMessage(msg: TGMessage, accountID: string) {
@@ -325,6 +335,16 @@ export function mapMessage(msg: TGMessage, accountID: string) {
       mapped.text = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
       break
     }
+    case 'messageVenue': {
+      const { venue } = msg.content
+      mapped.textHeading = '📍 Venue'
+      mapped.text = [
+        venue.title,
+        venue.address,
+        `https://www.google.com/maps?q=${venue.location.latitude},${venue.location.longitude}`,
+      ].join('\n')
+      break
+    }
     case 'messageDice':
       if (mapped.textHeading) mapped.textHeading += '\n'
       else mapped.textHeading = ''
@@ -392,6 +412,7 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       mapped.text = '{{sender}} joined Telegram'
       mapped.isAction = true
       mapped.parseTemplate = true
+      mapped.silent = true
       break
     case 'messageChatChangeTitle':
       mapped.text = `{{sender}} changed the thread title to "${msg.content.title}"`
@@ -550,10 +571,10 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
   const messages = thread.lastMessage ? [mapMessage(thread.lastMessage, accountID)] : []
   const imgFile = thread.photo?.small
   const t: Thread = {
-    _original: JSON.stringify([thread, members]),
+    _original: JSON.stringify(thread),
     id: String(thread.id),
     type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
-    timestamp: messages[0]?.timestamp || new Date(),
+    timestamp: messages[0]?.timestamp,
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
     isReadOnly: !thread.permissions.canSendMessages,
     mutedUntil: mapMuteFor(thread.notificationSettings.muteFor),
@@ -574,3 +595,70 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
 
 export const mapMessages = (messages: TGMessage[], accountID: string) =>
   messages.map(m => mapMessage(m, accountID))
+
+// https://github.com/evgeny-nadymov/telegram-react/blob/afd90f19b264895806359c23f985edccda828aca/src/Utils/Chat.js#L445
+export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
+  const threadID = update.chatId.toString()
+  const participantID = update.userId.toString()
+  const customActivity = (customLabel: string): UserActivityEvent => ({
+    type: ServerEventType.USER_ACTIVITY,
+    threadID,
+    participantID,
+    activityType: ActivityType.CUSTOM,
+    customLabel,
+    durationMs: 10 * 60_000, // 10 mins
+  })
+  switch (update.action._) {
+    case 'chatActionTyping': {
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.TYPING,
+        durationMs: 3 * 60_000, // 3 mins
+      }
+    }
+    case 'chatActionRecordingVoiceNote': {
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.RECORDING_VOICE,
+        durationMs: 5 * 60_000, // 5 mins
+      }
+    }
+    case 'chatActionRecordingVideo':
+    case 'chatActionRecordingVideoNote': {
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.RECORDING_VIDEO,
+        durationMs: 10 * 60_000, // 10 mins
+      }
+    }
+    case 'chatActionChoosingContact':
+      return customActivity('choosing contact')
+    case 'chatActionChoosingLocation':
+      return customActivity('choosing location')
+    case 'chatActionStartPlayingGame':
+      return customActivity('playing a game')
+    case 'chatActionUploadingDocument':
+      return customActivity('uploading a document' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingPhoto':
+      return customActivity('uploading a photo' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingVideo':
+      return customActivity('uploading a video' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingVideoNote':
+      return customActivity('uploading a video note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionUploadingVoiceNote':
+      return customActivity('uploading a voice note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    case 'chatActionCancel':
+      return {
+        type: ServerEventType.USER_ACTIVITY,
+        threadID,
+        participantID,
+        activityType: ActivityType.NONE,
+      }
+  }
+}

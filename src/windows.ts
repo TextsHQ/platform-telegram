@@ -1,13 +1,18 @@
 import path from 'path'
 import { promises as fs } from 'fs'
-import { fileExists } from './util'
 import { BINARIES_DIR_PATH } from './constants'
+
+const WIN_BINARIES_DIR_PATH = path.join(BINARIES_DIR_PATH, `${process.platform}-${process.arch}`)
 
 async function copyFileFromBinaries(dirPath: string, fileName: string) {
   const newFilePath = path.join(dirPath, fileName)
-  const exists = await fileExists(newFilePath)
-  if (!exists) {
-    await fs.copyFile(path.join(BINARIES_DIR_PATH, fileName), newFilePath)
+  const srcFilePath = path.join(WIN_BINARIES_DIR_PATH, fileName)
+  const [newStat, srcStat] = await Promise.all([
+    fs.stat(newFilePath).catch(null),
+    fs.stat(srcFilePath),
+  ])
+  if (newStat?.size !== srcStat.size) {
+    await fs.copyFile(srcFilePath, newFilePath)
   }
 }
 
@@ -27,7 +32,7 @@ export async function copyDLLsForWindows() {
   const cwd = process.cwd()
   // if the app was started by windows autorun, this would be thrown
   // Error: EPERM: operation not permitted, copyfile 'C:\Users\$user\AppData\Local\Programs\jack\resources\app\build\platform-telegram\zlib1.dll' -> 'C:\Windows\System32\zlib1.dll']
-  if (cwd.includes(':\\Windows\\System32')) return
+  if (cwd.toLowerCase().includes(':\\windows\\system32')) return
   const promises = ['libcrypto-1_1-x64.dll', 'libssl-1_1-x64.dll', 'zlib1.dll'].map(fileName => copyFileFromBinaries(cwd, fileName))
   return Promise.all(promises)
 }
@@ -35,5 +40,5 @@ export async function copyDLLsForWindows() {
 export const IS_WINDOWS = process.platform === 'win32'
 
 if (IS_WINDOWS) {
-  addToPath(BINARIES_DIR_PATH)
+  addToPath(WIN_BINARIES_DIR_PATH)
 }
