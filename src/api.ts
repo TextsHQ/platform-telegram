@@ -608,7 +608,11 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private _getParticipants = async (chat: ChatUnion) => {
-    const mapMembers = (members: ChatMember[]) => Promise.all(members.map(member => this.getTGUser(member.userId)))
+    const mapMembers = (members: ChatMember[]) =>
+      Promise.all(
+        members.map(member =>
+          // @ts-expect-error bad typedef
+          member.memberId._ === 'messageSenderUser' && this.getTGUser(member.memberId.userId)))
     switch (chat.type._) {
       case 'chatTypePrivate': {
         const participant = await this.getTGUser(chat.type.userId)
