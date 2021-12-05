@@ -124,10 +124,10 @@ export function getMessageButtons(replyMarkup: ReplyMarkupUnion, accountID: stri
 }
 
 const getAssetURL = (file: File) =>
-  (file.local.path ? `file://${file.local.path}` : `asset://$accountID/file/${file.id}`)
+  (file.local.path ? `file://${encodeURI(file.local.path)}` : `asset://$accountID/file/${file.id}`)
 
 const getAssetURLWithAccountID = (accountID: string, file: File) =>
-  (file.local.path ? `file://${file.local.path}` : `asset://${accountID}/file/${file.id}`)
+  (file.local.path ? `file://${encodeURI(file.local.path)}` : `asset://${accountID}/file/${file.id}`)
 
 function mapLinkImg(photo: Photo): Partial<MessageLink> {
   if (photo.sizes.length < 1) return
@@ -198,7 +198,7 @@ export function mapMessage(msg: TGMessage, accountID: string) {
     mapped.text = ft.text
     mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
   }
-  const pushSticker = (sticker: Sticker, loop: boolean = undefined) => {
+  const pushSticker = (sticker: Sticker, loop: boolean = undefined, width = sticker.width, height = sticker.height) => {
     mapped.attachments = mapped.attachments || []
     mapped.attachments.push({
       id: String(sticker.sticker.id),
@@ -207,7 +207,7 @@ export function mapMessage(msg: TGMessage, accountID: string) {
       type: MessageAttachmentType.IMG,
       isGif: true,
       isSticker: true,
-      size: { width: sticker.width, height: sticker.height },
+      size: { width, height },
       extra: {
         loop,
       },
@@ -345,6 +345,12 @@ export function mapMessage(msg: TGMessage, accountID: string) {
       ].join('\n')
       break
     }
+    // @ts-expect-error bad typedef
+    case 'messageAnimatedEmoji': {
+      // @ts-expect-error bad typedef
+      pushSticker(msg.content.animatedEmoji.sticker, undefined, 100, 100)
+      break
+    }
     case 'messageDice':
       if (mapped.textHeading) mapped.textHeading += '\n'
       else mapped.textHeading = ''
@@ -363,7 +369,7 @@ export function mapMessage(msg: TGMessage, accountID: string) {
       }
       switch (msg.content.finalState?._) {
         case 'diceStickersRegular':
-          pushSticker(msg.content.finalState.sticker, false)
+          pushSticker(msg.content.finalState.sticker, false, 100, 100)
           break
         case 'diceStickersSlotMachine':
           pushSticker(msg.content.finalState.background, false)

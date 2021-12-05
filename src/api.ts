@@ -374,13 +374,14 @@ export default class TelegramAPI implements PlatformAPI {
       if (event) this.onEvent([event])
     })
     this.airgram.on(UPDATE.updateFile, ({ update }) => {
-      const resolve = this.getAssetResolvers.get(update.file.id)
-      if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', update.file.id)
+      const fileID = update.file.id
+      const resolve = this.getAssetResolvers.get(fileID)
+      if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', fileID)
       if (update.file.local.isDownloadingCompleted && update.file.local.path) {
-        const filePath =`file://${update.file.local.path}`
-        this.fileIdToPath.set(update.file.id, filePath)
+        const filePath = `file://${encodeURI(update.file.local.path)}`
+        this.fileIdToPath.set(fileID, filePath)
         resolve(filePath)
-        this.getAssetResolvers.delete(update.file.id)
+        this.getAssetResolvers.delete(fileID)
       }
     })
     this.airgram.on(UPDATE.updateChatIsMarkedAsUnread, ({ update }) => {
