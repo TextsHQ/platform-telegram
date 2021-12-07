@@ -9,7 +9,7 @@ async function copyFileFromBinaries(dirPath: string, fileName: string) {
   const srcFilePath = path.join(WIN_BINARIES_DIR_PATH, fileName)
   const [newStat, srcStat] = await Promise.all([
     fs.stat(newFilePath).catch(null),
-    fs.stat(srcFilePath),
+    fs.stat(srcFilePath).catch(null),
   ])
   if (newStat?.size !== srcStat.size) {
     await fs.copyFile(srcFilePath, newFilePath)
