@@ -682,7 +682,7 @@ export default class TelegramAPI implements PlatformAPI {
   getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     const limit = 20
-    const res = await this.airgram.api.loadChats({ limit, chatList: { _: 'chatListMain' } })
+    const res = await this.airgram.api.loadChats({ limit })
     const is404 = isError(res) && res.code === 404
     return {
       items: [],
