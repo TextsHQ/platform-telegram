@@ -13,14 +13,11 @@ import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Mes
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
 import { fileExists } from './util'
-import { rangeRight, throttle } from 'lodash'
 
 type SendMessageResolveFunction = (value: Message[]) => void
 type GetAssetResolveFunction = (value: string) => void
 type Session = { dbKey: string }
 type LoginEventCallback = (authState: any) => void
-
-const MAX_SIGNED_64BIT_NUMBER = '9223372036854775807'
 
 function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T {
   if (isError(response)) {
