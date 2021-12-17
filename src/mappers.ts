@@ -540,6 +540,7 @@ export function mapUserPresence(userId: number, status: UserStatusUnion): UserPr
     userID: userId.toString(),
     isActive: false,
     lastActive: null,
+    status: null,
   }
   const oneDay = 24 * 3600 * 1000
   switch (status._) {
@@ -582,6 +583,7 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
     type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
     timestamp: messages[0]?.timestamp,
     isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
+    lastReadMessageID: String(Math.max(thread.lastReadInboxMessageId, thread.lastReadOutboxMessageId)),
     isReadOnly: !thread.permissions.canSendMessages,
     mutedUntil: mapMuteFor(thread.notificationSettings.muteFor),
     imgURL: imgFile ? getAssetURLWithAccountID(accountID, imgFile) : undefined,
