@@ -407,9 +407,6 @@ export default class TelegramAPI implements PlatformAPI {
         ],
       }])
     })
-    this.airgram.on(UPDATE.updateUserStatus, ({ update }) => {
-      this.onEvent([mapUserPresence(update.userId, update.status)])
-    })
     this.airgram.on(UPDATE.updateChatReadOutbox, ({ update }) => {
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
@@ -426,6 +423,9 @@ export default class TelegramAPI implements PlatformAPI {
         ],
       }
       this.onEvent([event])
+    })
+    this.airgram.on(UPDATE.updateUserStatus, ({ update }) => {
+      this.onEvent([mapUserPresence(update.userId, update.status)])
     })
     this.airgram.on(UPDATE.updateMessageEdited, ({ update }) => {
       this.onEvent([{
@@ -704,12 +704,19 @@ export default class TelegramAPI implements PlatformAPI {
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor, direction } = pagination || { cursor: null, direction: null }
     const limit = 20
-    const messagesResponse = await this.airgram.api.getChatHistory({
-      limit,
-      chatId: +threadID,
-      fromMessageId: +cursor || 0,
-    })
+    const [
+      messagesResponse,
+      chatResponse,
+    ] = await Promise.all([
+      this.airgram.api.getChatHistory({
+        limit,
+        chatId: +threadID,
+        fromMessageId: +cursor || 0,
+      }),
+      this.airgram.api.getChat({ chatId: +threadID }),
+    ])
     const { messages } = toObject(messagesResponse)
+    const chat = toObject(chatResponse)
     // When fromMessageId is 0, getChatHistory returns only one message.
     // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
     if (!cursor && messages.length === 1) {
@@ -720,7 +727,7 @@ export default class TelegramAPI implements PlatformAPI {
       })
       messages.push(...toObject(res).messages)
     }
-    const items = mapMessages(messages, this.accountInfo.accountID).reverse()
+    const items = mapMessages(messages, this.accountInfo.accountID, chat).reverse()
     this.emitParticipantsFromMessages(threadID, items)
     return {
       items,

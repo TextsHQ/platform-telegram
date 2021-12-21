@@ -175,7 +175,7 @@ export function mapMessageUpdateText(messageID: string, newContent: MessageConte
   }
 }
 
-export function mapMessage(msg: TGMessage, accountID: string) {
+export function mapMessage(msg: TGMessage, accountID: string, chat?: Chat) {
   const mapped: Message = {
     _original: JSON.stringify(msg),
     id: String(msg.id),
@@ -193,6 +193,7 @@ export function mapMessage(msg: TGMessage, accountID: string) {
     linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
     buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId, msg.id),
     expiresInSeconds: msg.ttlExpiresIn,
+    seen: chat ? (msg.id <= chat.lastReadOutboxMessageId) : undefined, // https://github.com/tdlib/td/issues/1034#issuecomment-625245114
   }
   const setFormattedText = (ft: FormattedText) => {
     mapped.text = ft.text
@@ -575,7 +576,7 @@ export const mapMuteFor = (seconds: number) => {
 }
 
 export function mapThread(thread: Chat, members: TGUser[], accountID: string): Thread {
-  const messages = thread.lastMessage ? [mapMessage(thread.lastMessage, accountID)] : []
+  const messages = thread.lastMessage ? [mapMessage(thread.lastMessage, accountID, thread)] : []
   const imgFile = thread.photo?.small
   const t: Thread = {
     _original: JSON.stringify(thread),
@@ -601,8 +602,8 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
   return t
 }
 
-export const mapMessages = (messages: TGMessage[], accountID: string) =>
-  messages.map(m => mapMessage(m, accountID))
+export const mapMessages = (messages: TGMessage[], accountID: string, chat?: Chat) =>
+  messages.map(m => mapMessage(m, accountID, chat))
 
 // https://github.com/evgeny-nadymov/telegram-react/blob/afd90f19b264895806359c23f985edccda828aca/src/Utils/Chat.js#L445
 export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
