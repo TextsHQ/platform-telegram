@@ -9,6 +9,7 @@ import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
+import { debounce } from 'lodash'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
@@ -244,9 +245,7 @@ export default class TelegramAPI implements PlatformAPI {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'message',
-      objectIDs: {
-        threadID,
-      },
+      objectIDs: { threadID },
       entries: [message],
     }
     this.onEvent([event])
@@ -520,10 +519,24 @@ export default class TelegramAPI implements PlatformAPI {
     displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phoneNumber),
   })
 
-  private onEvent: OnServerEventCallback = () => {}
+  private pendingEvents: ServerEvent[] = []
 
-  subscribeToEvents = (onEvent: OnServerEventCallback) => {
-    this.onEvent = onEvent
+  private onEvent: OnServerEventCallback = (events: ServerEvent[]) => {
+    this.pendingEvents.push(...events)
+    this.debouncedPushEvents()
+  }
+
+  private onServerEvent: OnServerEventCallback
+
+  private debouncedPushEvents = debounce(() => {
+    if (!this.onServerEvent) return
+    if (!this.pendingEvents.length) return
+    this.onServerEvent(this.pendingEvents)
+    this.pendingEvents = []
+  }, 300)
+
+  subscribeToEvents = (onServerEvent: OnServerEventCallback) => {
+    this.onServerEvent = onServerEvent
   }
 
   serializeSession = () => this.session
