@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config",
-    "@textshq/platform-sdk": "link:../platform-sdk",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk",
     "@types/bluebird": "^3.5.33",
     "@types/eslint": "^7.2.6",
     "@types/lodash": "^4.14.168",

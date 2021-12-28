@@ -286,11 +286,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@textshq/platform-sdk@link:../platform-sdk::locator=%40textshq%2Fplatform-telegram%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@textshq/platform-sdk@link:../platform-sdk::locator=%40textshq%2Fplatform-telegram%40workspace%3A."
+"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk":
+  version: 0.4.4
+  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=8d36c31b7b5a07f9f8740951b2da27e986145edf"
+  dependencies:
+    form-data: ^4.0.0
+  checksum: 7e8b93c43244cbdfc6fc6a9b423d1bd9dcf6ce8555f8c90ab34e42dd98e452ba82a1353503766ef8dc52c551816295976829b270cd60997a13112966a1447638
   languageName: node
-  linkType: soft
+  linkType: hard
 
 "@textshq/platform-telegram@workspace:.":
   version: 0.0.0-use.local
@@ -298,7 +301,7 @@ __metadata:
   dependencies:
     "@airgram/constants": ^3.1.0
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config"
-    "@textshq/platform-sdk": "link:../platform-sdk"
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk"
     "@types/bluebird": ^3.5.33
     "@types/eslint": ^7.2.6
     "@types/lodash": ^4.14.168
@@ -838,6 +841,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"asynckit@npm:^0.4.0":
+  version: 0.4.0
+  resolution: "asynckit@npm:0.4.0"
+  checksum: 7b78c451df768adba04e2d02e63e2d0bf3b07adcd6e42b4cf665cb7ce899bedd344c69a1dcbce355b5f972d597b25aaa1c1742b52cffd9caccb22f348114f6be
+  languageName: node
+  linkType: hard
+
 "axe-core@npm:^4.0.2":
   version: 4.1.1
   resolution: "axe-core@npm:4.1.1"
@@ -1032,6 +1042,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"combined-stream@npm:^1.0.8":
+  version: 1.0.8
+  resolution: "combined-stream@npm:1.0.8"
+  dependencies:
+    delayed-stream: ~1.0.0
+  checksum: 49fa4aeb4916567e33ea81d088f6584749fc90c7abec76fd516bf1c5aa5c79f3584b5ba3de6b86d26ddd64bae5329c4c7479343250cfe71c75bb366eae53bb7c
+  languageName: node
+  linkType: hard
+
 "compare-versions@npm:^3.6.0":
   version: 3.6.0
   resolution: "compare-versions@npm:3.6.0"
@@ -1188,6 +1207,13 @@ __metadata:
   dependencies:
     object-keys: ^1.0.12
   checksum: da80dba55d0cd76a5a7ab71ef6ea0ebcb7b941f803793e4e0257b384cb772038faa0c31659d244e82c4342edef841c1a1212580006a05a5068ee48223d787317
+  languageName: node
+  linkType: hard
+
+"delayed-stream@npm:~1.0.0":
+  version: 1.0.0
+  resolution: "delayed-stream@npm:1.0.0"
+  checksum: 46fe6e83e2cb1d85ba50bd52803c68be9bd953282fa7096f51fc29edd5d67ff84ff753c51966061e5ba7cb5e47ef6d36a91924eddb7f3f3483b1c560f77a0020
   languageName: node
   linkType: hard
 
@@ -1738,18 +1764,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ffi-napi@npm:^4.0.1":
-  version: 4.0.1
-  resolution: "ffi-napi@npm:4.0.1"
+"ffi-napi@npm:^4.0.3":
+  version: 4.0.3
+  resolution: "ffi-napi@npm:4.0.3"
   dependencies:
     debug: ^4.1.1
     get-uv-event-loop-napi-h: ^1.0.5
     node-addon-api: ^3.0.0
     node-gyp: latest
     node-gyp-build: ^4.2.1
-    ref-napi: ^2.0.1
+    ref-napi: ^2.0.1 || ^3.0.2
     ref-struct-di: ^1.1.0
-  checksum: aae5ca311f048f48a959f3b7a2136223bd93bb104db5494ae31d3f5ed3b0f16ad9a56bfa6100e4c70392a345ff612daa21abb9421f95281d1aceb28a88ca6c95
+  checksum: 3a65d3e6ccf3e2714e2445858643e730f2c13174018484de152f96d89a5e80e8c75f98d0cb169aa07ecd06bcb03131e683304db3fe75976a8ec1e7cd6a577374
   languageName: node
   linkType: hard
 
@@ -1813,6 +1839,17 @@ __metadata:
   version: 3.1.0
   resolution: "flatted@npm:3.1.0"
   checksum: 3e4699377ef18194e39777fc39e472e8939e65c38fe1445a26072242498ea4a7f701bbd6515aa332e5ea11dd9d3488f775f6dfe8b605756fbc0807dc329fe118
+  languageName: node
+  linkType: hard
+
+"form-data@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "form-data@npm:4.0.0"
+  dependencies:
+    asynckit: ^0.4.0
+    combined-stream: ^1.0.8
+    mime-types: ^2.1.12
+  checksum: 01135bf8675f9d5c61ff18e2e2932f719ca4de964e3be90ef4c36aacfc7b9cb2fceb5eca0b7e0190e3383fe51c5b37f4cb80b62ca06a99aaabfcfd6ac7c9328c
   languageName: node
   linkType: hard
 
@@ -2538,6 +2575,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"mime-db@npm:1.51.0":
+  version: 1.51.0
+  resolution: "mime-db@npm:1.51.0"
+  checksum: 613b1ac9d6e725cc24444600b124a7f1ce6c60b1baa654f39a3e260d0995a6dffc5693190217e271af7e2a5612dae19f2a73f3e316707d797a7391165f7ef423
+  languageName: node
+  linkType: hard
+
+"mime-types@npm:^2.1.12":
+  version: 2.1.34
+  resolution: "mime-types@npm:2.1.34"
+  dependencies:
+    mime-db: 1.51.0
+  checksum: 67013de9e9d6799bde6d669d18785b7e18bcd212e710d3e04a4727f92f67a8ad4e74aee24be28b685adb794944814bde649119b58ee3282ffdbee58f9278d9f3
+  languageName: node
+  linkType: hard
+
 "minimatch@npm:^3.0.4":
   version: 3.0.4
   resolution: "minimatch@npm:3.0.4"
@@ -2665,15 +2718,6 @@ __metadata:
   version: 0.6.2
   resolution: "negotiator@npm:0.6.2"
   checksum: dfddaff6c06792f1c4c3809e29a427b8daef8cd437c83b08dd51d7ee11bbd1c29d9512d66b801144d6c98e910ffd8723f2432e0cbf8b18d41d2a09599c975ab3
-  languageName: node
-  linkType: hard
-
-"node-addon-api@npm:^2.0.0":
-  version: 2.0.2
-  resolution: "node-addon-api@npm:2.0.2"
-  dependencies:
-    node-gyp: latest
-  checksum: 31fb22d674648204f8dd94167eb5aac896c841b84a9210d614bf5d97c74ef059cc6326389cf0c54d2086e35312938401d4cc82e5fcd679202503eb8ac84814f8
   languageName: node
   linkType: hard
 
@@ -3156,16 +3200,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ref-napi@npm:^2.0.1":
-  version: 2.1.2
-  resolution: "ref-napi@npm:2.1.2"
+"ref-napi@npm:^2.0.1 || ^3.0.2":
+  version: 3.0.3
+  resolution: "ref-napi@npm:3.0.3"
   dependencies:
     debug: ^4.1.1
     get-symbol-from-current-process-h: ^1.0.2
-    node-addon-api: ^2.0.0
+    node-addon-api: ^3.0.0
     node-gyp: latest
     node-gyp-build: ^4.2.1
-  checksum: cfc04c5c5a02a1475b4b7713333af26595e3f28b2cb7a3cb3f7b7dcbcb14209c4bffe97b9e9303003de60d1351bb10be178c286411b2f7a3e70075638cc818f0
+  checksum: fad9066947d0db5cb10f1f4a61de596bd441918ce86b71bc02d0032b8dc5df0b698a555b5331799dd9b8dc91b4a2ec0a61251f8b4cfa4ee3b4a63fb9657156b8
   languageName: node
   linkType: hard
 
