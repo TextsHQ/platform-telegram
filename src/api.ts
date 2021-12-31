@@ -8,7 +8,7 @@ import { promises as fs } from 'fs'
 import rimraf from 'rimraf'
 import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
 import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant, Awaitable } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
@@ -271,6 +271,9 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private registerUpdateListeners() {
+    this.airgram.on('updateMessageReactions', (data) => {
+      console.log('updateMessageReactions', data)
+    })
     this.airgram.on(UPDATE.updateMessageSendSucceeded, ({ update }) => {
       const resolve = this.sendMessageResolvers.get(update.oldMessageId)
       if (!resolve) {
@@ -759,6 +762,18 @@ export default class TelegramAPI implements PlatformAPI {
     })
     return !isError(toObject(res))
   }
+
+  setReaction = async (threadID: string, messageID: string, reactionKey: string, on: boolean) => {
+    // @ts-expect-error
+    const res = await this.airgram.callApi({ method: 'sendReaction', params: [+threadID, +messageID, reactionKey] })
+    console.log(res)
+  }
+
+  addReaction = (threadID: string, messageID: string, reactionKey: string) =>
+    this.setReaction(threadID, messageID, reactionKey, true)
+
+  removeReaction = (threadID: string, messageID: string, reactionKey: string) =>
+    this.setReaction(threadID, messageID, reactionKey, false)
 
   forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[], userIDs?: string[]): Promise<boolean> => {
     const resArr = await Promise.all(threadIDs.map(async toThreadID => {

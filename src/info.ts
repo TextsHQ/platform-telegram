@@ -35,6 +35,21 @@ const info: PlatformInfo = {
     Attribute.SUPPORTS_MARK_AS_UNREAD,
     Attribute.SUPPORTS_QUOTED_MESSAGES,
   ]),
+  reactions: {
+    supported: {
+      '👍': { title: '👍', render: '👍' },
+      '👎': { title: '👎', render: '👎' },
+      '❤️': { title: '❤️', render: '❤️' },
+      '🔥': { title: '🔥', render: '🔥' },
+      '🎉': { title: '🎉', render: '🎉' },
+      '🤩': { title: '😂', render: '😂' },
+      '😱': { title: '😂', render: '😂' },
+      '😁': { title: '😂', render: '😂' },
+      '😢': { title: '😢', render: '😢' },
+      '💩': { title: '💩', render: '💩' },
+      '🤮': { title: '🤮', render: '🤮' },
+    },
+  },
   attachments: {
     supportsCaption: true,
     recordedAudioMimeType: 'audio/ogg',
