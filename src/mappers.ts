@@ -60,6 +60,10 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
         case 'textEntityTypeCode':
           return { from, to, code: true }
 
+        // @ts-expect-error
+        case 'textEntityTypeSpoiler':
+          return { from, to, spoiler: true }
+
         case 'textEntityTypePreCode':
           return { from, to, codeLanguage: e.type.language }
 
