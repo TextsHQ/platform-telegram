@@ -161,8 +161,10 @@ function* getTextFooter(interactionInfo: MessageInteractionInfo) {
 export const mapTextFooter = (interactionInfo: MessageInteractionInfo) => [...getTextFooter(interactionInfo)].join(' · ')
 
 function getSenderID(msg: TGMessage) {
-  if (msg.sender._ === 'messageSenderUser') return msg.sender.userId
-  return msg.sender.chatId === msg.chatId ? '$thread' : `$thread_${msg.sender.chatId}`
+  // @ts-expect-error
+  if (msg.senderId._ === 'messageSenderUser') return msg.senderId.userId
+  // @ts-expect-error
+  return msg.senderId.chatId === msg.chatId ? '$thread' : `$thread_${msg.senderId.chatId}`
 }
 
 export function mapMessageUpdateText(messageID: string, newContent: MessageContentUnion) {
