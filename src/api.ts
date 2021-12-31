@@ -765,7 +765,33 @@ export default class TelegramAPI implements PlatformAPI {
 
   setReaction = async (threadID: string, messageID: string, reactionKey: string, on: boolean) => {
     // @ts-expect-error
-    const res = await this.airgram.callApi({ method: 'sendReaction', params: [+threadID, +messageID, reactionKey] })
+    const res = await this.airgram.callApi({
+      method: 'sendReaction',
+      params: {
+        peer: {
+          _: 'inputPeerChat',
+          chat_id: +threadID,
+        },
+        msg_id: +messageID,
+        reaction: reactionKey
+      },
+    })
+    // const res = await this.airgram.api.sendReactionSync(+threadID, +messageID, reactionKey)
+    // console.log('getOption version', await this.airgram.callApi({ method: 'getOption', params: { name: 'version' } }))
+    // await this.airgram.callApi({
+    //   method: 'sendMessage',
+    //   params: {
+    //     chatId: Number(threadID),
+    //     messageThreadId: 0,
+    //       inputMessageContent: {
+    //         _: 'inputMessageText',
+    //         text: {
+    //           _: 'formattedText',
+    //           text: 'testing..',
+    //         },
+    //       },
+    //   }
+    // })
     console.log(res)
   }
 
