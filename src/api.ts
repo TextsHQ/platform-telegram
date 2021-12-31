@@ -108,7 +108,7 @@ const tdlibPath = path.join(BINARIES_DIR_PATH, {
 }[process.platform])
 
 export default class TelegramAPI implements PlatformAPI {
-  private airgram: Airgram
+  private conn: Airgram
 
   private accountInfo: AccountInfo
 
@@ -149,7 +149,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.accountInfo = accountInfo
     this.session = session || { dbKey: crypto.randomBytes(32).toString('hex') }
-    this.airgram = new Airgram({
+    this.conn = new Airgram({
       databaseEncryptionKey: this.session.dbKey,
       apiId: API_ID,
       apiHash: API_HASH,
@@ -167,7 +167,7 @@ export default class TelegramAPI implements PlatformAPI {
       databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
       filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
     })
-    this.airgram.on(UPDATE.updateAuthorizationState, ({ update }) => {
+    this.conn.on(UPDATE.updateAuthorizationState, ({ update }) => {
       this.authState = update.authorizationState
       this.loginEventCallback?.(update.authorizationState._)
       if (texts.IS_DEV) console.log(update)
@@ -180,7 +180,7 @@ export default class TelegramAPI implements PlatformAPI {
     })
     if (session) await this.afterLogin()
     // if (texts.IS_DEV) {
-    //   this.airgram.use((ctx, next) => {
+    //   this.conn.use((ctx, next) => {
     //     if ('update' in ctx) {
     //       console.log(`[${ctx._}]`, JSON.stringify(ctx.update))
     //     }
@@ -208,19 +208,19 @@ export default class TelegramAPI implements PlatformAPI {
     const { phoneNumber, code, password } = creds.custom || {}
     switch (this.authState._) {
       case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
-        const res = await this.airgram.api.setAuthenticationPhoneNumber({ phoneNumber })
+        const res = await this.conn.api.setAuthenticationPhoneNumber({ phoneNumber })
         const data = res.response
         if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
         return { type: 'wait' }
       }
       case AUTHORIZATION_STATE.authorizationStateWaitCode: {
-        const res = await this.airgram.api.checkAuthenticationCode({ code })
+        const res = await this.conn.api.checkAuthenticationCode({ code })
         const data = res.response
         if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
         return { type: 'wait' }
       }
       case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
-        const res = await this.airgram.api.checkAuthenticationPassword({ password })
+        const res = await this.conn.api.checkAuthenticationPassword({ password })
         const data = res.response
         if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
         return { type: 'wait' }
@@ -271,7 +271,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private registerUpdateListeners() {
-    this.airgram.on(UPDATE.updateMessageSendSucceeded, ({ update }) => {
+    this.conn.on(UPDATE.updateMessageSendSucceeded, ({ update }) => {
       const resolve = this.sendMessageResolvers.get(update.oldMessageId)
       if (!resolve) {
         return console.warn('update.updateMessageSendSucceeded: unable to find promise resolver for', update.oldMessageId)
@@ -280,9 +280,9 @@ export default class TelegramAPI implements PlatformAPI {
       this.sendMessageResolvers.delete(update.oldMessageId)
     })
 
-    this.airgram.on(UPDATE.updateNewChat, async ({ update }) => {
+    this.conn.on(UPDATE.updateNewChat, async ({ update }) => {
       texts.log(`[updateNewChat]`, update.chat.id, update.chat.title, update.chat.positions.length)
-      const chat = toObject(await this.airgram.api.getChat({ chatId: update.chat.id }))
+      const chat = toObject(await this.conn.api.getChat({ chatId: update.chat.id }))
       if (!chat.positions.length) return
       const thread = await this.asyncMapThread(chat)
       const event: ServerEvent = {
@@ -296,7 +296,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
       this.onEvent([event])
     })
-    this.airgram.on(UPDATE.updateSecretChat, ({ update }) => {
+    this.conn.on(UPDATE.updateSecretChat, ({ update }) => {
       if (update.secretChat.state._ === SECRET_CHAT_STATE.secretChatStateClosed) {
         // Secret chat is accepted by another device or closed.
         const chatId = this.secretChatIdToChatId.get(update.secretChat.id)
@@ -305,7 +305,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.secretChatIdToChatId.delete(update.secretChat.id)
       }
     })
-    this.airgram.on(UPDATE.updateBasicGroup, ({ update }) => {
+    this.conn.on(UPDATE.updateBasicGroup, ({ update }) => {
       const { status } = update.basicGroup
       if (
         status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
@@ -318,7 +318,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.basicGroupIdToChatId.delete(update.basicGroup.id)
       }
     })
-    this.airgram.on(UPDATE.updateSupergroup, ({ update }) => {
+    this.conn.on(UPDATE.updateSupergroup, ({ update }) => {
       const { status } = update.supergroup
       if (
         status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
@@ -331,7 +331,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.superGroupIdToChatId.delete(update.supergroup.id)
       }
     })
-    this.airgram.on(UPDATE.updateChatNotificationSettings, ({ update }) => {
+    this.conn.on(UPDATE.updateChatNotificationSettings, ({ update }) => {
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
         objectIDs: {},
@@ -343,10 +343,10 @@ export default class TelegramAPI implements PlatformAPI {
         }],
       }])
     })
-    this.airgram.on(UPDATE.updateNewMessage, ({ update }) => {
+    this.conn.on(UPDATE.updateNewMessage, ({ update }) => {
       this.onUpdateNewMessage(update.message)
     })
-    this.airgram.on(UPDATE.updateDeleteMessages, ({ update }) => {
+    this.conn.on(UPDATE.updateDeleteMessages, ({ update }) => {
       if (!update.isPermanent) {
         return
       }
@@ -362,11 +362,11 @@ export default class TelegramAPI implements PlatformAPI {
         },
       ])
     })
-    this.airgram.on(UPDATE.updateUserChatAction, ({ update }) => {
+    this.conn.on(UPDATE.updateUserChatAction, ({ update }) => {
       const event = mapUserAction(update)
       if (event) this.onEvent([event])
     })
-    this.airgram.on(UPDATE.updateFile, ({ update }) => {
+    this.conn.on(UPDATE.updateFile, ({ update }) => {
       const fileID = update.file.id
       const resolve = this.getAssetResolvers.get(fileID)
       if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', fileID)
@@ -377,7 +377,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.getAssetResolvers.delete(fileID)
       }
     })
-    this.airgram.on(UPDATE.updateChatIsMarkedAsUnread, ({ update }) => {
+    this.conn.on(UPDATE.updateChatIsMarkedAsUnread, ({ update }) => {
       const threadID = update.chatId.toString()
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
@@ -392,7 +392,7 @@ export default class TelegramAPI implements PlatformAPI {
         ],
       }])
     })
-    this.airgram.on(UPDATE.updateChatReadInbox, ({ update }) => {
+    this.conn.on(UPDATE.updateChatReadInbox, ({ update }) => {
       const threadID = update.chatId.toString()
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
@@ -407,7 +407,7 @@ export default class TelegramAPI implements PlatformAPI {
         ],
       }])
     })
-    this.airgram.on(UPDATE.updateChatReadOutbox, ({ update }) => {
+    this.conn.on(UPDATE.updateChatReadOutbox, ({ update }) => {
       const threadID = update.chatId.toString()
       const messageID = update.lastReadOutboxMessageId.toString()
       const event: StateSyncEvent = {
@@ -424,10 +424,10 @@ export default class TelegramAPI implements PlatformAPI {
       }
       this.onEvent([event])
     })
-    this.airgram.on(UPDATE.updateUserStatus, ({ update }) => {
+    this.conn.on(UPDATE.updateUserStatus, ({ update }) => {
       this.onEvent([mapUserPresence(update.userId, update.status)])
     })
-    this.airgram.on(UPDATE.updateMessageEdited, ({ update }) => {
+    this.conn.on(UPDATE.updateMessageEdited, ({ update }) => {
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -440,7 +440,7 @@ export default class TelegramAPI implements PlatformAPI {
         }],
       }])
     })
-    this.airgram.on(UPDATE.updateMessageContent, async ({ update }) => {
+    this.conn.on(UPDATE.updateMessageContent, async ({ update }) => {
       const messageID = String(update.messageId)
       const threadID = String(update.chatId)
       // since most of the time we get `messageText` updates, we only handle that here and inefficiently fetch the whole message in other cases
@@ -455,7 +455,7 @@ export default class TelegramAPI implements PlatformAPI {
         }])
         return
       }
-      const res = await this.airgram.api.getMessage({
+      const res = await this.conn.api.getMessage({
         chatId: update.chatId,
         messageId: update.messageId,
       })
@@ -468,7 +468,7 @@ export default class TelegramAPI implements PlatformAPI {
         entries: [mapMessage(message, this.accountInfo.accountID)],
       }])
     })
-    this.airgram.on('updateMessageInteractionInfo', ({ update }) => {
+    this.conn.on('updateMessageInteractionInfo', ({ update }) => {
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -497,12 +497,12 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    this.me = toObject(await this.airgram.api.getMe())
+    this.me = toObject(await this.conn.api.getMe())
     this.registerUpdateListeners()
   }
 
   logout = async () => {
-    await this.airgram?.api.logOut()
+    await this.conn?.api.logOut()
     return new Promise<void>(resolve => {
       rimraf(this.accountInfo?.dataDirPath, () => {
         resolve()
@@ -511,7 +511,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    await this.airgram.api.close()
+    await this.conn.api.close()
   }
 
   getCurrentUser = (): CurrentUser => ({
@@ -542,7 +542,7 @@ export default class TelegramAPI implements PlatformAPI {
   serializeSession = () => this.session
 
   searchUsers = async (query: string) => {
-    const res = await this.airgram.api.searchContacts({
+    const res = await this.conn.api.searchContacts({
       query,
       limit: 20,
     })
@@ -556,10 +556,10 @@ export default class TelegramAPI implements PlatformAPI {
   createThread = async (userIDs: string[], title?: string) => {
     if (userIDs.length === 0) return
     if (userIDs.length === 1) {
-      const chatResponse = await this.airgram.api.createPrivateChat({ userId: +userIDs[0] })
+      const chatResponse = await this.conn.api.createPrivateChat({ userId: +userIDs[0] })
       return this.asyncMapThread(toObject(chatResponse))
     }
-    const res = await this.airgram.api.createNewBasicGroupChat({
+    const res = await this.conn.api.createNewBasicGroupChat({
       userIds: userIDs.map(Number),
       title,
     })
@@ -569,7 +569,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
     if ('mutedUntil' in updates) {
-      await this.airgram.api.setChatNotificationSettings({
+      await this.conn.api.setChatNotificationSettings({
         chatId: +threadID,
         notificationSettings: {
           _: 'chatNotificationSettings',
@@ -581,15 +581,15 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   deleteThread = async (threadID: string) => {
-    await this.airgram.api.deleteChatHistory({
+    await this.conn.api.deleteChatHistory({
       chatId: +threadID,
       removeFromChatList: true,
     })
-    await this.airgram.api.leaveChat({ chatId: +threadID })
+    await this.conn.api.leaveChat({ chatId: +threadID })
   }
 
   reportThread = async (type: 'spam', threadID: string) => {
-    const res = await this.airgram.api.reportChat({
+    const res = await this.conn.api.reportChat({
       chatId: +threadID,
       reason: {
         _: 'chatReportReasonSpam',
@@ -600,13 +600,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private getTGUser = async (userId: number) => {
-    const res = await this.airgram.api.getUser({ userId })
+    const res = await this.conn.api.getUser({ userId })
     return toObject(res)
   }
 
   getUser = async ({ username }: { username: string }) => {
     if (!username) return
-    const res = await this.airgram.api.searchPublicChat({ username })
+    const res = await this.conn.api.searchPublicChat({ username })
     const chat = toObject(res)
     if (isError(chat)) return
     if (chat.type._ !== 'chatTypePrivate') return
@@ -631,7 +631,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
       case 'chatTypeBasicGroup': {
         this.basicGroupIdToChatId.set(chat.type.basicGroupId, chat.id)
-        const res = await this.airgram.api.getBasicGroupFullInfo({ basicGroupId: chat.type.basicGroupId })
+        const res = await this.conn.api.getBasicGroupFullInfo({ basicGroupId: chat.type.basicGroupId })
         const { members } = toObject(res)
         return mapMembers(members)
       }
@@ -639,12 +639,12 @@ export default class TelegramAPI implements PlatformAPI {
         this.superGroupThreads.add(chat.id.toString())
         this.superGroupIdToChatId.set(chat.type.supergroupId, chat.id)
         return []
-        // const supergroupRes = await this.airgram.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
+        // const supergroupRes = await this.conn.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
         // const supergroup = toObject(supergroupRes)
         // if (!supergroup.canGetMembers) {
         //   return []
         // }
-        // const membersRes = await this.airgram.api.getSupergroupMembers({
+        // const membersRes = await this.conn.api.getSupergroupMembers({
         //   supergroupId: chat.type.supergroupId,
         //   limit: 256, // todo, random limit
         // })
@@ -685,14 +685,14 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getThread = async (threadID: string) => {
-    const chatResponse = await this.airgram.api.getChat({ chatId: +threadID })
+    const chatResponse = await this.conn.api.getChat({ chatId: +threadID })
     return this.asyncMapThread(toObject(chatResponse))
   }
 
   getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     const limit = 20
-    const res = await this.airgram.api.loadChats({ limit })
+    const res = await this.conn.api.loadChats({ limit })
     const is404 = isError(res) && res.code === 404
     return {
       items: [],
@@ -708,19 +708,19 @@ export default class TelegramAPI implements PlatformAPI {
       messagesResponse,
       chatResponse,
     ] = await Promise.all([
-      this.airgram.api.getChatHistory({
+      this.conn.api.getChatHistory({
         limit,
         chatId: +threadID,
         fromMessageId: +cursor || 0,
       }),
-      this.airgram.api.getChat({ chatId: +threadID }),
+      this.conn.api.getChat({ chatId: +threadID }),
     ])
     const { messages } = toObject(messagesResponse)
     const chat = toObject(chatResponse)
     // When fromMessageId is 0, getChatHistory returns only one message.
     // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
     if (!cursor && messages.length === 1) {
-      const res = await this.airgram.api.getChatHistory({
+      const res = await this.conn.api.getChatHistory({
         limit,
         chatId: +threadID,
         fromMessageId: messages[0].id,
@@ -738,7 +738,7 @@ export default class TelegramAPI implements PlatformAPI {
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
     const inputMessageContent = await getInputMessageContent(msgContent)
     if (!inputMessageContent) return false
-    const res = await this.airgram.api.sendMessage({
+    const res = await this.conn.api.sendMessage({
       chatId: Number(threadID),
       messageThreadId: 0,
       replyToMessageId: +quotedMessageID || 0,
@@ -752,7 +752,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
     if (!msgContent.text || /^\s+$/.test(msgContent.text)) msgContent.text = '.'
-    const res = await this.airgram.api.editMessageText({
+    const res = await this.conn.api.editMessageText({
       chatId: +threadID,
       messageId: +messageID,
       inputMessageContent: await getInputMessageContent(msgContent),
@@ -762,7 +762,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[], userIDs?: string[]): Promise<boolean> => {
     const resArr = await Promise.all(threadIDs.map(async toThreadID => {
-      const res = await this.airgram.api.forwardMessages({
+      const res = await this.conn.api.forwardMessages({
         chatId: +toThreadID,
         fromChatId: +threadID,
         messageIds: [+messageID],
@@ -780,7 +780,7 @@ export default class TelegramAPI implements PlatformAPI {
       [ActivityType.RECORDING_VIDEO]: 'ChatActionRecordingVideoInput',
     }[type]
     if (!_) return
-    await this.airgram.api.sendChatAction({
+    await this.conn.api.sendChatAction({
       chatId: +threadID,
       messageThreadId: 0,
       action: { _ },
@@ -788,7 +788,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
-    const res = await this.airgram.api.deleteMessages({
+    const res = await this.conn.api.deleteMessages({
       chatId: +threadID,
       messageIds: [+messageID],
       revoke: forEveryone,
@@ -797,11 +797,11 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   sendReadReceipt = async (threadID: string, messageID: string) => {
-    await this.airgram.api.toggleChatIsMarkedAsUnread({
+    await this.conn.api.toggleChatIsMarkedAsUnread({
       chatId: +threadID,
       isMarkedAsUnread: false,
     })
-    const res = await this.airgram.api.viewMessages({
+    const res = await this.conn.api.viewMessages({
       chatId: +threadID,
       messageThreadId: 0,
       messageIds: [+messageID],
@@ -811,22 +811,22 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   markAsUnread = (threadID: string) => {
-    this.airgram.api.toggleChatIsMarkedAsUnread({
+    this.conn.api.toggleChatIsMarkedAsUnread({
       chatId: +threadID,
       isMarkedAsUnread: true,
     })
   }
 
   archiveThread = async (threadID: string, archived: boolean) => {
-    toObject(await this.airgram.api.addChatToList({ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' }}))
+    toObject(await this.conn.api.addChatToList({ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' }}))
   }
 
   private lastChatID: number
 
   onThreadSelected = async (threadID: string) => {
-    if (this.lastChatID) await this.airgram.api.closeChat({ chatId: this.lastChatID })
+    if (this.lastChatID) await this.conn.api.closeChat({ chatId: this.lastChatID })
     this.lastChatID = +threadID
-    if (threadID) await this.airgram.api.openChat({ chatId: +threadID })
+    if (threadID) await this.conn.api.openChat({ chatId: +threadID })
   }
 
   /**
@@ -853,7 +853,7 @@ export default class TelegramAPI implements PlatformAPI {
         })
       } else {
         // This is the first request for fileId.
-        this.airgram.api.downloadFile({ fileId, priority: 32 })
+        this.conn.api.downloadFile({ fileId, priority: 32 })
         this.getAssetResolvers.set(fileId, resolve)
       }
     })
@@ -862,7 +862,7 @@ export default class TelegramAPI implements PlatformAPI {
   handleDeepLink = async (link: string) => {
     const [,,,, type, chatID, messageID, data] = link.split('/')
     if (type !== 'callback') return
-    const res = await this.airgram.api.getCallbackQueryAnswer({
+    const res = await this.conn.api.getCallbackQueryAnswer({
       chatId: +chatID,
       messageId: +messageID,
       payload: {
