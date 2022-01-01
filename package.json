@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@airgram/constants": "^3.1.0",
+    "@mtproto/core": "link:/Users/kb/Downloads/mtproto-core",
     "airgram": "^4.0.0",
     "bluebird": "^3.7.2",
     "date-fns": "^2.27.0",

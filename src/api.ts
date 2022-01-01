@@ -14,6 +14,7 @@ import { debounce } from 'lodash'
 import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
 import { fileExists } from './util'
+import FakeAirgram from './airgram-mtproto'
 
 type SendMessageResolveFunction = (value: Message[])=> void
 type GetAssetResolveFunction = (value: string)=> void
@@ -108,7 +109,7 @@ const tdlibPath = path.join(BINARIES_DIR_PATH, {
 }[process.platform])
 
 export default class TelegramAPI implements PlatformAPI {
-  private conn: Airgram
+  private conn: FakeAirgram
 
   private accountInfo: AccountInfo
 
@@ -149,7 +150,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.accountInfo = accountInfo
     this.session = session || { dbKey: crypto.randomBytes(32).toString('hex') }
-    this.conn = new Airgram({
+    this.conn = new FakeAirgram({
       databaseEncryptionKey: this.session.dbKey,
       apiId: API_ID,
       apiHash: API_HASH,
@@ -167,70 +168,132 @@ export default class TelegramAPI implements PlatformAPI {
       databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
       filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
     })
-    this.conn.on(UPDATE.updateAuthorizationState, ({ update }) => {
-      this.authState = update.authorizationState
-      this.loginEventCallback?.(update.authorizationState._)
-      if (texts.IS_DEV) console.log(update)
-      if (this.authState._ === AUTHORIZATION_STATE.authorizationStateClosed) {
-        this.connStateChangeCallback({
-          status: ConnectionStatus.UNAUTHORIZED,
-        })
-        throw new ReAuthError('Session closed')
-      }
-    })
+    await this.conn.initPromise
+    // this.conn.on(UPDATE.updateAuthorizationState, ({ update }) => {
+    //   this.authState = update.authorizationState
+    //   this.loginEventCallback?.(update.authorizationState._)
+    //   if (texts.IS_DEV) console.log(update)
+    //   if (this.authState._ === AUTHORIZATION_STATE.authorizationStateClosed) {
+    //     this.connStateChangeCallback({
+    //       status: ConnectionStatus.UNAUTHORIZED,
+    //     })
+    //     throw new ReAuthError('Session closed')
+    //   }
+    // })
     if (session) await this.afterLogin()
-    // if (texts.IS_DEV) {
-    //   this.conn.use((ctx, next) => {
-    //     if ('update' in ctx) {
-    //       console.log(`[${ctx._}]`, JSON.stringify(ctx.update))
-    //     }
-    //     return next()
-    //   })
-    // }
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
-    this.loginEventCallback(this.authState?._)
+    this.loginEventCallback?.('authorizationStateWaitPhoneNumber')
+    // this.loginEventCallback(this.authState?._)
   }
 
   onConnectionStateChange = (onEvent: OnConnStateChangeCallback) => {
     this.connStateChangeCallback = onEvent
   }
 
+  state:any = {_:'authorizationStateWaitPhoneNumber'}
   login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
-    const mapError = (message: string) => {
-      if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
-      if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
-      if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
-      return message
-    }
+    // const mapError = (message: string) => {
+    //   if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
+    //   if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
+    //   if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
+    //   return message
+    // }
     const { phoneNumber, code, password } = creds.custom || {}
-    switch (this.authState._) {
+    switch (this.state._) {
       case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
-        const res = await this.conn.api.setAuthenticationPhoneNumber({ phoneNumber })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+        const { response } = await this.conn.api.auth.sendCode({
+          phone_number: phoneNumber,
+          settings: { _: 'codeSettings' },
+        })
+        this.state.phone_code_hash = response.phone_code_hash
+        this.state._ = 'authorizationStateWaitCode'
+        this.loginEventCallback(this.state._)
+        // {
+        //   _: 'auth.sentCode',
+        //   flags: 2,
+        //   type: { _: 'auth.sentCodeTypeApp', length: 5 },
+        //   phone_code_hash: 'f72f96230988977c67',
+        //   next_type: { _: 'auth.codeTypeSms' }
+        // }
         return { type: 'wait' }
       }
       case AUTHORIZATION_STATE.authorizationStateWaitCode: {
-        const res = await this.conn.api.checkAuthenticationCode({ code })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+        if (!code) return { type: 'error', errorMessage: 'Code is required.' }
+        const { response } = await this.conn.api.auth.signIn({
+          phone_number: phoneNumber,
+          phone_code: code,
+          phone_code_hash: this.state.phone_code_hash,
+        })
+        this.state._ = 'authorizationStateReady'
+        this.loginEventCallback(this.state._)
         return { type: 'wait' }
-      }
-      case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
-        const res = await this.conn.api.checkAuthenticationPassword({ password })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-        return { type: 'wait' }
+        // {
+        //   _: 'auth.authorization',
+        //   flags: 0,
+        //   setup_password_required: false,
+        //   user: {
+        //     _: 'user',
+        //     flags: REDACTED_NUMBER,
+        //     self: true,
+        //     contact: true,
+        //     mutual_contact: true,
+        //     deleted: false,
+        //     bot: false,
+        //     bot_chat_history: false,
+        //     bot_nochats: false,
+        //     verified: false,
+        //     restricted: false,
+        //     min: false,
+        //     bot_inline_geo: false,
+        //     support: false,
+        //     scam: false,
+        //     apply_min_photo: true,
+        //     fake: false,
+        //     id: 'REDACTED_NUMBER',
+        //     access_hash: 'REDACTED_NUMBER',
+        //     first_name: 'Kishan',
+        //     last_name: 'Bagaria',
+        //     username: 'KishanBagaria',
+        //     phone: '919401530303',
+        //     photo: [Object],
+        //     status: [Object]
+        //   }
+        // }
       }
       case AUTHORIZATION_STATE.authorizationStateReady: {
         await this.afterLogin()
         return { type: 'success' }
       }
     }
-    return { type: 'error', errorMessage: this.authState._ }
+
+    // switch (this.authState._) {
+    //   case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
+    //     const res = await this.conn.api.setAuthenticationPhoneNumber({ phoneNumber })
+    //     const data = res.response
+    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+    //     return { type: 'wait' }
+    //   }
+    //   case AUTHORIZATION_STATE.authorizationStateWaitCode: {
+    //     const res = await this.conn.api.checkAuthenticationCode({ code })
+    //     const data = res.response
+    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+    //     return { type: 'wait' }
+    //   }
+    //   case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
+    //     const res = await this.conn.api.checkAuthenticationPassword({ password })
+    //     const data = res.response
+    //     if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
+    //     return { type: 'wait' }
+    //   }
+    //   case AUTHORIZATION_STATE.authorizationStateReady: {
+    //     await this.afterLogin()
+    //     return { type: 'success' }
+    //   }
+    // }
+    // return { type: 'error', errorMessage: this.authState._ }
   }
 
   private onUpdateNewMessage = (tgMessage: TGMessage) => {

@@ -1547,6 +1547,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@mtproto/core@link:/Users/kb/Downloads/mtproto-core::locator=%40textshq%2Fplatform-telegram%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "@mtproto/core@link:/Users/kb/Downloads/mtproto-core::locator=%40textshq%2Fplatform-telegram%40workspace%3A."
+  languageName: node
+  linkType: soft
+
 "@nodelib/fs.scandir@npm:2.1.4":
   version: 2.1.4
   resolution: "@nodelib/fs.scandir@npm:2.1.4"
@@ -1636,6 +1642,7 @@ __metadata:
   resolution: "@textshq/platform-telegram@workspace:."
   dependencies:
     "@airgram/constants": ^3.1.0
+    "@mtproto/core": "link:/Users/kb/Downloads/mtproto-core"
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk"
     "@types/bluebird": ^3.5.33
