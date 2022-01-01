@@ -26,7 +26,7 @@
     "rimraf": "^3.0.2"
   },
   "devDependencies": {
-    "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config",
+    "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main",
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk",
     "@types/bluebird": "^3.5.33",
     "@types/eslint": "^7.2.6",

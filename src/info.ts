@@ -56,7 +56,7 @@ const info: PlatformInfo = {
     gifMimeType: 'video/mp4',
   },
   getUserProfileLink: ({ username }) =>
-    username ? `https://t.me/${username}` : null,
+    (username ? `https://t.me/${username}` : null),
 }
 
 export default info
