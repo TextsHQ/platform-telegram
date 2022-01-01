@@ -15,10 +15,10 @@ import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './c
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
 import { fileExists } from './util'
 
-type SendMessageResolveFunction = (value: Message[]) => void
-type GetAssetResolveFunction = (value: string) => void
+type SendMessageResolveFunction = (value: Message[])=> void
+type GetAssetResolveFunction = (value: string)=> void
 type Session = { dbKey: string }
-type LoginEventCallback = (authState: any) => void
+type LoginEventCallback = (authState: any)=> void
 
 function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T {
   if (isError(response)) {
@@ -173,7 +173,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (texts.IS_DEV) console.log(update)
       if (this.authState._ === AUTHORIZATION_STATE.authorizationStateClosed) {
         this.connStateChangeCallback({
-          status: ConnectionStatus.UNAUTHORIZED
+          status: ConnectionStatus.UNAUTHORIZED,
         })
         throw new ReAuthError('Session closed')
       }
@@ -281,7 +281,7 @@ export default class TelegramAPI implements PlatformAPI {
     })
 
     this.conn.on(UPDATE.updateNewChat, async ({ update }) => {
-      texts.log(`[updateNewChat]`, update.chat.id, update.chat.title, update.chat.positions.length)
+      texts.log('[updateNewChat]', update.chat.id, update.chat.title, update.chat.positions.length)
       const chat = toObject(await this.conn.api.getChat({ chatId: update.chat.id }))
       if (!chat.positions.length) return
       const thread = await this.asyncMapThread(chat)
@@ -308,9 +308,9 @@ export default class TelegramAPI implements PlatformAPI {
     this.conn.on(UPDATE.updateBasicGroup, ({ update }) => {
       const { status } = update.basicGroup
       if (
-        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
-          status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned ||
-          (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
+        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft
+          || status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned
+          || (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
       ) {
         const chatId = this.basicGroupIdToChatId.get(update.basicGroup.id)
         if (!chatId) return
@@ -321,9 +321,9 @@ export default class TelegramAPI implements PlatformAPI {
     this.conn.on(UPDATE.updateSupergroup, ({ update }) => {
       const { status } = update.supergroup
       if (
-        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft ||
-          status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned ||
-          (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
+        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft
+          || status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned
+          || (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
       ) {
         const chatId = this.superGroupIdToChatId.get(update.supergroup.id)
         if (!chatId) return
@@ -436,7 +436,7 @@ export default class TelegramAPI implements PlatformAPI {
         entries: [{
           id: String(update.messageId),
           editedTimestamp: update.editDate ? new Date(update.editDate * 1000) : undefined,
-          buttons: getMessageButtons(update.replyMarkup, this.accountInfo.accountID, update.chatId, update.messageId)
+          buttons: getMessageButtons(update.replyMarkup, this.accountInfo.accountID, update.chatId, update.messageId),
         }],
       }])
     })
@@ -618,7 +618,8 @@ export default class TelegramAPI implements PlatformAPI {
     const mapMembers = (members: ChatMember[]) =>
       Promise.all(
         members.map(member =>
-          member.memberId._ === 'messageSenderUser' && this.getTGUser(member.memberId.userId)))
+          member.memberId._ === 'messageSenderUser' && this.getTGUser(member.memberId.userId)),
+      )
     switch (chat.type._) {
       case 'chatTypePrivate': {
         const participant = await this.getTGUser(chat.type.userId)
@@ -679,7 +680,7 @@ export default class TelegramAPI implements PlatformAPI {
       // Only need to emit participant for supergroup.
       return
     }
-    const senderIDs = [...new Set(messages.map(m => m.senderID.startsWith('$thread') ? null : +m.senderID).filter(Boolean))]
+    const senderIDs = [...new Set(messages.map(m => (m.senderID.startsWith('$thread') ? null : +m.senderID)).filter(Boolean))]
     const members = await Promise.all(senderIDs.map(x => this.getTGUser(x)))
     this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
   }
@@ -818,7 +819,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   archiveThread = async (threadID: string, archived: boolean) => {
-    toObject(await this.conn.api.addChatToList({ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' }}))
+    toObject(await this.conn.api.addChatToList({ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } }))
   }
 
   private lastChatID: number
@@ -868,7 +869,7 @@ export default class TelegramAPI implements PlatformAPI {
       payload: {
         _: 'callbackQueryPayloadData',
         data,
-      }
+      },
     })
     const answer = toObject(res)
     if (!answer.text) return

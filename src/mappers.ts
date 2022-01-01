@@ -1,8 +1,8 @@
 import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
-import { MUTED_FOREVER_CONSTANT } from './constants'
 import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateUserChatAction } from 'airgram'
+import { MUTED_FOREVER_CONSTANT } from './constants'
 
 /**
  * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
@@ -14,7 +14,7 @@ function transformOffset(text: string, entities: TextEntity[]) {
   const arr = Array.from(text)
   let strCursor = 0
   let arrCursor = 0
-  for (let entity of entities) {
+  for (const entity of entities) {
     const { from, to } = entity
     while (strCursor < from) {
       strCursor += arr[arrCursor++].length
