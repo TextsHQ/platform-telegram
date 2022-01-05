@@ -362,7 +362,7 @@ export default class TelegramAPI implements PlatformAPI {
         },
       ])
     })
-    this.conn.on(UPDATE.updateUserChatAction, ({ update }) => {
+    this.conn.on(UPDATE.updateChatAction, ({ update }) => {
       const event = mapUserAction(update)
       if (event) this.onEvent([event])
     })

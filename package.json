@@ -13,12 +13,11 @@
     }
   },
   "nativeDeps": {
-    "airgram": "^4.0.0"
+    "airgram": "^5.0.0"
   },
   "dependencies": {
-    "@airgram/constants": "^3.1.0",
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk",
-    "airgram": "^4.0.0",
+    "airgram": "^5.0.0",
     "bluebird": "^3.7.2",
     "date-fns": "^2.27.0",
     "lodash": "^4.17.21",

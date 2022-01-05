@@ -1,7 +1,7 @@
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ServerEvent, ActivityType, UserActivityEvent } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent } from '@textshq/platform-sdk'
 import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
 import { formatDuration, addSeconds } from 'date-fns'
-import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateUserChatAction } from 'airgram'
+import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateChatAction } from 'airgram'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 
 /**
@@ -60,7 +60,6 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
         case 'textEntityTypeCode':
           return { from, to, code: true }
 
-        // @ts-expect-error
         case 'textEntityTypeSpoiler':
           return { from, to, spoiler: true }
 
@@ -165,9 +164,7 @@ function* getTextFooter(interactionInfo: MessageInteractionInfo) {
 export const mapTextFooter = (interactionInfo: MessageInteractionInfo) => [...getTextFooter(interactionInfo)].join(' · ')
 
 function getSenderID(msg: TGMessage) {
-  // @ts-expect-error
   if (msg.senderId._ === 'messageSenderUser') return msg.senderId.userId
-  // @ts-expect-error
   return msg.senderId.chatId === msg.chatId ? '$thread' : `$thread_${msg.senderId.chatId}`
 }
 
@@ -352,9 +349,7 @@ export function mapMessage(msg: TGMessage, accountID: string, chat?: Chat) {
       ].join('\n')
       break
     }
-    // @ts-expect-error bad typedef
     case 'messageAnimatedEmoji': {
-      // @ts-expect-error bad typedef
       pushSticker(msg.content.animatedEmoji.sticker, undefined, 100, 100)
       break
     }
@@ -612,9 +607,9 @@ export const mapMessages = (messages: TGMessage[], accountID: string, chat?: Cha
   messages.map(m => mapMessage(m, accountID, chat))
 
 // https://github.com/evgeny-nadymov/telegram-react/blob/afd90f19b264895806359c23f985edccda828aca/src/Utils/Chat.js#L445
-export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
+export function mapUserAction(update: UpdateChatAction): UserActivityEvent {
   const threadID = update.chatId.toString()
-  const participantID = update.userId.toString()
+  const participantID = update.senderId.toString()
   const customActivity = (customLabel: string): UserActivityEvent => ({
     type: ServerEventType.USER_ACTIVITY,
     threadID,
@@ -675,5 +670,6 @@ export function mapUserAction(update: UpdateUserChatAction): UserActivityEvent {
         participantID,
         activityType: ActivityType.NONE,
       }
+    default:
   }
 }

@@ -5,24 +5,17 @@ __metadata:
   version: 5
   cacheKey: 8
 
-"@airgram/constants@npm:^3.1.0":
-  version: 3.1.0
-  resolution: "@airgram/constants@npm:3.1.0"
-  checksum: 4c4a9d3a564c3d2a7304c3266136da0af973e19433fed470473b2d1024851da22ba575b0b872cacddade240c8fa6d846dbbb02879975002311bb9af7556fe58c
+"@airgram/constants@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "@airgram/constants@npm:4.0.0"
+  checksum: d0c1fa1da7e2dc7c495434cd80e0aa1f0be8135f3821e2e0b29834ca8639f6a584d1b140348d4f2c1a4e59a2175a63c0606f062bc9fe497cb6566c81668a7b26
   languageName: node
   linkType: hard
 
-"@airgram/constants@npm:^3.2.0":
-  version: 3.2.0
-  resolution: "@airgram/constants@npm:3.2.0"
-  checksum: 7e6b8690c49599ff9064ea06d29d702c93bac4c58a8fa5057566fb90d4d1024fa40072175ad28be42d12f38896fb223d5bbed57435ae5790e70aaab2a5ade3bb
-  languageName: node
-  linkType: hard
-
-"@airgram/core@npm:^4.1.0":
-  version: 4.1.0
-  resolution: "@airgram/core@npm:4.1.0"
-  checksum: c789c68f20b0947a5003ca48ad134031204d1280bf2e6639f45f2da3e28bb0277a0441d654d56cf28bbfc90e7cb9461e2085a503eff3fcf15a7cd2697f93da81
+"@airgram/core@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "@airgram/core@npm:5.0.0"
+  checksum: c235da530b9c6d855739b09e4441fb6b26fe4026daa5e6e836ec342b400b4b4c9370f8d2736652810a8c876ef61234ec9d940f00601c90b88d39edf3e027b60d
   languageName: node
   linkType: hard
 
@@ -1635,7 +1628,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@textshq/platform-telegram@workspace:."
   dependencies:
-    "@airgram/constants": ^3.1.0
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk"
     "@types/bluebird": ^3.5.33
@@ -1644,7 +1636,7 @@ __metadata:
     "@types/react": 17.0.2
     "@types/react-phone-number-input": ^3.0.13
     "@types/rimraf": ^3.0.0
-    airgram: ^4.0.0
+    airgram: ^5.0.0
     bluebird: ^3.7.2
     date-fns: ^2.27.0
     eslint: ^7.21.0
@@ -2049,14 +2041,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"airgram@npm:^4.0.0":
-  version: 4.2.0
-  resolution: "airgram@npm:4.2.0"
+"airgram@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "airgram@npm:5.0.0"
   dependencies:
-    "@airgram/constants": ^3.2.0
-    "@airgram/core": ^4.1.0
+    "@airgram/constants": ^4.0.0
+    "@airgram/core": ^5.0.0
     ffi-napi: ^3.0.0
-  checksum: 2e8173f4fef69ada48d3e49318571c02873243a5c07f6704377b53dfaa628b7751e8f95b103f301e6527539e7142124f6673452d474f494d65496aaaca576c55
+  checksum: ac43757d19d5b16ff62e7a9e5ce2621a0187f1579646c6dbfe2451263434be7ad1654b6a3c92a21c8380333c697162ba6c04c9d47c16061e69f85ec8641429c0
   languageName: node
   linkType: hard
 
