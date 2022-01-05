@@ -545,18 +545,17 @@ export function mapUser(user: TGUser, accountID: string): User {
 export function mapUserPresence(userId: number, status: UserStatusUnion): UserPresenceEvent {
   const presence: UserPresence = {
     userID: userId.toString(),
-    isActive: false,
     lastActive: null,
     status: null,
   }
   const oneDay = 24 * 3600 * 1000
   switch (status._) {
     case USER_STATUS.userStatusOnline:
-      presence.isActive = true
+      presence.status = 'online'
       presence.lastActive = new Date()
       break
     case USER_STATUS.userStatusRecently:
-      presence.isActive = true
+      presence.status = 'online'
       presence.lastActive = new Date(Date.now() - 3600 * 1000)
       break
     // case USER_STATUS.userStatusOffline:
@@ -568,10 +567,11 @@ export function mapUserPresence(userId: number, status: UserStatusUnion): UserPr
     case USER_STATUS.userStatusLastMonth:
       presence.lastActive = new Date(Date.now() - 30 * oneDay)
       break
-  }
-  return {
-    type: ServerEventType.USER_PRESENCE_UPDATED,
-    presence,
+    default:
+      return {
+        type: ServerEventType.USER_PRESENCE_UPDATED,
+        presence,
+      }
   }
 }
 
