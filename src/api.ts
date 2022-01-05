@@ -229,8 +229,9 @@ export default class TelegramAPI implements PlatformAPI {
         await this.afterLogin()
         return { type: 'success' }
       }
+      default:
+        return { type: 'error', errorMessage: this.authState._ }
     }
-    return { type: 'error', errorMessage: this.authState._ }
   }
 
   private onUpdateNewMessage = (tgMessage: TGMessage) => {
@@ -252,7 +253,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private asyncMapThread = async (chat: Chat) => {
-    const isSuperGroup = chat.type._ == 'chatTypeSupergroup'
+    const isSuperGroup = chat.type._ === 'chatTypeSupergroup'
     const participants: TGUser[] = isSuperGroup ? [] : await this._getParticipants(chat)
 
     const thread = mapThread(chat, participants, this.accountInfo.accountID)

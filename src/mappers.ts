@@ -84,8 +84,10 @@ function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttribut
             to,
             mentionedUser: { id: String(e.type.userId) },
           }
+
+        default:
+          return undefined
       }
-      return undefined
     }).filter(Boolean)),
   }
 }
@@ -102,6 +104,7 @@ function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion, accountID: string,
     // case 'inlineKeyboardButtonTypeCallbackGame':
     // case 'inlineKeyboardButtonTypeCallbackWithPassword':
     //   return 'texts://platform-callback/' + row.data
+    default:
   }
 }
 
@@ -123,6 +126,7 @@ export function getMessageButtons(replyMarkup: ReplyMarkupUnion, accountID: stri
         }
         return undefined // todo
       })).filter(Boolean)
+    default:
   }
 }
 
@@ -178,6 +182,20 @@ export function mapMessageUpdateText(messageID: string, newContent: MessageConte
   }
 }
 
+function mapCallReason(discardReason: CallDiscardReasonUnion) {
+  switch (discardReason._) {
+    case 'callDiscardReasonMissed':
+      return 'Missed'
+    case 'callDiscardReasonDeclined':
+      return 'Declined'
+    case 'callDiscardReasonDisconnected':
+      return 'Disconnected'
+    case 'callDiscardReasonHungUp':
+      return 'Hung up'
+    default:
+      return ''
+  }
+}
 export function mapMessage(msg: TGMessage, accountID: string, chat?: Chat) {
   const mapped: Message = {
     _original: JSON.stringify(msg),
@@ -367,6 +385,7 @@ export function mapMessage(msg: TGMessage, accountID: string, chat?: Chat) {
           case 'diceStickersSlotMachine':
             mapped.textHeading = `Slot Machine: ${msg.content.value}`
             break
+          default:
         }
       }
       switch (msg.content.finalState?._) {
@@ -380,6 +399,7 @@ export function mapMessage(msg: TGMessage, accountID: string, chat?: Chat) {
           pushSticker(msg.content.finalState.rightReel, false)
           pushSticker(msg.content.finalState.lever, false)
           break
+        default:
       }
       break
     case 'messagePoll': {
@@ -391,23 +411,10 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
     }
 
     case 'messageCall':
-      function mapReason(discardReason: CallDiscardReasonUnion) {
-        switch (discardReason._) {
-          case 'callDiscardReasonMissed':
-            return 'Missed'
-          case 'callDiscardReasonDeclined':
-            return 'Declined'
-          case 'callDiscardReasonDisconnected':
-            return 'Disconnected'
-          case 'callDiscardReasonHungUp':
-            return 'Hung up'
-        }
-        return ''
-      }
       mapped.textHeading = [
         `${msg.content.isVideo ? '🎥 Video ' : '📞 '}Call`,
         msg.content.duration ? formatDuration({ seconds: msg.content.duration }) : '',
-        mapReason(msg.content.discardReason),
+        mapCallReason(msg.content.discardReason),
       ].filter(Boolean).join('\n')
       break
 
@@ -519,6 +526,8 @@ ${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `—
       break
     case 'messageUnsupported':
       mapped.textHeading = 'Unsupported Telegram message'
+      break
+    default:
   }
   return mapped
 }
