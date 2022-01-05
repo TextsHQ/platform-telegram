@@ -13,7 +13,8 @@
     }
   },
   "nativeDeps": {
-    "airgram": "^5.0.0"
+    "ffi-napi": "^4.0.3",
+    "ref-napi": "^3.0.3"
   },
   "dependencies": {
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk",
