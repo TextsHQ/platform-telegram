@@ -572,10 +572,10 @@ export function mapUserPresence(userId: number, status: UserStatusUnion): UserPr
       presence.lastActive = new Date(Date.now() - 30 * oneDay)
       break
     default:
-      return {
-        type: ServerEventType.USER_PRESENCE_UPDATED,
-        presence,
-      }
+  }
+  return {
+    type: ServerEventType.USER_PRESENCE_UPDATED,
+    presence,
   }
 }
 
