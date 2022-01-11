@@ -150,24 +150,32 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.accountInfo = accountInfo
     this.session = session || { dbKey: crypto.randomBytes(32).toString('hex') }
-    this.conn = new Airgram({
-      databaseEncryptionKey: this.session.dbKey,
-      apiId: API_ID,
-      apiHash: API_HASH,
-      command: tdlibPath,
-      // deviceModel: undefined,
-      applicationVersion: texts.constants.APP_VERSION,
-      systemVersion: `${os.platform()} ${os.release()}`,
-      logVerbosityLevel: texts.IS_DEV ? 2 : 0,
-      useFileDatabase: true,
-      useChatInfoDatabase: true,
-      useMessageDatabase: true,
-      useSecretChats: true,
-      enableStorageOptimizer: true,
-      ignoreFileNames: false,
-      databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
-      filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
-    })
+    try {
+      this.conn = new Airgram({
+        databaseEncryptionKey: this.session.dbKey,
+        apiId: API_ID,
+        apiHash: API_HASH,
+        command: tdlibPath,
+        // deviceModel: undefined,
+        applicationVersion: texts.constants.APP_VERSION,
+        systemVersion: `${os.platform()} ${os.release()}`,
+        logVerbosityLevel: texts.IS_DEV ? 2 : 0,
+        useFileDatabase: true,
+        useChatInfoDatabase: true,
+        useMessageDatabase: true,
+        useSecretChats: true,
+        enableStorageOptimizer: true,
+        ignoreFileNames: false,
+        databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
+        filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
+      })
+    } catch (e) {
+      if (e.message.includes('Win32 error 126')) {
+        throw new Error('You don\'t appear to have the required components for this platform integration installed. Please install Microsoft Visual C++ Redistributable from https://aka.ms/vs/17/release/vc_redist.x64.exe')
+      }
+      throw e
+    }
+
     this.conn.on(UPDATE.updateAuthorizationState, ({ update }) => {
       this.authState = update.authorizationState
       this.loginEventCallback?.(update.authorizationState._)
