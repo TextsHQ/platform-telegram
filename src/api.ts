@@ -2,6 +2,7 @@
 // eslint-disable-next-line
 // import { copyDLLsForWindows, IS_WINDOWS } from './windows'
 import path from 'path'
+import url from 'url'
 import os from 'os'
 import crypto from 'crypto'
 import { promises as fs } from 'fs'
@@ -372,7 +373,7 @@ export default class TelegramAPI implements PlatformAPI {
       const resolve = this.getAssetResolvers.get(fileID)
       if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', fileID)
       if (update.file.local.isDownloadingCompleted && update.file.local.path) {
-        const filePath = `file://${encodeURI(update.file.local.path)}`
+        const filePath = url.pathToFileURL(update.file.local.path).toString()
         this.fileIdToPath.set(fileID, filePath)
         resolve(filePath)
         this.getAssetResolvers.delete(fileID)
