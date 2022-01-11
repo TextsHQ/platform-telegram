@@ -381,7 +381,7 @@ export default class TelegramAPI implements PlatformAPI {
       const resolve = this.getAssetResolvers.get(fileID)
       if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', fileID)
       if (update.file.local.isDownloadingCompleted && update.file.local.path) {
-        const filePath = url.pathToFileURL(update.file.local.path).toString()
+        const filePath = url.pathToFileURL(update.file.local.path).href
         this.fileIdToPath.set(fileID, filePath)
         resolve(filePath)
         this.getAssetResolvers.delete(fileID)

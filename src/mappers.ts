@@ -132,10 +132,10 @@ export function getMessageButtons(replyMarkup: ReplyMarkupUnion, accountID: stri
 }
 
 const getAssetURL = (file: File) =>
-  (file.local.path ? url.pathToFileURL(file.local.path).toString() : `asset://$accountID/file/${file.id}`)
+  (file.local.path ? url.pathToFileURL(file.local.path).href : `asset://$accountID/file/${file.id}`)
 
 const getAssetURLWithAccountID = (accountID: string, file: File) =>
-  (file.local.path ? url.pathToFileURL(file.local.path).toString() : `asset://${accountID}/file/${file.id}`)
+  (file.local.path ? url.pathToFileURL(file.local.path).href : `asset://${accountID}/file/${file.id}`)
 
 function mapLinkImg(photo: Photo): Partial<MessageLink> {
   if (photo.sizes.length < 1) return
