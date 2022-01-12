@@ -169,11 +169,11 @@ export default class TelegramAPI implements PlatformAPI {
         databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
         filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
       })
-    } catch (e) {
-      if (e.message.includes('Win32 error 126')) {
-        throw new Error('You don\'t appear to have the required components for this platform integration installed. Please install Microsoft Visual C++ Redistributable from https://aka.ms/vs/17/release/vc_redist.x64.exe')
+    } catch (err) {
+      if (err.message.includes('Win32 error 126')) {
+        throw new Error("Microsoft Visual C++ Redistributable isn't installed. Please install it from https://texts.com/msvcrt")
       }
-      throw e
+      throw err
     }
 
     this.conn.on(UPDATE.updateAuthorizationState, ({ update }) => {
