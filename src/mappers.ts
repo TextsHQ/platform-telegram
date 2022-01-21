@@ -1,16 +1,14 @@
-import url from 'url'
-import { Message, Thread, User, MessageAttachmentType, MessageActionType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent } from '@textshq/platform-sdk'
-import { CHAT_TYPE, USER_STATUS } from '@airgram/constants'
-import { formatDuration, addSeconds } from 'date-fns'
-import type { Chat, Message as TGMessage, TextEntity as TGTextEntity, User as TGUser, FormattedText, File, ReplyMarkupUnion, InlineKeyboardButtonTypeUnion, Photo, WebPage, UserStatusUnion, Sticker, CallDiscardReasonUnion, MessageInteractionInfo, MessageContentUnion, UpdateChatAction } from 'airgram'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType } from '@textshq/platform-sdk'
+import { addSeconds } from 'date-fns'
+import { Api } from 'telegram/tl'
+import type { CustomMessage } from 'telegram/tl/custom/message'
+import type { BigInteger } from 'big-integer'
+import { getPeerId } from 'telegram/Utils'
+import type { Dialog } from 'telegram/tl/custom/dialog'
+import { inspect } from 'util'
 import { MUTED_FOREVER_CONSTANT } from './constants'
+import { getAssetURL, saveAsset } from './util'
 
-/**
- * The offset of TGTextEntity is in UTF-16 code units, transform it to be in
- * characters. An example: for text "👍@user👍"
- *   before: { from: 2, to: 7 }
- *   after: { from: 1, to: 6 }
- */
 function transformOffset(text: string, entities: TextEntity[]) {
   const arr = Array.from(text)
   let strCursor = 0
@@ -36,71 +34,71 @@ function fixLinkProtocol(link: string) {
   }
 }
 
-function mapTextAttributes(text: string, entities: TGTextEntity[]): TextAttributes {
+function mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes {
   if (!entities || entities.length === 0) return
   return {
     entities: transformOffset(text, entities.map<TextEntity>(e => {
       const from = e.offset
       const to = e.offset + e.length
-      switch (e.type._) {
-        case 'textEntityTypeBold':
+      switch (e.className) {
+        case 'MessageEntityBold':
           return { from, to, bold: true }
 
-        case 'textEntityTypeItalic':
+        case 'MessageEntityItalic':
           return { from, to, italic: true }
 
-        case 'textEntityTypeStrikethrough':
+        case 'MessageEntityStrike':
           return { from, to, strikethrough: true }
 
-        case 'textEntityTypeUnderline':
+        case 'MessageEntityUnderline':
           return { from, to, underline: true }
 
-        case 'textEntityTypePre':
+        case 'MessageEntityPre':
           return { from, to, pre: true }
 
-        case 'textEntityTypeCode':
+        case 'MessageEntityCode':
           return { from, to, code: true }
 
-        case 'textEntityTypeSpoiler':
+        case 'MessageEntitySpoiler':
           return { from, to, spoiler: true }
 
-        case 'textEntityTypePreCode':
-          return { from, to, codeLanguage: e.type.language }
-
-        case 'textEntityTypeUrl': {
+        case 'MessageEntityUrl':
+        {
           const link = text.slice(from, to)
           return { from, to, link: fixLinkProtocol(link) }
         }
 
-        case 'textEntityTypeTextUrl':
-          if (e.type.url) return { from, to, link: e.type.url }
+        case 'MessageEntityTextUrl':
+        {
+          if (e.url) return { from, to, link: e.url }
           break
+        }
 
-        case 'textEntityTypeMention':
+        case 'MessageEntityMention':
           return { from, to, mentionedUser: { username: text.slice(from, to) } } as TextEntity
 
-        case 'textEntityTypeMentionName':
+        case 'MessageEntityMentionName':
           return {
             from,
             to,
-            mentionedUser: { id: String(e.type.userId) },
+            mentionedUser: { id: String(e.userId) },
           }
-
         default:
-          return undefined
+          return { from, to }
       }
+      return undefined
     }).filter(Boolean)),
   }
 }
 
-function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion, accountID: string, chatID: number, messageID: number) {
-  switch (row._) {
-    case 'inlineKeyboardButtonTypeUrl':
-    case 'inlineKeyboardButtonTypeLoginUrl':
+function getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, chatID: number, messageID: number) {
+  switch (row.className) {
+    case 'KeyboardButtonUrl':
+    case 'KeyboardButtonUrlAuth':
       return row.url
-    case 'inlineKeyboardButtonTypeSwitchInline':
+    case 'KeyboardButtonSwitchInline':
       return 'texts://fill-textarea?text=' + encodeURIComponent(row.query)
-    case 'inlineKeyboardButtonTypeCallback':
+    case 'KeyboardButtonCallback':
       return `texts://platform-callback/${accountID}/callback/${chatID}/${messageID}/${'data' in row ? row.data : ''}`
     // case 'inlineKeyboardButtonTypeCallbackGame':
     // case 'inlineKeyboardButtonTypeCallbackWithPassword':
@@ -109,17 +107,17 @@ function getButtonLinkURL(row: InlineKeyboardButtonTypeUnion, accountID: string,
   }
 }
 
-export function getMessageButtons(replyMarkup: ReplyMarkupUnion, accountID: string, chatID: number, messageID: number) {
+export function getMessageButtons(replyMarkup: Api.TypeReplyMarkup, accountID: string, chatID: number, messageID: number) {
   if (!replyMarkup) return
-  switch (replyMarkup._) {
-    case 'replyMarkupInlineKeyboard':
-      return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => ({
+  switch (replyMarkup.className) {
+    case 'ReplyInlineMarkup':
+      return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => ({
         label: row.text,
-        linkURL: getButtonLinkURL(row.type, accountID, chatID, messageID),
+        linkURL: getButtonLinkURL(row, accountID, chatID, messageID),
       })))
-    case 'replyMarkupShowKeyboard':
-      return replyMarkup.rows.flatMap<MessageButton>(rows => rows.map(row => {
-        if (row.type._ === 'keyboardButtonTypeText') {
+    case 'ReplyKeyboardMarkup':
+      return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
+        if (row.className === 'KeyboardButtonSwitchInline') {
           return {
             label: row.text,
             linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text), // todo: should actually be sent on clicking instantly
@@ -131,267 +129,243 @@ export function getMessageButtons(replyMarkup: ReplyMarkupUnion, accountID: stri
   }
 }
 
-const getAssetURL = (file: File) =>
-  (file.local.path ? url.pathToFileURL(file.local.path).href : `asset://$accountID/file/${file.id}`)
-
-const getAssetURLWithAccountID = (accountID: string, file: File) =>
-  (file.local.path ? url.pathToFileURL(file.local.path).href : `asset://${accountID}/file/${file.id}`)
-
-function mapLinkImg(photo: Photo): Partial<MessageLink> {
-  if (photo.sizes.length < 1) return
-  const photoSize = photo.sizes.slice(-1)[0] // last image should be biggest
-  const { width, height } = photoSize
-  const imgSize = { width, height }
-  const file = photoSize.photo
-  const img = getAssetURL(file)
-  return { img, imgSize }
+const getAssetUrl = async (id: BigInteger, messageId: number) => {
+  const assetPath = await getAssetURL(id.toString())
+  if (assetPath) return assetPath
+  return `asset://$accountID/media/${messageId}/${id}`
 }
 
-function mapMessageLink(webPage: WebPage) {
-  const { url, displayUrl, title, description, photo } = webPage
+const getProfilePhotoUrl = async (id: BigInteger) => {
+  const assetPath = await getAssetURL(id.toString())
+  if (assetPath) return assetPath
+  return `asset://$accountID/profile/${id}/${id}`
+}
+async function mapLinkImg(photo: Api.Photo, messageId: number): Promise<Partial<MessageLink>> {
+  if (photo.sizes.length < 1) return
+  const photoSize = photo.sizes.slice(-1)[0]
+  if (photoSize.className === 'PhotoSize') {
+    const { w, h } = photoSize
+    const imgSize = { width: w, height: h }
+    const file = photo
+
+    const img = await getAssetUrl(file.id, messageId)
+    return { img, imgSize }
+  }
+}
+
+function mapMessageLink(webPage: Api.WebPage, messageId: number) {
+  const { url: originalURL, displayUrl, title, description, photo } = webPage
   const link: MessageLink = {
     url: displayUrl,
-    originalURL: url,
+    originalURL,
     title,
-    summary: description.text,
+    summary: description,
     img: undefined,
     imgSize: undefined,
   }
-  if (photo) Object.assign(link, mapLinkImg(photo))
+  if (photo instanceof Api.Photo) Object.assign(link, mapLinkImg(photo, messageId))
   return link
 }
 
-function* getTextFooter(interactionInfo: MessageInteractionInfo) {
-  if (interactionInfo?.viewCount) yield `${interactionInfo!.viewCount.toLocaleString()} ${interactionInfo!.viewCount === 1 ? 'view' : 'views'}`
-  if (interactionInfo?.forwardCount) yield `${interactionInfo!.forwardCount.toLocaleString()} ${interactionInfo!.forwardCount === 1 ? 'forward' : 'forwards'}`
+function* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {
+  if (interactionInfo?.views) yield `${interactionInfo!.views.toLocaleString()} ${interactionInfo!.views === 1 ? 'view' : 'views'}`
+  if (interactionInfo?.forwards) yield `${interactionInfo!.forwards.toLocaleString()} ${interactionInfo!.forwards === 1 ? 'forward' : 'forwards'}`
 }
 
-export const mapTextFooter = (interactionInfo: MessageInteractionInfo) => [...getTextFooter(interactionInfo)].join(' · ')
+export const mapTextFooter = (interactionInfo: Api.MessageInteractionCounters) => [...getTextFooter(interactionInfo)].join(' · ')
 
-function getSenderID(msg: TGMessage) {
-  if (msg.senderId._ === 'messageSenderUser') return msg.senderId.userId
-  return msg.senderId.chatId === msg.chatId ? '$thread' : `$thread_${msg.senderId.chatId}`
-}
+export const getSenderID = (msg: CustomMessage) => msg.senderId
 
-export function mapMessageUpdateText(messageID: string, newContent: MessageContentUnion) {
-  if (newContent._ !== 'messageText') return
-  return {
-    id: messageID,
-    text: newContent.text.text,
-    textAttributes: mapTextAttributes(newContent.text.text, newContent.text.entities),
-    links: newContent.webPage ? [mapMessageLink(newContent.webPage)] : undefined,
+export function mapMessageUpdateText(messageID: string, newContent: Api.Message) {
+  if ('text' in newContent) {
+    return {
+      id: messageID,
+      text: newContent.text,
+      textAttributes: mapTextAttributes(newContent.text, newContent.entities),
+      links: 'webpage' in newContent.media && newContent.media.webpage instanceof Api.WebPage
+        ? [mapMessageLink(newContent.media.webpage, Number(messageID))]
+        : undefined,
+    }
   }
 }
 
-function mapCallReason(discardReason: CallDiscardReasonUnion) {
-  switch (discardReason._) {
-    case 'callDiscardReasonMissed':
-      return 'Missed'
-    case 'callDiscardReasonDeclined':
-      return 'Declined'
-    case 'callDiscardReasonDisconnected':
-      return 'Disconnected'
-    case 'callDiscardReasonHungUp':
-      return 'Hung up'
-    default:
-      return ''
+function mapCallReason(discardReason: Api.TypePhoneCallDiscardReason) {
+  if (discardReason instanceof Api.PhoneCallDiscardReasonMissed) {
+    return 'Missed'
+  } if (discardReason instanceof Api.PhoneCallDiscardReasonBusy) {
+    return 'Declined'
+  } if (discardReason instanceof Api.PhoneCallDiscardReasonDisconnect) {
+    return 'Disconnected'
+  } if (discardReason instanceof Api.PhoneCallDiscardReasonHangup) {
+    return 'Hung up'
   }
+  return ''
 }
-export function mapMessage(msg: TGMessage, accountID: string, chat?: Chat) {
+export async function mapMessage(msg: CustomMessage, accountID: string) {
   const mapped: Message = {
-    _original: JSON.stringify(msg),
+    _original: inspect(msg),
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
-    forwardedCount: msg.forwardInfo?.date ? 1 : undefined,
-    textFooter: mapTextFooter(msg.interactionInfo),
+    forwardedCount: msg.forwards,
     textAttributes: undefined,
     senderID: String(getSenderID(msg)),
-    isSender: msg.isOutgoing,
+    isSender: msg.out,
     attachments: undefined,
-    isErrored: msg.sendingState?._ === 'messageSendingStateFailed',
-    isDelivered: msg.sendingState?._ === 'messageSendingStatePending',
-    linkedMessageID: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
-    buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId, msg.id),
-    expiresInSeconds: msg.ttlExpiresIn,
-    seen: chat ? (msg.id <= chat.lastReadOutboxMessageId) : undefined, // https://github.com/tdlib/td/issues/1034#issuecomment-625245114
+    linkedMessageID: msg.replyTo ? String(msg.replyToMsgId) : undefined,
+    buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId.toJSNumber(), msg.id),
+    expiresInSeconds: msg.ttlPeriod,
   }
-  const setFormattedText = (ft: FormattedText) => {
-    mapped.text = ft.text
-    mapped.textAttributes = mapTextAttributes(ft.text, ft.entities)
+  const setFormattedText = (msgText: string, msgEntities: Api.TypeMessageEntity[]) => {
+    mapped.text = msgText
+    mapped.textAttributes = mapTextAttributes(msgText, msgEntities)
   }
-  const pushSticker = (sticker: Sticker, loop: boolean = undefined, width = sticker.width, height = sticker.height) => {
+  const pushSticker = async (sticker: Api.Document, messageId : number) => {
+    const sizeAttribute = sticker.attributes.find(a => a.className === 'DocumentAttributeImageSize')?.[0]
+    const size = sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined
+    const animatedAttributes = sticker.attributes.find(a => a.className === 'DocumentAttributeAnimated')
     mapped.attachments = mapped.attachments || []
     mapped.attachments.push({
-      id: String(sticker.sticker.id),
-      srcURL: getAssetURL(sticker.sticker),
-      mimeType: sticker.isAnimated ? 'image/tgs' : undefined,
+      id: sticker.id.toString(),
+      srcURL: await getAssetUrl(sticker.id, messageId),
+      mimeType: animatedAttributes ? 'image/tgs' : undefined,
       type: MessageAttachmentType.IMG,
       isGif: true,
       isSticker: true,
-      size: { width, height },
+      size,
       extra: {
-        loop,
       },
     })
   }
-  switch (msg.content._) {
-    case 'messageText':
-      setFormattedText(msg.content.text)
-      if (msg.content.webPage) {
-        mapped.links = [mapMessageLink(msg.content.webPage)]
-      }
-      break
 
-    case 'messagePhoto': {
-      setFormattedText(msg.content.caption)
-      const photo = msg.content.photo.sizes.slice(-1)[0]
-      mapped.attachments = mapped.attachments || []
+  if (msg.text) {
+    setFormattedText(msg.rawText, msg.entities)
+    if (msg.webPreview) {
+      mapped.links = [mapMessageLink(msg.webPreview, msg.id)]
+    }
+  } if (msg.photo instanceof Api.Photo) {
+    const { photo } = msg
+    mapped.attachments = mapped.attachments || []
+    if (photo.sizes[0].className === 'PhotoSize') {
       mapped.attachments.push({
-        id: String(photo.photo.id),
-        srcURL: getAssetURL(photo.photo),
+        id: String(photo.id),
+        srcURL: await getAssetUrl(photo.id, msg.id),
         type: MessageAttachmentType.IMG,
-        size: { width: photo.width, height: photo.height },
+        size: photo.sizes ? { width: photo.sizes[0].w, height: photo.sizes[0].h } : undefined,
       })
-      break
     }
-    case 'messageVideo': {
-      setFormattedText(msg.content.caption)
-      const { video } = msg.content
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: String(video.video.id),
-        srcURL: getAssetURL(video.video),
-        type: MessageAttachmentType.VIDEO,
-        fileName: video.fileName,
-        mimeType: video.mimeType,
-        size: { width: video.width, height: video.height },
-      })
-      break
-    }
-    case 'messageAudio': {
-      setFormattedText(msg.content.caption)
-      const { audio } = msg.content
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: String(audio.audio.id),
-        srcURL: getAssetURL(audio.audio),
-        type: MessageAttachmentType.AUDIO,
-        fileName: audio.fileName,
-        mimeType: audio.mimeType,
-      })
-      break
-    }
-    case 'messageDocument': {
-      setFormattedText(msg.content.caption)
-      const { document } = msg.content
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: String(document.document.id),
-        type: MessageAttachmentType.UNKNOWN,
-        srcURL: getAssetURL(document.document),
-        fileName: document.fileName,
-        mimeType: document.mimeType,
-        fileSize: document.document.size === 0 ? document.document.expectedSize : document.document.size,
-      })
-      break
-    }
-    case 'messageVideoNote': {
-      const { videoNote } = msg.content
-      mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: String(videoNote.video.id),
-        srcURL: getAssetURL(videoNote.video),
-        type: MessageAttachmentType.VIDEO,
-      })
-      break
-    }
-    case 'messageVoiceNote': {
-      setFormattedText(msg.content.caption)
-      const { voiceNote } = msg.content
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: String(voiceNote.voice.id),
-        srcURL: getAssetURL(voiceNote.voice),
-        type: MessageAttachmentType.AUDIO,
-      })
-      break
-    }
-    case 'messageAnimation': {
-      setFormattedText(msg.content.caption)
-      const { animation } = msg.content
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: String(animation.animation.id),
-        srcURL: getAssetURL(animation.animation),
-        type: MessageAttachmentType.VIDEO,
-        isGif: true,
-        fileName: animation.fileName,
-        mimeType: animation.mimeType,
-        size: { width: animation.width, height: animation.height },
-      })
-      break
-    }
-    case 'messageSticker': {
-      const { sticker } = msg.content
-      pushSticker(sticker)
-      break
-    }
-    case 'messageContact': {
-      const { contact } = msg.content
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: String(contact.userId),
-        type: MessageAttachmentType.UNKNOWN,
-        data: Buffer.from(contact.vcard, 'utf-8'),
-        fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
-      })
-      break
-    }
-    case 'messageLocation': {
-      const { location } = msg.content
+  } if (msg.video instanceof Api.Document) {
+    const { video } = msg
+    mapped.attachments = mapped.attachments || []
+    mapped.attachments.push({
+      id: String(video.id),
+      srcURL: await getAssetUrl(video.id, msg.id),
+      type: MessageAttachmentType.VIDEO,
+      fileName: video.accessHash.toString(),
+      mimeType: video.mimeType,
+      size: video.videoThumbs ? { width: video.videoThumbs[0].w, height: video.videoThumbs[0].h } : undefined,
+    })
+  } if (msg.audio instanceof Api.Document) {
+    const { audio } = msg
+    mapped.attachments = mapped.attachments || []
+    mapped.attachments.push({
+      id: String(audio.id),
+      srcURL: await getAssetUrl(audio.id, msg.id),
+      type: MessageAttachmentType.AUDIO,
+      fileName: audio.accessHash.toString(),
+      mimeType: audio.mimeType,
+    })
+  } if (msg.document instanceof Api.Document) {
+    const { document } = msg
+    mapped.attachments = mapped.attachments || []
+    const fileName = (document.attributes.find(f => f instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename)?.fileName
+      ?? document.accessHash.toString()
+    mapped.attachments.push({
+      id: String(document.id),
+      type: MessageAttachmentType.UNKNOWN,
+      srcURL: await getAssetUrl(document.id, msg.id),
+      fileName,
+      mimeType: document.mimeType,
+      fileSize: document.size,
+    })
+  } if (msg.videoNote instanceof Api.Document) {
+    const { videoNote } = msg
+    mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
+    mapped.attachments = mapped.attachments || []
+    mapped.attachments.push({
+      id: String(videoNote.id),
+      srcURL: await getAssetUrl(videoNote.id, msg.id),
+      type: MessageAttachmentType.VIDEO,
+    })
+  } if (msg.voice instanceof Api.Document) {
+    const { voice } = msg
+    mapped.attachments = mapped.attachments || []
+    mapped.attachments.push({
+      id: String(voice.id),
+      srcURL: await getAssetUrl(voice.id, msg.id),
+      type: MessageAttachmentType.AUDIO,
+    })
+  } if (msg.gif instanceof Api.Document) {
+    const animation = msg.gif
+    mapped.attachments = mapped.attachments || []
+    const size = animation.thumbs[0] as Api.PhotoSize
+    mapped.attachments.push({
+      id: String(animation.id),
+      srcURL: await getAssetUrl(animation.id, msg.id),
+      type: MessageAttachmentType.VIDEO,
+      isGif: true,
+      fileName: animation.accessHash.toString(),
+      mimeType: animation.mimeType,
+      size: { width: size.w, height: size.h },
+    })
+  } if (msg.sticker instanceof Api.Document) {
+    pushSticker(msg.sticker, msg.id)
+  } else if (msg.contact) {
+    const { contact } = msg
+    mapped.attachments = mapped.attachments || []
+    mapped.attachments.push({
+      id: String(contact.userId),
+      type: MessageAttachmentType.UNKNOWN,
+      data: Buffer.from(contact.vcard, 'utf-8'),
+      fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
+    })
+  } if (msg.geo instanceof Api.GeoPoint) {
+    const location = msg.geo
+    if (mapped.textHeading) mapped.textHeading += '\n'
+    else mapped.textHeading = ''
+    mapped.textHeading += '📍 Location'
+    mapped.text = `https://www.google.com/maps?q=${location.lat},${location.long}`
+  } else if (msg.venue instanceof Api.MessageMediaVenue) {
+    const { venue } = msg
+    mapped.textHeading = '📍 Venue'
+    mapped.text = [
+      venue.title,
+      venue.address,
+      venue.geo instanceof Api.GeoPoint ? `https://www.google.com/maps?q=${venue.geo.lat},${venue.geo.long}` : '',
+    ].join('\n')
+  } if (msg.dice instanceof Api.MessageMediaDice) {
+    /* TODO
       if (mapped.textHeading) mapped.textHeading += '\n'
       else mapped.textHeading = ''
-      mapped.textHeading += msg.content.livePeriod ? '📍 Live Location' : '📍 Location'
-      mapped.text = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
-      break
-    }
-    case 'messageVenue': {
-      const { venue } = msg.content
-      mapped.textHeading = '📍 Venue'
-      mapped.text = [
-        venue.title,
-        venue.address,
-        `https://www.google.com/maps?q=${venue.location.latitude},${venue.location.longitude}`,
-      ].join('\n')
-      break
-    }
-    case 'messageAnimatedEmoji': {
-      pushSticker(msg.content.animatedEmoji.sticker, undefined, 100, 100)
-      break
-    }
-    case 'messageDice':
-      if (mapped.textHeading) mapped.textHeading += '\n'
-      else mapped.textHeading = ''
-      if (msg.content.finalState?._) {
+      if (msg.dice.emoticon) {
         mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
       } else {
-        mapped.text = msg.content.emoji
-        switch (msg.content.initialState?._) {
+        mapped.text = msg.dice.emoticon
+        switch (msg.dice.emoticon) {
           case 'diceStickersRegular':
-            mapped.textHeading = `Dice: ${msg.content.value}`
+            mapped.textHeading = `Dice: ${msg.dice.value}`
             break
           case 'diceStickersSlotMachine':
-            mapped.textHeading = `Slot Machine: ${msg.content.value}`
+            mapped.textHeading = `Slot Machine: ${msg.dice.value}`
             break
           default:
+            break
         }
       }
-      switch (msg.content.finalState?._) {
+      switch (msg.dice.emoticon) {
         case 'diceStickersRegular':
-          pushSticker(msg.content.finalState.sticker, false, 100, 100)
+          pushSticker(msg.dice, false, 100, 100)
           break
         case 'diceStickersSlotMachine':
           pushSticker(msg.content.finalState.background, false)
@@ -399,180 +373,162 @@ export function mapMessage(msg: TGMessage, accountID: string, chat?: Chat) {
           pushSticker(msg.content.finalState.centerReel, false)
           pushSticker(msg.content.finalState.rightReel, false)
           pushSticker(msg.content.finalState.lever, false)
-          break
         default:
       }
-      break
-    case 'messagePoll': {
-      const { poll } = msg.content
-      mapped.textHeading = `${poll.isAnonymous ? 'Anonymous ' : ''}Poll
+      */
+  } if (msg.poll instanceof Api.MessageMediaPoll) {
+    const { poll } = msg
+    mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}Poll
 
-${poll.options.map(option => [option.text, option.isChosen ? '✔️' : '', `— ${option.votePercentage}%`, `(${option.voterCount})`].filter(Boolean).join('\t')).join('\n')}`
-      break
-    }
-
-    case 'messageCall':
+${poll.results.results.map(result => [poll.poll.answers.find(a => a.option === result.option).text, result.chosen ? '✔️' : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+  } if (msg instanceof Api.MessageService) {
+    if (msg.action instanceof Api.MessageActionPhoneCall) {
       mapped.textHeading = [
-        `${msg.content.isVideo ? '🎥 Video ' : '📞 '}Call`,
-        msg.content.duration ? formatDuration({ seconds: msg.content.duration }) : '',
-        mapCallReason(msg.content.discardReason),
+        `${msg.action.video ? '🎥 Video ' : '📞 '}Call`,
+        msg.action.duration ? msg.action.duration.toString() : '',
+        mapCallReason(msg.action.reason),
       ].filter(Boolean).join('\n')
-      break
-
-    case 'messagePinMessage':
+    } else if (msg.action instanceof Api.MessageActionPinMessage) {
       mapped.text = '{{sender}} pinned a message'
       mapped.isAction = true
       mapped.parseTemplate = true
-      break
-    case 'messageContactRegistered':
+    } else if (msg.action instanceof Api.MessageActionContactSignUp) {
       mapped.text = '{{sender}} joined Telegram'
       mapped.isAction = true
       mapped.parseTemplate = true
-      mapped.silent = true
-      break
-    case 'messageChatChangeTitle':
-      mapped.text = `{{sender}} changed the thread title to "${msg.content.title}"`
+    } else if (msg.action instanceof Api.MessageActionChatEditTitle) {
+      mapped.text = `{{sender}} changed the thread title to "${msg.action.title}"`
       mapped.isAction = true
       mapped.parseTemplate = true
       mapped.action = {
         type: MessageActionType.THREAD_TITLE_UPDATED,
-        title: msg.content.title,
+        title: msg.action.title,
         actorParticipantID: mapped.senderID,
       }
-      break
-    case 'messageChatAddMembers':
-      mapped.text = `${msg.content.memberUserIds.map(m => `{{${m}}}`).join(', ')} joined the group`
+    } else if (msg.action instanceof Api.MessageActionChatAddUser) {
+      mapped.text = `${msg.action.users.map(m => `{{${m}}}`).join(', ')} joined the group`
       mapped.isAction = true
       mapped.parseTemplate = true
       mapped.action = {
         type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-        participantIDs: msg.content.memberUserIds.map(num => String(num)),
+        participantIDs: msg.action.users.map(num => String(num)),
         actorParticipantID: undefined,
       }
-      break
-    case 'messageChatDeleteMember':
-      mapped.text = `{{${msg.content.userId}}} left the group`
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      mapped.action = {
-        type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
-        participantIDs: [String(msg.content.userId)],
-        actorParticipantID: undefined,
-      }
-      break
-    case 'messageChatJoinByLink':
-      mapped.text = '{{sender}} joined the group via invite link'
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      mapped.action = {
-        type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-        participantIDs: [mapped.senderID],
-        actorParticipantID: undefined,
-      }
-      break
-    case 'messageChatChangePhoto':
-      mapped.text = '{{sender}} updated the group photo'
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      mapped.action = {
-        type: MessageActionType.THREAD_IMG_CHANGED,
-        actorParticipantID: mapped.senderID,
-      }
-      break
-    case 'messageChatDeletePhoto':
-      mapped.text = '{{sender}} deleted the group photo'
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      mapped.action = {
-        type: MessageActionType.THREAD_IMG_CHANGED,
-        actorParticipantID: mapped.senderID,
-      }
-      break
-    case 'messageBasicGroupChatCreate':
-    case 'messageSupergroupChatCreate':
-      mapped.text = `{{sender}} created the group "${msg.content.title}"`
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      mapped.action = {
-        type: MessageActionType.GROUP_THREAD_CREATED,
-        actorParticipantID: mapped.senderID,
-        title: msg.content.title,
-      }
-      break
-    case 'messageChatUpgradeFrom':
-      mapped.text = `{{sender}} created the group "${msg.content.title}"`
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      break
-    case 'messageExpiredPhoto':
-      mapped.text = '{{sender}} sent a self-destructing photo.'
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      break
-    case 'messageExpiredVideo':
-      mapped.text = '{{sender}} sent a self-destructing video.'
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      break
-    case 'messageCustomServiceAction':
-      mapped.text = msg.content.text
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      break
-    case 'messagePaymentSuccessful':
-      mapped.text = `You have successfully transfered ${msg.content.currency} ${msg.content.totalAmount}`
-      mapped.linkedMessageID = String(msg.content.invoiceMessageId)
-      mapped.isAction = true
-      mapped.parseTemplate = true
-      break
-    case 'messageUnsupported':
+    } else {
       mapped.textHeading = 'Unsupported Telegram message'
-      break
-    default:
+    }
   }
   return mapped
+  /*
+      case 'messageChatDeleteMember':
+        mapped.text = `{{${msg.content.userId}}} left the group`
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        mapped.action = {
+          type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
+          participantIDs: [String(msg.content.userId)],
+          actorParticipantID: undefined,
+        }
+        break
+      case 'messageChatJoinByLink':
+        mapped.text = '{{sender}} joined the group via invite link'
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        mapped.action = {
+          type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+          participantIDs: [mapped.senderID],
+          actorParticipantID: undefined,
+        }
+        break
+      case 'messageChatChangePhoto':
+        mapped.text = '{{sender}} updated the group photo'
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        mapped.action = {
+          type: MessageActionType.THREAD_IMG_CHANGED,
+          actorParticipantID: mapped.senderID,
+        }
+        break
+      case 'messageChatDeletePhoto':
+        mapped.text = '{{sender}} deleted the group photo'
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        mapped.action = {
+          type: MessageActionType.THREAD_IMG_CHANGED,
+          actorParticipantID: mapped.senderID,
+        }
+        break
+      case 'messageBasicGroupChatCreate':
+      case 'messageSupergroupChatCreate':
+        mapped.text = `{{sender}} created the group "${msg.content.title}"`
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        mapped.action = {
+          type: MessageActionType.GROUP_THREAD_CREATED,
+          actorParticipantID: mapped.senderID,
+          title: msg.content.title,
+        }
+        break
+      case 'messageChatUpgradeFrom':
+        mapped.text = `{{sender}} created the group "${msg.content.title}"`
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        break
+      case 'messageExpiredPhoto':
+        mapped.text = '{{sender}} sent a self-destructing photo.'
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        break
+      case 'messageExpiredVideo':
+        mapped.text = '{{sender}} sent a self-destructing video.'
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        break
+      case 'messageCustomServiceAction':
+        mapped.text = msg.content.text
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        break
+      case 'messagePaymentSuccessful':
+        mapped.text = `You have successfully transfered ${msg.content.currency} ${msg.content.totalAmount}`
+        mapped.linkedMessageID = String(msg.content.invoiceMessageId)
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        break
+      }
+      */
 }
 
-export function mapUser(user: TGUser, accountID: string): User {
+export async function mapUser(user: Api.User): Promise<User> {
   if (!user) return
-  const file = user.profilePhoto?.small
-  const imgURL = file ? getAssetURLWithAccountID(accountID, file) : undefined
+  const imgURL = await getProfilePhotoUrl(user.id)
   return {
     id: user.id.toString(),
     username: user.username,
-    phoneNumber: user.phoneNumber ? '+' + user.phoneNumber : undefined,
-    isVerified: user.isVerified,
+    phoneNumber: user.phone ? '+' + user.phone : undefined,
+    isVerified: user.verified,
     fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     imgURL,
   }
 }
 
-export function mapUserPresence(userId: number, status: UserStatusUnion): UserPresenceEvent {
+export function mapUserPresence(userId: number, status: Api.TypeUserStatus): UserPresenceEvent {
   const presence: UserPresence = {
     userID: userId.toString(),
     lastActive: null,
     status: null,
   }
   const oneDay = 24 * 3600 * 1000
-  switch (status._) {
-    case USER_STATUS.userStatusOnline:
-      presence.status = 'online'
-      presence.lastActive = new Date()
-      break
-    case USER_STATUS.userStatusRecently:
-      presence.status = 'online'
-      presence.lastActive = new Date(Date.now() - 3600 * 1000)
-      break
-    // case USER_STATUS.userStatusOffline:
-    //   presence.lastActive = new Date(status.wasOnline * 1000)
-    //   break
-    case USER_STATUS.userStatusLastWeek:
-      presence.lastActive = new Date(Date.now() - 7 * oneDay)
-      break
-    case USER_STATUS.userStatusLastMonth:
-      presence.lastActive = new Date(Date.now() - 30 * oneDay)
-      break
-    default:
+  if (status instanceof Api.UserStatusOnline) {
+    presence.status = 'online'
+    presence.lastActive = new Date()
+  } else if (status instanceof Api.UserStatusRecently) {
+    presence.status = 'online'
+    presence.lastActive = new Date(Date.now() - 3600 * 1000)
+  } else if (status instanceof Api.UserStatusLastWeek) {
+    presence.lastActive = new Date(Date.now() - 7 * oneDay)
+  } else if (status instanceof Api.UserStatusLastMonth) {
+    presence.lastActive = new Date(Date.now() - 30 * oneDay)
   }
   return {
     type: ServerEventType.USER_PRESENCE_UPDATED,
@@ -586,20 +542,19 @@ export const mapMuteFor = (seconds: number) => {
   return addSeconds(new Date(), seconds)
 }
 
-export function mapThread(thread: Chat, members: TGUser[], accountID: string): Thread {
-  const messages = thread.lastMessage ? [mapMessage(thread.lastMessage, accountID, thread)] : []
-  const imgFile = thread.photo?.small
+export async function mapThread(dialog: Dialog, messages: Message[], members: Api.User[]): Promise<Thread> {
+  const imgFile = await getProfilePhotoUrl(dialog.id)
   const t: Thread = {
-    _original: JSON.stringify(thread),
-    id: String(thread.id),
-    type: (thread.type._ === CHAT_TYPE.chatTypeSecret || thread.type._ === CHAT_TYPE.chatTypePrivate) ? 'single' : 'group',
+    _original: inspect(dialog),
+    id: String(getPeerId(dialog.id)),
+    type: dialog instanceof Api.Chat ? 'single' : 'group',
     timestamp: messages[0]?.timestamp,
-    isUnread: thread.isMarkedAsUnread || thread.unreadCount > 0,
-    lastReadMessageID: String(Math.max(thread.lastReadInboxMessageId, thread.lastReadOutboxMessageId)),
-    isReadOnly: !thread.permissions.canSendMessages,
-    mutedUntil: mapMuteFor(thread.notificationSettings.muteFor),
-    imgURL: imgFile ? getAssetURLWithAccountID(accountID, imgFile) : undefined,
-    title: thread.title,
+    isUnread: dialog.unreadCount !== 0,
+    isReadOnly: false,
+    lastReadMessageID: String(Math.max(dialog.dialog.readInboxMaxId, dialog.dialog.readOutboxMaxId)),
+    mutedUntil: mapMuteFor(dialog.dialog.notifySettings.muteUntil),
+    imgURL: imgFile,
+    title: dialog.title,
     messages: {
       hasMore: true,
       oldestCursor: messages[0]?.id || '',
@@ -607,19 +562,20 @@ export function mapThread(thread: Chat, members: TGUser[], accountID: string): T
     },
     participants: {
       hasMore: false,
-      items: members.map(m => mapUser(m, accountID)),
+      items: await Promise.all(members.map(m => mapUser(m))),
     },
   }
   return t
 }
 
-export const mapMessages = (messages: TGMessage[], accountID: string, chat?: Chat) =>
-  messages.map(m => mapMessage(m, accountID, chat))
+export const mapMessages = async (messages: Api.Message[], accountID: string) =>
+  Promise.all(messages.map(m => mapMessage(m, accountID)))
 
 // https://github.com/evgeny-nadymov/telegram-react/blob/afd90f19b264895806359c23f985edccda828aca/src/Utils/Chat.js#L445
-export function mapUserAction(update: UpdateChatAction): UserActivityEvent {
-  const threadID = update.chatId.toString()
-  const participantID = update.senderId.toString()
+export function mapUserAction(update: Api.UpdateUserTyping): UserActivityEvent {
+  // TODO
+  const threadID = update.userId.toString()
+  const participantID = update.userId.toString()
   const customActivity = (customLabel: string): UserActivityEvent => ({
     type: ServerEventType.USER_ACTIVITY,
     threadID,
@@ -628,58 +584,52 @@ export function mapUserAction(update: UpdateChatAction): UserActivityEvent {
     customLabel,
     durationMs: 10 * 60_000, // 10 mins
   })
-  switch (update.action._) {
-    case 'chatActionTyping': {
-      return {
-        type: ServerEventType.USER_ACTIVITY,
-        threadID,
-        participantID,
-        activityType: ActivityType.TYPING,
-        durationMs: 3 * 60_000, // 3 mins
-      }
+  if (update.action instanceof Api.SendMessageTypingAction) {
+    return {
+      type: ServerEventType.USER_ACTIVITY,
+      threadID,
+      participantID,
+      activityType: ActivityType.TYPING,
+      durationMs: 3 * 60_000, // 3 mins
     }
-    case 'chatActionRecordingVoiceNote': {
-      return {
-        type: ServerEventType.USER_ACTIVITY,
-        threadID,
-        participantID,
-        activityType: ActivityType.RECORDING_VOICE,
-        durationMs: 5 * 60_000, // 5 mins
-      }
-    }
-    case 'chatActionRecordingVideo':
-    case 'chatActionRecordingVideoNote': {
-      return {
-        type: ServerEventType.USER_ACTIVITY,
-        threadID,
-        participantID,
-        activityType: ActivityType.RECORDING_VIDEO,
-        durationMs: 10 * 60_000, // 10 mins
-      }
-    }
-    case 'chatActionChoosingContact':
-      return customActivity('choosing contact')
-    case 'chatActionChoosingLocation':
-      return customActivity('choosing location')
-    case 'chatActionStartPlayingGame':
-      return customActivity('playing a game')
-    case 'chatActionUploadingDocument':
-      return customActivity('uploading a document' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
-    case 'chatActionUploadingPhoto':
-      return customActivity('uploading a photo' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
-    case 'chatActionUploadingVideo':
-      return customActivity('uploading a video' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
-    case 'chatActionUploadingVideoNote':
-      return customActivity('uploading a video note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
-    case 'chatActionUploadingVoiceNote':
-      return customActivity('uploading a voice note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
-    case 'chatActionCancel':
-      return {
-        type: ServerEventType.USER_ACTIVITY,
-        threadID,
-        participantID,
-        activityType: ActivityType.NONE,
-      }
-    default:
   }
+  if (update.action instanceof Api.SendMessageRecordAudioAction) {
+    return {
+      type: ServerEventType.USER_ACTIVITY,
+      threadID,
+      participantID,
+      activityType: ActivityType.RECORDING_VOICE,
+      durationMs: 5 * 60_000, // 5 mins
+    }
+  }
+  if (update.action instanceof Api.SendMessageRecordVideoAction) {
+    return {
+      type: ServerEventType.USER_ACTIVITY,
+      threadID,
+      participantID,
+      activityType: ActivityType.RECORDING_VIDEO,
+      durationMs: 10 * 60_000, // 10 mins
+    }
+  }
+  if (update.action instanceof Api.SendMessageChooseContactAction) { return customActivity('choosing contact') }
+  if (update.action instanceof Api.SendMessageGeoLocationAction) { return customActivity('choosing location') }
+  if (update.action instanceof Api.SendMessageGamePlayAction) return customActivity('playing a game')
+  if (update.action instanceof Api.SendMessageUploadDocumentAction) return customActivity('uploading a document' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+  if (update.action instanceof Api.SendMessageUploadPhotoAction) return customActivity('uploading a photo' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+  if (update.action instanceof Api.SendMessageUploadVideoAction) return customActivity('uploading a video' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+  if (update.action instanceof Api.SendMessageUploadAudioAction) return customActivity('uploading a voice note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+  if (update.action instanceof Api.SendMessageCancelAction) {
+    return {
+      type: ServerEventType.USER_ACTIVITY,
+      threadID,
+      participantID,
+      activityType: ActivityType.NONE,
+    }
+  }
+}
+
+export function idFromPeer(peer: Api.TypePeer): number {
+  if (peer instanceof Api.PeerChat) { return peer.chatId.toJSNumber() }
+  if (peer instanceof Api.PeerChannel) { return peer.channelId.toJSNumber() }
+  return peer.userId.toJSNumber()
 }

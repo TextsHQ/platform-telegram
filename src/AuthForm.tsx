@@ -2,13 +2,14 @@ import React, { FormEvent } from 'react'
 import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
 import type { PlatformAPI, LoginCreds, LoginResult } from '@textshq/platform-sdk'
+import { AuthState } from './api'
 
 const TelegramAuth: React.FC<{
   api: PlatformAPI
   login: (creds?: LoginCreds)=> Promise<LoginResult>
 }> = ({ api, login }) => {
   const [loading, setLoading] = React.useState(false)
-  const [authState, setAuthState] = React.useState('')
+  const [authState, setAuthState] = React.useState(AuthState.PHONE_INPUT)
   const [phoneNumber, setPhoneNumber] = React.useState('+')
   const [code, setCode] = React.useState('')
   const [password, setPassword] = React.useState('')
@@ -19,21 +20,21 @@ const TelegramAuth: React.FC<{
     setLoading(false)
   }
   React.useEffect(() => {
-    api.onLoginEvent(data => {
-      setAuthState(data)
-      if (data === 'authorizationStateReady') onSubmit()
+    api.onLoginEvent(state => {
+      setAuthState(state)
+      if (state === AuthState.READY) onSubmit()
     })
   }, [api])
   return (
     <div className="auth telegram-auth">
       <form onSubmit={onSubmit}>
-        {authState === 'authorizationStateWaitPhoneNumber' && (
+        {authState === AuthState.PHONE_INPUT && (
           <label>
             <span>Phone Number</span>
-            <PhoneInput onChange={setPhoneNumber} value={phoneNumber} autoFocus />
+            <PhoneInput onChange={value => setPhoneNumber(value ? value.toString() : '')} value={phoneNumber} autoFocus />
           </label>
         )}
-        {authState === 'authorizationStateWaitCode' && (
+        {authState === AuthState.CODE_INPUT && (
           <>
             <div>Authentication code has been sent to {phoneNumber} (check your Telegram app)</div>
             <label>
@@ -42,7 +43,7 @@ const TelegramAuth: React.FC<{
             </label>
           </>
         )}
-        {authState === 'authorizationStateWaitPassword' && (
+        {authState === AuthState.PASSWORD_INPUT && (
           <label>
             <span>Password</span>
             <input type="password" onChange={ev => setPassword(ev.target.value)} autoFocus />

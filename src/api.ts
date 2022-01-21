@@ -1,210 +1,78 @@
-// this should be the first import to fix PATH env variable on windows
+/* eslint-disable @typescript-eslint/no-throw-literal */
 // eslint-disable-next-line
-// import { copyDLLsForWindows, IS_WINDOWS } from './windows'
-import path from 'path'
-import url from 'url'
-import os from 'os'
-import crypto from 'crypto'
-import { promises as fs } from 'fs'
-import rimraf from 'rimraf'
-import { Airgram, ChatUnion, Message as TGMessage, FormattedTextInput, InputMessageContentInputUnion, InputMessageTextInput, InputFileInputUnion, isError, ChatMember, Chat, AuthorizationStateUnion, TDLibError, ApiResponse, BaseTdObject, User as TGUser } from 'airgram'
-import { AUTHORIZATION_STATE, CHAT_MEMBER_STATUS, SECRET_CHAT_STATE, UPDATE } from '@airgram/constants'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, AccountInfo, MessageSendOptions, ActivityType, ReAuthError, OnConnStateChangeCallback, ConnectionStatus, StateSyncEvent, Participant } from '@textshq/platform-sdk'
-import { debounce } from 'lodash'
 
-import { API_ID, API_HASH, BINARIES_DIR_PATH, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapMuteFor, getMessageButtons, mapTextFooter, mapMessageUpdateText, mapUserAction } from './mappers'
-import { fileExists } from './util'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant } from '@textshq/platform-sdk'
+import { debounce } from 'lodash'
+import { TelegramClient } from 'telegram'
+import { NewMessage, NewMessageEvent } from 'telegram/events'
+import { StringSession } from 'telegram/sessions'
+import { Api } from 'telegram/tl'
+import bigInt, { BigInteger } from 'big-integer'
+import type { Dialog } from 'telegram/tl/custom/dialog'
+import type { TotalList } from 'telegram/Helpers'
+import { API_ID, API_HASH } from './constants'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer } from './mappers'
+import { getAssetURL, initAssets, saveAsset } from './util'
 
 type SendMessageResolveFunction = (value: Message[])=> void
 type GetAssetResolveFunction = (value: string)=> void
-type Session = { dbKey: string }
 type LoginEventCallback = (authState: any)=> void
 
-function toObject<T extends BaseTdObject>({ response }: ApiResponse<any, T>): T {
-  if (isError(response)) {
-    switch (response.code) {
-      case 401:
-        throw new ReAuthError(response.message)
-      default:
-        throw new TDLibError(response.code, response.message)
-    }
-  }
-  return response
+const { IS_DEV } = texts
+export enum AuthState {
+  PHONE_INPUT,
+  CODE_INPUT,
+  PASSWORD_INPUT,
+  READY,
 }
 
-function getFileInput(msgContent: MessageContent, filePath: string, caption?: FormattedTextInput): InputMessageContentInputUnion {
-  const fileInput: InputFileInputUnion = {
-    _: 'inputFileLocal',
-    path: filePath,
-  }
-  switch (msgContent.mimeType.split('/')[0]) {
-    case 'image':
-      return {
-        _: 'inputMessagePhoto',
-        photo: fileInput,
-        caption,
-      }
-    case 'audio':
-      if (msgContent.isRecordedAudio) {
-        return {
-          _: 'inputMessageVoiceNote',
-          voiceNote: fileInput,
-          caption,
-        }
-      }
-      return {
-        _: 'inputMessageAudio',
-        audio: fileInput,
-        caption,
-      }
-    case 'video':
-      if (msgContent.isGif) {
-        return {
-          _: 'inputMessageAnimation',
-          animation: fileInput,
-          caption,
-        }
-      }
-      return {
-        _: 'inputMessageVideo',
-        video: fileInput,
-        caption,
-      }
-    default:
-      return {
-        _: 'inputMessageDocument',
-        document: fileInput,
-        caption,
-      }
-  }
+if (IS_DEV) {
+  // eslint-disable-next-line import/no-extraneous-dependencies, global-require
+  require('source-map-support').install()
 }
-
-async function getInputMessageContent(msgContent: MessageContent): Promise<InputMessageContentInputUnion> {
-  const { text, filePath, fileBuffer, fileName } = msgContent
-  const formattedTextInput: FormattedTextInput = text ? {
-    _: 'formattedText',
-    text,
-  } : undefined
-  const textInput: InputMessageTextInput = text ? {
-    _: 'inputMessageText',
-    text: formattedTextInput,
-  } : undefined
-  if (filePath) {
-    return getFileInput(msgContent, filePath, formattedTextInput)
-  }
-  if (fileBuffer) {
-    const tmpFilePath = path.join(os.tmpdir(), `${Math.random().toString(36)}.${fileName}`)
-    await fs.writeFile(tmpFilePath, fileBuffer)
-    return getFileInput(msgContent, tmpFilePath, formattedTextInput)
-    // TODO fs.unlink(tmpFilePath).catch(() => {})
-  }
-  return textInput
-}
-
-const tdlibPath = path.join(BINARIES_DIR_PATH, {
-  darwin: `${process.platform}-${process.arch}/libtdjson.dylib`,
-  linux: `${process.platform}-${process.arch}/libtdjson.so`,
-  win32: `${process.platform}-${process.arch}/libtdjson.dll`,
-}[process.platform])
 
 export default class TelegramAPI implements PlatformAPI {
-  private conn: Airgram
+  private client?: TelegramClient
 
-  private accountInfo: AccountInfo
-
-  private authState: AuthorizationStateUnion
+  private authState: AuthState
 
   private sendMessageResolvers = new Map<number, SendMessageResolveFunction>()
 
   private getAssetResolvers = new Map<number, GetAssetResolveFunction>()
 
-  private fileIdToPath = new Map<number, string>()
+  private messageStore = new Map<string, Api.Message>()
 
   private loginEventCallback: LoginEventCallback
 
-  private connStateChangeCallback: OnConnStateChangeCallback
+  private stringSession?: StringSession
 
-  private secretChatIdToChatId = new Map<number, number>()
+  private dialogs?: TotalList<Dialog>
 
-  private basicGroupIdToChatId = new Map<number, number>()
+  private me: Api.User
 
-  private superGroupIdToChatId = new Map<number, number>()
+  private loginInfo = {
+    phoneNumber: undefined,
+    phoneCodeHash: undefined,
+    phoneCode: undefined,
+    password: undefined,
+  }
 
-  private superGroupThreads = new Set<string>()
+  init = async (session?: string) => {
+    this.stringSession = session ? new StringSession(session) : new StringSession('')
 
-  private session: Session
-
-  private me: TGUser
-
-  init = async (session: Session, accountInfo: AccountInfo) => {
-    texts.log({ tdlibPath })
-    const tdlibExists = await fileExists(tdlibPath)
-    if (!tdlibExists) {
-      throw new Error(`tdlib not found for ${process.platform} ${process.arch}`)
-    }
-
-    // if (IS_WINDOWS) {
-    //   await copyDLLsForWindows()
-    // }
-
-    this.accountInfo = accountInfo
-    this.session = session || { dbKey: crypto.randomBytes(32).toString('hex') }
-    try {
-      this.conn = new Airgram({
-        databaseEncryptionKey: this.session.dbKey,
-        apiId: API_ID,
-        apiHash: API_HASH,
-        command: tdlibPath,
-        // deviceModel: undefined,
-        applicationVersion: texts.constants.APP_VERSION,
-        systemVersion: `${os.platform()} ${os.release()}`,
-        logVerbosityLevel: texts.IS_DEV ? 2 : 0,
-        useFileDatabase: true,
-        useChatInfoDatabase: true,
-        useMessageDatabase: true,
-        useSecretChats: true,
-        enableStorageOptimizer: true,
-        ignoreFileNames: false,
-        databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
-        filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
-      })
-    } catch (e) {
-      if (e.message.includes('Win32 error 126')) {
-        throw new Error('You don\'t appear to have the required components for this platform integration installed. Please install Microsoft Visual C++ Redistributable from https://aka.ms/vs/17/release/vc_redist.x64.exe')
-      }
-      throw e
-    }
-
-    this.conn.on(UPDATE.updateAuthorizationState, ({ update }) => {
-      this.authState = update.authorizationState
-      this.loginEventCallback?.(update.authorizationState._)
-      if (texts.IS_DEV) console.log(update)
-      if (this.authState._ === AUTHORIZATION_STATE.authorizationStateClosed) {
-        this.connStateChangeCallback({
-          status: ConnectionStatus.UNAUTHORIZED,
-        })
-        throw new ReAuthError('Session closed')
-      }
+    this.client = new TelegramClient(this.stringSession, API_ID, API_HASH, {
+      connectionRetries: 5,
     })
+
+    await this.client.connect()
+
+    this.authState = AuthState.PHONE_INPUT
     if (session) await this.afterLogin()
-    // if (texts.IS_DEV) {
-    //   this.conn.use((ctx, next) => {
-    //     if ('update' in ctx) {
-    //       console.log(`[${ctx._}]`, JSON.stringify(ctx.update))
-    //     }
-    //     return next()
-    //   })
-    // }
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
-    this.loginEventCallback(this.authState?._)
-  }
-
-  onConnectionStateChange = (onEvent: OnConnStateChangeCallback) => {
-    this.connStateChangeCallback = onEvent
+    this.loginEventCallback(this.authState)
   }
 
   login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
@@ -214,281 +82,278 @@ export default class TelegramAPI implements PlatformAPI {
       if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
       return message
     }
-    const { phoneNumber, code, password } = creds.custom || {}
-    switch (this.authState._) {
-      case AUTHORIZATION_STATE.authorizationStateWaitPhoneNumber: {
-        const res = await this.conn.api.setAuthenticationPhoneNumber({ phoneNumber })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-        return { type: 'wait' }
+
+    if (IS_DEV) console.log(JSON.stringify(creds.custom, null, 4))
+    try {
+      switch (this.authState) {
+        case AuthState.PHONE_INPUT:
+        {
+          this.loginInfo.phoneNumber = creds.custom.phoneNumber
+          const res = await this.client.invoke(new Api.auth.SendCode({
+            apiHash: API_HASH,
+            apiId: API_ID,
+            phoneNumber: this.loginInfo.phoneNumber,
+            settings: new Api.CodeSettings({
+              allowFlashcall: true,
+              currentNumber: true,
+              allowAppHash: true,
+            }),
+          }))
+          if (IS_DEV) console.log('PHONE_INPUT', JSON.stringify(res))
+          this.loginInfo.phoneCodeHash = res.phoneCodeHash
+          this.authState = AuthState.CODE_INPUT
+          break
+        }
+        case AuthState.CODE_INPUT:
+        {
+          this.loginInfo.phoneCode = creds.custom.code
+          if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
+          console.log(creds.custom)
+          const res = await this.client.invoke(new Api.auth.SignIn({
+            phoneNumber: this.loginInfo.phoneNumber,
+            phoneCodeHash: this.loginInfo.phoneCodeHash,
+            phoneCode: this.loginInfo.phoneCode,
+          }))
+          if (IS_DEV) console.log('CODE_INPUT', JSON.stringify(res))
+          this.authState = AuthState.READY
+          break
+        }
+        case AuthState.PASSWORD_INPUT:
+        {
+          this.loginInfo.password = creds.custom.password
+          await this.client.signInWithPassword({
+            apiHash: API_HASH,
+            apiId: API_ID,
+          }, {
+            password: async () => this.loginInfo.password,
+            onError: async err => { console.log(err); return true },
+          })
+          this.authState = AuthState.READY
+          break
+        }
+        case AuthState.READY:
+        {
+          if (IS_DEV) {
+            const sessionString = this.stringSession.save()
+            console.log((sessionString))
+          }
+          await this.afterLogin()
+          return { type: 'success' }
+        }
+        default:
+        {
+          return { type: 'error' }
+        }
       }
-      case AUTHORIZATION_STATE.authorizationStateWaitCode: {
-        const res = await this.conn.api.checkAuthenticationCode({ code })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-        return { type: 'wait' }
-      }
-      case AUTHORIZATION_STATE.authorizationStateWaitPassword: {
-        const res = await this.conn.api.checkAuthenticationPassword({ password })
-        const data = res.response
-        if (isError(data)) return { type: 'error', errorMessage: mapError(data.message) }
-        return { type: 'wait' }
-      }
-      case AUTHORIZATION_STATE.authorizationStateReady: {
-        await this.afterLogin()
-        return { type: 'success' }
-      }
-      default:
-        return { type: 'error', errorMessage: this.authState._ }
+    } catch (e) {
+      if (IS_DEV) console.log(JSON.stringify(e, null, 4))
+      if (e.code === 401) this.authState = AuthState.PASSWORD_INPUT
+      else return { type: 'error', errorMessage: mapError(e.errorMessage) }
     }
+
+    this.loginEventCallback(this.authState)
+    return { type: 'wait' }
   }
 
-  private onUpdateNewMessage = (tgMessage: TGMessage) => {
-    if (tgMessage.sendingState) {
-      // Sent message is handled in updateMessageSendSucceeded.
-      return
-    }
-    const message = mapMessage(tgMessage, this.accountInfo.accountID)
-    const threadID = tgMessage.chatId.toString()
-    this.emitParticipantsFromMessages(threadID, [message])
+  onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
+    const { message } = newMessageEvent
+    const threadID = message.chatId.toString()
+    const mappedMessage = await mapMessage(message, this.me.id.toString())
+    this.emitParticipantsFromMessages(threadID, [mappedMessage])
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'message',
       objectIDs: { threadID },
-      entries: [message],
+      entries: [mappedMessage],
     }
     this.onEvent([event])
   }
 
-  private asyncMapThread = async (chat: Chat) => {
-    const isSuperGroup = chat.type._ === 'chatTypeSupergroup'
-    const participants: TGUser[] = isSuperGroup ? [] : await this._getParticipants(chat)
+  private getProfilePhoto = async (id: BigInteger) => {
+    const assetPath = await getAssetURL(id.toString())
+    if (assetPath) return
+    const buffer = await this.client.downloadProfilePhoto(id, { isBig: false })
+    if (buffer.length !== 0) await saveAsset(buffer, id.toString())
+    await getAssetURL(id.toString())
+  }
 
-    const thread = mapThread(chat, participants, this.accountInfo.accountID)
-    if (isSuperGroup) {
-      // Intentionally not using `await` to not block getThreads.
-      this.getAndEmitParticipants(chat)
-      if (thread.messages.items.length) {
-        setTimeout(() => {
-          this.emitParticipantsFromMessages(chat.id.toString(), thread.messages.items)
-        }, 100) // todo revisit
+  private mapThread = async (dialog: Dialog) => {
+    const participants: Api.User[] = await this.client.getParticipants(dialog.id, {})
+    const messages = (await this.client.getMessages(dialog.id, { limit: 20 }))
+    const mappedMessages = await mapMessages(messages, this.me.id.toString())
+    messages.forEach(m => {
+      if (m.media) {
+        this.messageStore.set(m.id.toString(), m)
       }
-    }
-    // const presenceEvents = participants.map(x => mapUserPresence(x.id, x.status))
-    // this.onEvent(presenceEvents)
+    })
+    const thread = mapThread(dialog, mappedMessages, participants)
+    const presenceEvents = participants.map(x => mapUserPresence(x.id.toJSNumber(), x.status))
+    this.onEvent(presenceEvents)
     return thread
   }
 
-  private registerUpdateListeners() {
-    this.conn.on(UPDATE.updateMessageSendSucceeded, ({ update }) => {
-      const resolve = this.sendMessageResolvers.get(update.oldMessageId)
-      if (!resolve) {
-        return console.warn('update.updateMessageSendSucceeded: unable to find promise resolver for', update.oldMessageId)
-      }
-      resolve([mapMessage(update.message, this.accountInfo.accountID)])
-      this.sendMessageResolvers.delete(update.oldMessageId)
-    })
+  private onUpdateChat = async (update: Api.UpdateChat) => {
+    const chat = await this.client._getInputDialog(update.chatId)
+    const thread = await this.mapThread(chat)
+    const event: ServerEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'upsert',
+      objectName: 'thread',
+      objectIDs: {
+        threadID: thread.id,
+      },
+      entries: [thread],
+    }
+    this.onEvent([event])
+  }
 
-    this.conn.on(UPDATE.updateNewChat, async ({ update }) => {
-      texts.log('[updateNewChat]', update.chat.id, update.chat.title, update.chat.positions.length)
-      const chat = toObject(await this.conn.api.getChat({ chatId: update.chat.id }))
-      if (!chat.positions.length) return
-      const thread = await this.asyncMapThread(chat)
-      const event: ServerEvent = {
+  private onUpdateChatParticipant(update: Api.UpdateChatParticipant) {
+    if (update.prevParticipant) {
+      const chatId = update.chatId.toJSNumber()
+      this.emitDeleteThread(chatId)
+    }
+  }
+
+  private onUpdateChannelParticipant(update: Api.UpdateChannelParticipant) {
+    if (update.prevParticipant) {
+      const chatId = update.channelId.toJSNumber()
+      this.emitDeleteThread(chatId)
+    }
+  }
+
+  private onUpdateNotifySettings(update: Api.UpdateNotifySettings) {
+    if (!('peer' in update.peer)) return
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      objectIDs: {},
+      mutationType: 'update',
+      objectName: 'thread',
+      entries: [{
+        id: idFromPeer(update.peer.peer).toString(),
+        mutedUntil: new Date(update.notifySettings.muteUntil),
+      }],
+    }])
+  }
+
+  private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages) {
+    // TODO
+    this.onEvent([
+      {
         type: ServerEventType.STATE_SYNC,
-        mutationType: 'upsert',
-        objectName: 'thread',
         objectIDs: {
-          threadID: thread.id,
+          threadID: '0',
         },
-        entries: [thread],
-      }
-      this.onEvent([event])
-    })
-    this.conn.on(UPDATE.updateSecretChat, ({ update }) => {
-      if (update.secretChat.state._ === SECRET_CHAT_STATE.secretChatStateClosed) {
-        // Secret chat is accepted by another device or closed.
-        const chatId = this.secretChatIdToChatId.get(update.secretChat.id)
-        if (!chatId) return
-        this.emitDeleteThread(chatId)
-        this.secretChatIdToChatId.delete(update.secretChat.id)
-      }
-    })
-    this.conn.on(UPDATE.updateBasicGroup, ({ update }) => {
-      const { status } = update.basicGroup
-      if (
-        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft
-          || status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned
-          || (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
-      ) {
-        const chatId = this.basicGroupIdToChatId.get(update.basicGroup.id)
-        if (!chatId) return
-        this.emitDeleteThread(chatId)
-        this.basicGroupIdToChatId.delete(update.basicGroup.id)
-      }
-    })
-    this.conn.on(UPDATE.updateSupergroup, ({ update }) => {
-      const { status } = update.supergroup
-      if (
-        status._ === CHAT_MEMBER_STATUS.chatMemberStatusLeft
-          || status._ === CHAT_MEMBER_STATUS.chatMemberStatusBanned
-          || (status._ === CHAT_MEMBER_STATUS.chatMemberStatusCreator && !status.isMember)
-      ) {
-        const chatId = this.superGroupIdToChatId.get(update.supergroup.id)
-        if (!chatId) return
-        this.emitDeleteThread(chatId)
-        this.superGroupIdToChatId.delete(update.supergroup.id)
-      }
-    })
-    this.conn.on(UPDATE.updateChatNotificationSettings, ({ update }) => {
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        objectIDs: {},
-        mutationType: 'update',
-        objectName: 'thread',
-        entries: [{
-          id: update.chatId.toString(),
-          mutedUntil: mapMuteFor(update.notificationSettings.muteFor),
-        }],
-      }])
-    })
-    this.conn.on(UPDATE.updateNewMessage, ({ update }) => {
-      this.onUpdateNewMessage(update.message)
-    })
-    this.conn.on(UPDATE.updateDeleteMessages, ({ update }) => {
-      if (!update.isPermanent) {
-        return
-      }
-      this.onEvent([
+        mutationType: 'delete',
+        objectName: 'message',
+        entries: update.messages.map(x => x.toString()),
+      },
+    ])
+  }
+
+  private onUpdateUserTyping(update: Api.UpdateUserTyping) {
+    const event = mapUserAction(update)
+    if (event) this.onEvent([event])
+  }
+
+  private onUpdateDialogUnreadMark(update: Api.UpdateDialogUnreadMark) {
+    if (!(update.peer instanceof Api.DialogPeer)) return
+    if (!('chatId' in update.peer.peer)) return
+    const threadID = update.peer.peer.chatId.toString()
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'update',
+      objectName: 'thread',
+      objectIDs: { threadID },
+      entries: [
         {
-          type: ServerEventType.STATE_SYNC,
-          objectIDs: {
-            threadID: update.chatId.toString(),
-          },
-          mutationType: 'delete',
-          objectName: 'message',
-          entries: update.messageIds.map(x => x.toString()),
+          id: threadID,
+          isUnread: update.unread,
         },
-      ])
-    })
-    this.conn.on(UPDATE.updateChatAction, ({ update }) => {
-      const event = mapUserAction(update)
-      if (event) this.onEvent([event])
-    })
-    this.conn.on(UPDATE.updateFile, ({ update }) => {
-      const fileID = update.file.id
-      const resolve = this.getAssetResolvers.get(fileID)
-      if (!resolve) return console.warn('unable to find promise resolver for update.updateFile', fileID)
-      if (update.file.local.isDownloadingCompleted && update.file.local.path) {
-        const filePath = url.pathToFileURL(update.file.local.path).href
-        this.fileIdToPath.set(fileID, filePath)
-        resolve(filePath)
-        this.getAssetResolvers.delete(fileID)
-      }
-    })
-    this.conn.on(UPDATE.updateChatIsMarkedAsUnread, ({ update }) => {
-      const threadID = update.chatId.toString()
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'thread',
-        objectIDs: { threadID },
-        entries: [
-          {
-            id: threadID,
-            isUnread: update.isMarkedAsUnread,
-          },
-        ],
-      }])
-    })
-    this.conn.on(UPDATE.updateChatReadInbox, ({ update }) => {
-      const threadID = update.chatId.toString()
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'thread',
-        objectIDs: { threadID },
-        entries: [
-          {
-            id: threadID,
-            isUnread: update.unreadCount > 0,
-          },
-        ],
-      }])
-    })
-    this.conn.on(UPDATE.updateChatReadOutbox, ({ update }) => {
-      const threadID = update.chatId.toString()
-      const messageID = update.lastReadOutboxMessageId.toString()
-      const event: StateSyncEvent = {
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID, messageID },
-        entries: [
-          {
-            id: messageID,
-            seen: true,
-          },
-        ],
-      }
-      this.onEvent([event])
-    })
-    this.conn.on(UPDATE.updateUserStatus, ({ update }) => {
-      this.onEvent([mapUserPresence(update.userId, update.status)])
-    })
-    this.conn.on(UPDATE.updateMessageEdited, ({ update }) => {
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
-        entries: [{
-          id: String(update.messageId),
-          editedTimestamp: update.editDate ? new Date(update.editDate * 1000) : undefined,
-          buttons: getMessageButtons(update.replyMarkup, this.accountInfo.accountID, update.chatId, update.messageId),
-        }],
-      }])
-    })
-    this.conn.on(UPDATE.updateMessageContent, async ({ update }) => {
-      const messageID = String(update.messageId)
-      const threadID = String(update.chatId)
-      // since most of the time we get `messageText` updates, we only handle that here and inefficiently fetch the whole message in other cases
-      // we should be handling all other message content types after refactoring mapMessage()
-      if (update.newContent._ === 'messageText') {
-        this.onEvent([{
-          type: ServerEventType.STATE_SYNC,
-          mutationType: 'update',
-          objectName: 'message',
-          objectIDs: { threadID, messageID },
-          entries: [mapMessageUpdateText(messageID, update.newContent)],
-        }])
-        return
-      }
-      const res = await this.conn.api.getMessage({
-        chatId: update.chatId,
-        messageId: update.messageId,
-      })
-      const message = toObject(res)
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID, messageID },
-        entries: [mapMessage(message, this.accountInfo.accountID)],
-      }])
-    })
-    this.conn.on('updateMessageInteractionInfo', ({ update }) => {
-      this.onEvent([{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'message',
-        objectIDs: { threadID: String(update.chatId), messageID: String(update.messageId) },
-        entries: [{
-          id: String(update.messageId),
-          textFooter: mapTextFooter(update.interactionInfo),
-        }],
-      }])
+      ],
+    }])
+  }
+
+  private onUpdateReadChannelInbox(update: Api.UpdateReadChannelInbox) {
+    const threadID = update.channelId.toString()
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'update',
+      objectName: 'thread',
+      objectIDs: { threadID },
+      entries: [
+        {
+          id: threadID,
+          isUnread: update.stillUnreadCount > 0,
+        },
+      ],
+    }])
+  }
+
+  private onUpdateReadChannelOutbox(update: Api.UpdateReadChannelOutbox) {
+    const threadID = update.channelId.toString()
+    const messageID = update.maxId.toString()
+    const event: StateSyncEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'update',
+      objectName: 'message',
+      objectIDs: { threadID, messageID },
+      entries: [
+        {
+          id: messageID,
+          seen: true,
+        },
+      ],
+    }
+    this.onEvent([event])
+  }
+
+  private onUpdateUserStatus(update: Api.UpdateUserStatus) {
+    this.onEvent([mapUserPresence(update.userId.toJSNumber(), update.status)])
+  }
+
+  private onUpdateEditMessage(update: Api.UpdateEditMessage) {
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'update',
+      objectName: 'message',
+      objectIDs: { threadID: String(idFromPeer(update.message.peerId)), messageID: String(update.message.id) },
+      entries: [{
+        id: String(update.message.id),
+      }],
+    }])
+  }
+
+  private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents) => {
+    const messageID = String(update.messages[0])
+    const res = await this.client.getMessages(undefined, { ids: update.messages })
+    const entries = await mapMessages(res, this.me.id.toString())
+    if (res.length === 0) return
+    const threadID = res[0].chatId?.toString()
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'update',
+      objectName: 'message',
+      objectIDs: { threadID, messageID },
+      entries,
+    }])
+  }
+
+  private registerUpdateListeners() {
+    this.client.addEventHandler(this.onUpdateNewMessage, new NewMessage({}))
+    this.client.addEventHandler(async (update: Api.TypeUpdate) => {
+      if (update instanceof Api.UpdateChat) await this.onUpdateChat(update)
+      else if (update instanceof Api.ChatParticipant) await this.onUpdateChatParticipant(update)
+      else if (update instanceof Api.ChannelParticipant) await this.onUpdateChannelParticipant(update)
+      else if (update instanceof Api.UpdateNotifySettings) await this.onUpdateNotifySettings(update)
+      else if (update instanceof Api.UpdateDeleteMessages) await this.onUpdateDeleteMessages(update)
+      else if (update instanceof Api.UpdateUserTyping) await this.onUpdateUserTyping(update)
+      else if (update instanceof Api.UpdateDialogUnreadMark) await this.onUpdateDialogUnreadMark(update)
+      else if (update instanceof Api.UpdateReadChannelInbox) await this.onUpdateReadChannelInbox(update)
+      else if (update instanceof Api.UpdateReadChannelOutbox) await this.onUpdateReadChannelOutbox(update)
+      else if (update instanceof Api.UpdateUserStatus) await this.onUpdateUserStatus(update)
+      else if (update instanceof Api.UpdateEditMessage) await this.onUpdateEditMessage(update)
+      else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
     })
   }
 
@@ -507,27 +372,23 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    this.me = toObject(await this.conn.api.getMe())
+    await initAssets()
+    this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
   }
 
   logout = async () => {
-    await this.conn?.api.logOut()
-    return new Promise<void>(resolve => {
-      rimraf(this.accountInfo?.dataDirPath, () => {
-        resolve()
-      })
-    })
+    await this.client?.disconnect()
   }
 
   dispose = async () => {
-    await this.conn.api.close()
   }
 
-  getCurrentUser = (): CurrentUser => ({
-    ...mapUser(this.me, this.accountInfo.accountID),
-    displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phoneNumber),
-  })
+  getCurrentUser = (): CurrentUser => (
+    {
+      id: this.me.id.toString(),
+      displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phone),
+    })
 
   private pendingEvents: ServerEvent[] = []
 
@@ -549,121 +410,82 @@ export default class TelegramAPI implements PlatformAPI {
     this.onServerEvent = onServerEvent
   }
 
-  serializeSession = () => this.session
+  serializeSession = () => this.stringSession.save()
 
   searchUsers = async (query: string) => {
-    const res = await this.conn.api.searchContacts({
-      query,
-      limit: 20,
-    })
-    const { userIds } = toObject(res)
+    const res = await this.client.invoke(new Api.contacts.Search({
+      q: query,
+    }))
+    const userIds = res.users.map(user => user.id.toJSNumber())
     return Promise.all(userIds.map(async userId => {
       const user = await this.getTGUser(userId)
-      return mapUser(user, this.accountInfo.accountID)
+      return mapUser(user)
     }))
   }
 
   createThread = async (userIDs: string[], title?: string) => {
     if (userIDs.length === 0) return
-    if (userIDs.length === 1) {
-      const chatResponse = await this.conn.api.createPrivateChat({ userId: +userIDs[0] })
-      return this.asyncMapThread(toObject(chatResponse))
-    }
-    const res = await this.conn.api.createNewBasicGroupChat({
-      userIds: userIDs.map(Number),
-      title,
-    })
-    const chat = toObject(res)
-    return this.asyncMapThread(chat)
+    const chat = await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
+    texts.log('createThread', chat)
+    return true
+    // return this.asyncMapThread(chat)
   }
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
     if ('mutedUntil' in updates) {
-      await this.conn.api.setChatNotificationSettings({
+      /* TODO
+      await this.client.setChatNotificationSettings({
         chatId: +threadID,
         notificationSettings: {
           _: 'chatNotificationSettings',
           muteFor: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0,
         },
       })
+      */
       return true
     }
   }
 
   deleteThread = async (threadID: string) => {
-    await this.conn.api.deleteChatHistory({
-      chatId: +threadID,
-      removeFromChatList: true,
-    })
-    await this.conn.api.leaveChat({ chatId: +threadID })
+    await this.client.invoke(new Api.messages.DeleteHistory({
+      peer: threadID,
+      revoke: true,
+    }))
+    await this.client.invoke(new Api.messages.DeleteChatUser({
+      userId: 'me',
+      chatId: bigInt(parseInt(threadID, 10)),
+      revokeHistory: true,
+    }))
   }
 
   reportThread = async (type: 'spam', threadID: string) => {
-    const res = await this.conn.api.reportChat({
-      chatId: +threadID,
-      reason: {
-        _: 'chatReportReasonSpam',
-      },
-    })
+    const res = await this.client.invoke(new Api.account.ReportPeer({
+      peer: threadID,
+      reason: new Api.InputReportReasonSpam(),
+    }))
     await this.deleteThread(threadID)
-    return toObject(res)._ === 'ok'
+    return res
   }
 
   private getTGUser = async (userId: number) => {
-    const res = await this.conn.api.getUser({ userId })
-    return toObject(res)
+    const res = await this.client.getEntity(
+      userId,
+    )
+    if (res instanceof Api.User) return res
   }
 
   getUser = async ({ username }: { username: string }) => {
     if (!username) return
-    const res = await this.conn.api.searchPublicChat({ username })
-    const chat = toObject(res)
-    if (isError(chat)) return
-    if (chat.type._ !== 'chatTypePrivate') return
-    const user = await this.getTGUser(chat.type.userId)
-    return mapUser(user, this.accountInfo.accountID)
-  }
-
-  private _getParticipants = async (chat: ChatUnion) => {
-    const mapMembers = (members: ChatMember[]) =>
-      Promise.all(
-        members.map(member =>
-          member.memberId._ === 'messageSenderUser' && this.getTGUser(member.memberId.userId)),
-      )
-    switch (chat.type._) {
-      case 'chatTypePrivate': {
-        const participant = await this.getTGUser(chat.type.userId)
-        return [participant]
-      }
-      case 'chatTypeSecret': {
-        this.secretChatIdToChatId.set(chat.type.secretChatId, chat.id)
-        const participant = await this.getTGUser(chat.type.userId)
-        return [participant]
-      }
-      case 'chatTypeBasicGroup': {
-        this.basicGroupIdToChatId.set(chat.type.basicGroupId, chat.id)
-        const res = await this.conn.api.getBasicGroupFullInfo({ basicGroupId: chat.type.basicGroupId })
-        const { members } = toObject(res)
-        return mapMembers(members)
-      }
-      case 'chatTypeSupergroup': {
-        this.superGroupThreads.add(chat.id.toString())
-        this.superGroupIdToChatId.set(chat.type.supergroupId, chat.id)
-        return []
-        // const supergroupRes = await this.conn.api.getSupergroupFullInfo({ supergroupId: chat.type.supergroupId })
-        // const supergroup = toObject(supergroupRes)
-        // if (!supergroup.canGetMembers) {
-        //   return []
-        // }
-        // const membersRes = await this.conn.api.getSupergroupMembers({
-        //   supergroupId: chat.type.supergroupId,
-        //   limit: 256, // todo, random limit
-        // })
-        // const { members } = toObject(membersRes)
-        // return mapMembers(members)
-      }
-      default:
-        return []
+    const res = await this.client.invoke(
+      new Api.contacts.Search({
+        q: username,
+      }),
+    )
+    const { users } = res
+    if (users.length === 0) return
+    const user = await this.getTGUser(users[0].id.toJSNumber())
+    if (user instanceof Api.User) {
+      return mapUser(user)
     }
   }
 
@@ -679,215 +501,136 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private getAndEmitParticipants = async (chat: ChatUnion) => {
-    const members = await this._getParticipants(chat)
+  private getAndEmitParticipants = async (channel: Dialog) => {
+    const members = await this.client.getParticipants(channel.id, {})
     if (!members.length) return
-    this.upsertParticipants(String(chat.id), members.map(m => mapUser(m, this.accountInfo.accountID)))
+    const mappedMembers = await Promise.all(members.map(m => mapUser(m)))
+    this.upsertParticipants(String(channel.id), mappedMembers)
   }
 
   private emitParticipantsFromMessages = async (threadID: string, messages: Message[]) => {
-    if (!this.superGroupThreads.has(threadID)) {
-      // Only need to emit participant for supergroup.
-      return
-    }
     const senderIDs = [...new Set(messages.map(m => (m.senderID.startsWith('$thread') ? null : +m.senderID)).filter(Boolean))]
     const members = await Promise.all(senderIDs.map(x => this.getTGUser(x)))
-    this.upsertParticipants(threadID, members.map(m => mapUser(m, this.accountInfo.accountID)))
+    const mappedMembers = await Promise.all(members.map(m => mapUser(m)))
+    this.upsertParticipants(threadID, mappedMembers)
   }
 
   getThread = async (threadID: string) => {
-    const chatResponse = await this.conn.api.getChat({ chatId: +threadID })
-    return this.asyncMapThread(toObject(chatResponse))
+    const dialogThread = await this.dialogs.find(dialog => dialog.id.toString() === threadID)
+    return this.mapThread(dialogThread)
   }
 
   getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
-    const limit = 20
-    const res = await this.conn.api.loadChats({ limit })
-    const is404 = isError(res) && res.code === 404
+    this.dialogs = await this.client.getDialogs({})
+    const threads = await Promise.all(this.dialogs.map(dialog => this.mapThread(dialog)))
     return {
-      items: [],
+      items: threads,
       oldestCursor: '*',
-      hasMore: !is404,
+      hasMore: false,
     }
   }
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
-    const { cursor, direction } = pagination || { cursor: null, direction: null }
+    const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
-    const [
-      messagesResponse,
-      chatResponse,
-    ] = await Promise.all([
-      this.conn.api.getChatHistory({
-        limit,
-        chatId: +threadID,
-        fromMessageId: +cursor || 0,
-      }),
-      this.conn.api.getChat({ chatId: +threadID }),
-    ])
-    const { messages } = toObject(messagesResponse)
-    const chat = toObject(chatResponse)
-    // When fromMessageId is 0, getChatHistory returns only one message.
-    // See https://core.telegram.org/tdlib/getting-started#getting-chat-messages
-    if (!cursor && messages.length === 1) {
-      const res = await this.conn.api.getChatHistory({
-        limit,
-        chatId: +threadID,
-        fromMessageId: messages[0].id,
-      })
-      messages.push(...toObject(res).messages)
-    }
-    const items = mapMessages(messages, this.accountInfo.accountID, chat).reverse()
+    const messages = await this.client.getMessages(threadID, { limit, minId: +cursor || 0 })
+    const items = await (await mapMessages(messages, this.me.id.toString()))
     this.emitParticipantsFromMessages(threadID, items)
     return {
       items,
-      hasMore: items.length > 0, // items.length === limit is inaccurate
+      hasMore: messages.length !== 0,
     }
   }
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
-    const inputMessageContent = await getInputMessageContent(msgContent)
-    if (!inputMessageContent) return false
-    const res = await this.conn.api.sendMessage({
-      chatId: Number(threadID),
-      messageThreadId: 0,
-      replyToMessageId: +quotedMessageID || 0,
-      inputMessageContent,
-    })
+    const res = await this.client.sendMessage(threadID, { message: msgContent.text, replyTo: +quotedMessageID || 0 })
     return new Promise<Message[]>(resolve => {
-      const tmpId = toObject(res).id
+      const tmpId = res.id
       this.sendMessageResolvers.set(tmpId, resolve)
     })
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
-    if (!msgContent.text || /^\s+$/.test(msgContent.text)) msgContent.text = '.'
-    const res = await this.conn.api.editMessageText({
-      chatId: +threadID,
-      messageId: +messageID,
-      inputMessageContent: await getInputMessageContent(msgContent),
-    })
-    return !isError(toObject(res))
+    let { text } = msgContent
+    if (!msgContent.text || /^\s+$/.test(msgContent.text)) text = '.'
+    await this.client.editMessage(threadID, { message: +messageID, text })
+    return true
   }
 
-  forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[], userIDs?: string[]): Promise<boolean> => {
+  forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[]): Promise<boolean> => {
     const resArr = await Promise.all(threadIDs.map(async toThreadID => {
-      const res = await this.conn.api.forwardMessages({
-        chatId: +toThreadID,
-        fromChatId: +threadID,
-        messageIds: [+messageID],
-      })
-      return !isError(toObject(res))
+      const res = await this.client.forwardMessages(threadID, { messages: +messageID, fromPeer: toThreadID })
+      return res.length
     }))
     return resArr.every(Boolean)
   }
 
   sendActivityIndicator = async (type: ActivityType, threadID: string) => {
-    const _ = {
-      [ActivityType.NONE]: 'chatActionCancel',
-      [ActivityType.TYPING]: 'chatActionTyping',
-      [ActivityType.RECORDING_VOICE]: 'ChatActionRecordingVoiceNoteInput',
-      [ActivityType.RECORDING_VIDEO]: 'ChatActionRecordingVideoInput',
+    const action = {
+      [ActivityType.NONE]: Api.SendMessageCancelAction,
+      [ActivityType.TYPING]: Api.SendMessageTypingAction,
+      [ActivityType.RECORDING_VOICE]: Api.SendMessageRecordAudioAction,
+      [ActivityType.RECORDING_VIDEO]: Api.SendMessageRecordVideoAction,
     }[type]
-    if (!_) return
-    await this.conn.api.sendChatAction({
-      chatId: +threadID,
-      messageThreadId: 0,
-      action: { _ },
-    })
+    if (action) return
+    await this.client.invoke(new Api.messages.SetTyping({ peer: threadID, topMsgId: +threadID, action }))
   }
 
   deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
-    const res = await this.conn.api.deleteMessages({
-      chatId: +threadID,
-      messageIds: [+messageID],
-      revoke: forEveryone,
-    })
-    return !isError(toObject(res))
+    const res = await this.client.deleteMessages(undefined, [parseInt(messageID, 10)], { revoke: forEveryone })
+    return res.length !== 0
   }
 
   sendReadReceipt = async (threadID: string, messageID: string) => {
-    await this.conn.api.toggleChatIsMarkedAsUnread({
-      chatId: +threadID,
-      isMarkedAsUnread: false,
-    })
-    const res = await this.conn.api.viewMessages({
-      chatId: +threadID,
-      messageThreadId: 0,
-      messageIds: [+messageID],
-      forceRead: true,
-    })
-    return !isError(toObject(res))
+    await this.client.markAsRead(+threadID, +messageID)
+    const res = await this.client.markAsRead(threadID, +messageID, { clearMentions: true })
+    return res
   }
 
-  markAsUnread = (threadID: string) => {
-    this.conn.api.toggleChatIsMarkedAsUnread({
-      chatId: +threadID,
-      isMarkedAsUnread: true,
-    })
+  markAsUnread = () => {
+    this.client.invoke(new Api.messages.MarkDialogUnread({ unread: true }))
   }
 
-  archiveThread = async (threadID: string, archived: boolean) => {
-    toObject(await this.conn.api.addChatToList({ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } }))
+  archiveThread = async () => {
+    // TDLib only?
+    // await this.client.invoke(Api.{ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } })
   }
 
-  private lastChatID: number
-
-  onThreadSelected = async (threadID: string) => {
-    if (this.lastChatID) await this.conn.api.closeChat({ chatId: this.lastChatID })
-    this.lastChatID = +threadID
-    if (threadID) await this.conn.api.openChat({ chatId: +threadID })
+  onThreadSelected = async () => {
   }
 
-  /**
-   * The frontend will request twice for each fileId, the first time for the
-   * wave form, the second time for the <audio> element.
-   */
-  getAsset = async (type: string, fileIdStr: string) => {
-    texts.log('get asset', type, fileIdStr)
-    if (type !== 'file') throw new Error('unknown asset type')
-    const fileId = +fileIdStr
-    const filePath = this.fileIdToPath.get(fileId)
+  getAsset = async (type: string, messageId: string, assetId: string) => {
+    texts.log('get asset', type, messageId, assetId)
+    console.log(type, messageId, assetId)
+    const fileId = +assetId
+    const filePath = await getAssetURL(assetId)
     if (filePath) {
-      // Download has finished, this is the second request for fileId.
-      this.fileIdToPath.delete(fileId)
+      this.messageStore.delete(messageId)
       return filePath
     }
-    const pendingResolve = this.getAssetResolvers.get(fileId)
-    return new Promise<string>(resolve => {
-      if (pendingResolve) {
-        // Download has not finished, this is the second request for fileId.
-        this.getAssetResolvers.set(fileId, url => {
-          pendingResolve(url)
-          resolve(url)
-        })
-      } else {
-        // This is the first request for fileId.
-        this.conn.api.downloadFile({ fileId, priority: 32 })
-        this.getAssetResolvers.set(fileId, resolve)
-      }
-    })
+    if (type === 'profile') {
+      await this.client.downloadProfilePhoto(fileId).then(buffer => saveAsset(buffer, assetId.toString()))
+    } if (type === 'media') {
+      const message = this.messageStore.get(messageId)
+      await message.downloadMedia({}).then(buffer => saveAsset(buffer, assetId.toString()))
+    }
+    return getAssetURL(assetId)
   }
 
   handleDeepLink = async (link: string) => {
     const [,,,, type, chatID, messageID, data] = link.split('/')
     if (type !== 'callback') return
-    const res = await this.conn.api.getCallbackQueryAnswer({
-      chatId: +chatID,
-      messageId: +messageID,
-      payload: {
-        _: 'callbackQueryPayloadData',
-        data,
-      },
-    })
-    const answer = toObject(res)
-    if (!answer.text) return
+    const res = await this.client.invoke(new Api.messages.GetBotCallbackAnswer({
+      data: Buffer.from(data),
+      peer: chatID,
+      msgId: +messageID,
+    }))
+    if (!res.message) return
     this.onEvent([{
       type: ServerEventType.TOAST,
       toast: {
-        // todo answer.url
-        text: answer.text,
+        text: res.message,
       },
     }])
   }

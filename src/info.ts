@@ -2,8 +2,8 @@ import { MessageDeletionMode, PlatformInfo, Attribute, texts } from '@textshq/pl
 
 const info: PlatformInfo = {
   name: 'telegram',
-  version: '1.0.0',
-  displayName: 'Telegram',
+  version: '1.0.1',
+  displayName: 'Telegram MTProto',
   tags: ['Beta'],
   icon: `<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="16" height="16" rx="5" fill="#179CDE"/>
@@ -18,6 +18,7 @@ const info: PlatformInfo = {
 </defs>
 </svg>`,
   loginMode: 'custom',
+  // eslint-disable-next-line import/extensions
   auth: texts.React?.lazy(() => import('./AuthForm')),
   deletionMode: MessageDeletionMode.DELETE_FOR_EVERYONE,
   typingDurationMs: 5_000,
