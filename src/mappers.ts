@@ -202,7 +202,7 @@ export async function mapMessage(msg: CustomMessage, accountID: string) {
     _original: inspect(msg),
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
-    editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
+    editedTimestamp: msg.editDate && !msg.reactions?.recentReactons.length ? new Date(msg.editDate * 1000) : undefined,
     text: undefined,
     forwardedCount: msg.forwards,
     textAttributes: undefined,
@@ -213,6 +213,20 @@ export async function mapMessage(msg: CustomMessage, accountID: string) {
     buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId.toJSNumber(), msg.id),
     expiresInSeconds: msg.ttlPeriod,
   }
+
+  const setReactions = (reactions: Api.MessageReactions) => {
+    if (reactions && reactions.recentReactons) {
+      const mappedReactions: MessageReaction[] = reactions.recentReactons.map(r => (
+        {
+          id: r.userId.toString(),
+          participantID: r.userId.toString(),
+          emoji: true,
+          reactionKey: r.reaction.replace('❤', '❤️'),
+        }))
+      mapped.reactions = mappedReactions
+    }
+  }
+
   const setFormattedText = (msgText: string, msgEntities: Api.TypeMessageEntity[]) => {
     mapped.text = msgText
     mapped.textAttributes = mapTextAttributes(msgText, msgEntities)

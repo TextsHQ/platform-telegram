@@ -15,7 +15,7 @@ import type { SendMessageParams } from 'telegram/client/messages'
 import type { LocalPath } from 'telegram/define'
 import { CustomFile } from 'telegram/client/uploads'
 import { readFile } from 'fs/promises'
-import { API_ID, API_HASH } from './constants'
+import { API_ID, API_HASH, REACTIONS } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer, initMappers } from './mappers'
 import { getAssetPath, initAssets, saveAsset } from './util'
 
@@ -170,7 +170,15 @@ export default class TelegramAPI implements PlatformAPI {
     return { type: 'wait' }
   }
 
-  onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
+  addReaction = (threadID: string, messageID: string, reactionKey: string) => {
+    this.client.invoke(new Api.messages.SendReaction({
+      msgId: Number(messageID),
+      peer: threadID,
+      reaction: REACTIONS[reactionKey].render,
+    }))
+  }
+
+  private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
     if (message.media) {
       this.messageStore.set(message.id.toString(), message)

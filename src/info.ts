@@ -1,4 +1,5 @@
 import { MessageDeletionMode, PlatformInfo, Attribute, texts } from '@textshq/platform-sdk'
+import { REACTIONS } from './constants'
 
 const info: PlatformInfo = {
   name: 'telegram',
@@ -40,6 +41,9 @@ const info: PlatformInfo = {
     supportsCaption: true,
     recordedAudioMimeType: 'audio/ogg',
     gifMimeType: 'video/mp4',
+  },
+  reactions: {
+    supported: REACTIONS,
   },
   getUserProfileLink: ({ username }) =>
     (username ? `https://t.me/${username}` : null),
