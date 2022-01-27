@@ -7,7 +7,12 @@ import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import { inspect } from 'util'
 import { MUTED_FOREVER_CONSTANT } from './constants'
-import { getAssetURL, saveAsset } from './util'
+
+let accountId = ''
+
+export function initMappers(id: string) {
+  accountId = id
+}
 
 function transformOffset(text: string, entities: TextEntity[]) {
   const arr = Array.from(text)
@@ -129,17 +134,8 @@ export function getMessageButtons(replyMarkup: Api.TypeReplyMarkup, accountID: s
   }
 }
 
-const getAssetUrl = async (id: BigInteger, messageId: number) => {
-  const assetPath = await getAssetURL(id.toString())
-  if (assetPath) return assetPath
-  return `asset://$accountID/media/${messageId}/${id}`
-}
+const getAssetUrl = async (id: BigInteger, messageId: number = undefined) => `asset://${accountId}/media/${id}/${messageId ?? ''}`
 
-const getProfilePhotoUrl = async (id: BigInteger) => {
-  const assetPath = await getAssetURL(id.toString())
-  if (assetPath) return assetPath
-  return `asset://$accountID/profile/${id}/${id}`
-}
 async function mapLinkImg(photo: Api.Photo, messageId: number): Promise<Partial<MessageLink>> {
   if (photo.sizes.length < 1) return
   const photoSize = photo.sizes.slice(-1)[0]
@@ -221,7 +217,7 @@ export async function mapMessage(msg: CustomMessage, accountID: string) {
     mapped.text = msgText
     mapped.textAttributes = mapTextAttributes(msgText, msgEntities)
   }
-  const pushSticker = async (sticker: Api.Document, messageId : number) => {
+  const pushSticker = async (sticker: Api.Document, messageId: number) => {
     const sizeAttribute = sticker.attributes.find(a => a.className === 'DocumentAttributeImageSize')?.[0]
     const size = sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined
     const animatedAttributes = sticker.attributes.find(a => a.className === 'DocumentAttributeAnimated')
@@ -244,144 +240,148 @@ export async function mapMessage(msg: CustomMessage, accountID: string) {
     if (msg.webPreview) {
       mapped.links = [mapMessageLink(msg.webPreview, msg.id)]
     }
-  } if (msg.photo instanceof Api.Photo) {
-    const { photo } = msg
-    mapped.attachments = mapped.attachments || []
-    if (photo.sizes[0].className === 'PhotoSize') {
+  }
+  if (msg.media) {
+    if (msg.photo instanceof Api.Photo) {
+      const { photo } = msg
+      mapped.attachments = mapped.attachments || []
+      if (photo.sizes[0].className === 'PhotoSize') {
+        mapped.attachments.push({
+          id: String(photo.id),
+          srcURL: await getAssetUrl(photo.id, msg.id),
+          type: MessageAttachmentType.IMG,
+          size: photo.sizes ? { width: photo.sizes[0].w, height: photo.sizes[0].h } : undefined,
+        })
+      }
+    } else if (msg.video instanceof Api.Document) {
+      const { video } = msg
+      mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
-        id: String(photo.id),
-        srcURL: await getAssetUrl(photo.id, msg.id),
-        type: MessageAttachmentType.IMG,
-        size: photo.sizes ? { width: photo.sizes[0].w, height: photo.sizes[0].h } : undefined,
+        id: String(video.id),
+        srcURL: await getAssetUrl(video.id, msg.id),
+        type: MessageAttachmentType.VIDEO,
+        fileName: video.accessHash.toString(),
+        mimeType: video.mimeType,
+        size: video.videoThumbs ? { width: video.videoThumbs[0].w, height: video.videoThumbs[0].h } : undefined,
       })
-    }
-  } if (msg.video instanceof Api.Document) {
-    const { video } = msg
-    mapped.attachments = mapped.attachments || []
-    mapped.attachments.push({
-      id: String(video.id),
-      srcURL: await getAssetUrl(video.id, msg.id),
-      type: MessageAttachmentType.VIDEO,
-      fileName: video.accessHash.toString(),
-      mimeType: video.mimeType,
-      size: video.videoThumbs ? { width: video.videoThumbs[0].w, height: video.videoThumbs[0].h } : undefined,
-    })
-  } if (msg.audio instanceof Api.Document) {
-    const { audio } = msg
-    mapped.attachments = mapped.attachments || []
-    mapped.attachments.push({
-      id: String(audio.id),
-      srcURL: await getAssetUrl(audio.id, msg.id),
-      type: MessageAttachmentType.AUDIO,
-      fileName: audio.accessHash.toString(),
-      mimeType: audio.mimeType,
-    })
-  } if (msg.document instanceof Api.Document) {
-    const { document } = msg
-    mapped.attachments = mapped.attachments || []
-    const fileName = (document.attributes.find(f => f instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename)?.fileName
-      ?? document.accessHash.toString()
-    mapped.attachments.push({
-      id: String(document.id),
-      type: MessageAttachmentType.UNKNOWN,
-      srcURL: await getAssetUrl(document.id, msg.id),
-      fileName,
-      mimeType: document.mimeType,
-      fileSize: document.size,
-    })
-  } if (msg.videoNote instanceof Api.Document) {
-    const { videoNote } = msg
-    mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
-    mapped.attachments = mapped.attachments || []
-    mapped.attachments.push({
-      id: String(videoNote.id),
-      srcURL: await getAssetUrl(videoNote.id, msg.id),
-      type: MessageAttachmentType.VIDEO,
-    })
-  } if (msg.voice instanceof Api.Document) {
-    const { voice } = msg
-    mapped.attachments = mapped.attachments || []
-    mapped.attachments.push({
-      id: String(voice.id),
-      srcURL: await getAssetUrl(voice.id, msg.id),
-      type: MessageAttachmentType.AUDIO,
-    })
-  } if (msg.gif instanceof Api.Document) {
-    const animation = msg.gif
-    mapped.attachments = mapped.attachments || []
-    const size = animation.thumbs[0] as Api.PhotoSize
-    mapped.attachments.push({
-      id: String(animation.id),
-      srcURL: await getAssetUrl(animation.id, msg.id),
-      type: MessageAttachmentType.VIDEO,
-      isGif: true,
-      fileName: animation.accessHash.toString(),
-      mimeType: animation.mimeType,
-      size: { width: size.w, height: size.h },
-    })
-  } if (msg.sticker instanceof Api.Document) {
-    pushSticker(msg.sticker, msg.id)
-  } else if (msg.contact) {
-    const { contact } = msg
-    mapped.attachments = mapped.attachments || []
-    mapped.attachments.push({
-      id: String(contact.userId),
-      type: MessageAttachmentType.UNKNOWN,
-      data: Buffer.from(contact.vcard, 'utf-8'),
-      fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
-    })
-  } if (msg.geo instanceof Api.GeoPoint) {
-    const location = msg.geo
-    if (mapped.textHeading) mapped.textHeading += '\n'
-    else mapped.textHeading = ''
-    mapped.textHeading += '📍 Location'
-    mapped.text = `https://www.google.com/maps?q=${location.lat},${location.long}`
-  } else if (msg.venue instanceof Api.MessageMediaVenue) {
-    const { venue } = msg
-    mapped.textHeading = '📍 Venue'
-    mapped.text = [
-      venue.title,
-      venue.address,
-      venue.geo instanceof Api.GeoPoint ? `https://www.google.com/maps?q=${venue.geo.lat},${venue.geo.long}` : '',
-    ].join('\n')
-  } if (msg.dice instanceof Api.MessageMediaDice) {
-    /* TODO
+    } else if (msg.audio instanceof Api.Document) {
+      const { audio } = msg
+      mapped.attachments = mapped.attachments || []
+      mapped.attachments.push({
+        id: String(audio.id),
+        srcURL: await getAssetUrl(audio.id, msg.id),
+        type: MessageAttachmentType.AUDIO,
+        fileName: audio.accessHash.toString(),
+        mimeType: audio.mimeType,
+      })
+    } else if (msg.document instanceof Api.Document) {
+      const { document } = msg
+      mapped.attachments = mapped.attachments || []
+      const fileName = (document.attributes.find(f => f instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename)?.fileName
+        ?? document.accessHash.toString()
+      mapped.attachments.push({
+        id: String(document.id),
+        type: MessageAttachmentType.UNKNOWN,
+        srcURL: await getAssetUrl(document.id, msg.id),
+        fileName,
+        mimeType: document.mimeType,
+        fileSize: document.size,
+      })
+    } else if (msg.videoNote instanceof Api.Document) {
+      const { videoNote } = msg
+      mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
+      mapped.attachments = mapped.attachments || []
+      mapped.attachments.push({
+        id: String(videoNote.id),
+        srcURL: await getAssetUrl(videoNote.id, msg.id),
+        type: MessageAttachmentType.VIDEO,
+      })
+    } else if (msg.voice instanceof Api.Document) {
+      const { voice } = msg
+      mapped.attachments = mapped.attachments || []
+      mapped.attachments.push({
+        id: String(voice.id),
+        srcURL: await getAssetUrl(voice.id, msg.id),
+        type: MessageAttachmentType.AUDIO,
+      })
+    } else if (msg.gif instanceof Api.Document) {
+      const animation = msg.gif
+      mapped.attachments = mapped.attachments || []
+      const size = animation.thumbs[0] as Api.PhotoSize
+      mapped.attachments.push({
+        id: String(animation.id),
+        srcURL: await getAssetUrl(animation.id, msg.id),
+        type: MessageAttachmentType.VIDEO,
+        isGif: true,
+        fileName: animation.accessHash.toString(),
+        mimeType: animation.mimeType,
+        size: { width: size.w, height: size.h },
+      })
+    } else if (msg.sticker instanceof Api.Document) {
+      pushSticker(msg.sticker, msg.id)
+    } else if (msg.contact) {
+      const { contact } = msg
+      mapped.attachments = mapped.attachments || []
+      mapped.attachments.push({
+        id: String(contact.userId),
+        type: MessageAttachmentType.UNKNOWN,
+        data: Buffer.from(contact.vcard, 'utf-8'),
+        fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
+      })
+    } else if (msg.geo instanceof Api.GeoPoint) {
+      const location = msg.geo
       if (mapped.textHeading) mapped.textHeading += '\n'
       else mapped.textHeading = ''
-      if (msg.dice.emoticon) {
-        mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
-      } else {
-        mapped.text = msg.dice.emoticon
+      mapped.textHeading += '📍 Location'
+      mapped.text = `https://www.google.com/maps?q=${location.lat},${location.long}`
+    } else if (msg.venue instanceof Api.MessageMediaVenue) {
+      const { venue } = msg
+      mapped.textHeading = '📍 Venue'
+      mapped.text = [
+        venue.title,
+        venue.address,
+        venue.geo instanceof Api.GeoPoint ? `https://www.google.com/maps?q=${venue.geo.lat},${venue.geo.long}` : '',
+      ].join('\n')
+    } else if (msg.dice instanceof Api.MessageMediaDice) {
+      /* TODO
+        if (mapped.textHeading) mapped.textHeading += '\n'
+        else mapped.textHeading = ''
+        if (msg.dice.emoticon) {
+          mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
+        } else {
+          mapped.text = msg.dice.emoticon
+          switch (msg.dice.emoticon) {
+            case 'diceStickersRegular':
+              mapped.textHeading = `Dice: ${msg.dice.value}`
+              break
+            case 'diceStickersSlotMachine':
+              mapped.textHeading = `Slot Machine: ${msg.dice.value}`
+              break
+            default:
+              break
+          }
+        }
         switch (msg.dice.emoticon) {
           case 'diceStickersRegular':
-            mapped.textHeading = `Dice: ${msg.dice.value}`
+            pushSticker(msg.dice, false, 100, 100)
             break
           case 'diceStickersSlotMachine':
-            mapped.textHeading = `Slot Machine: ${msg.dice.value}`
-            break
+            pushSticker(msg.content.finalState.background, false)
+            pushSticker(msg.content.finalState.leftReel, false)
+            pushSticker(msg.content.finalState.centerReel, false)
+            pushSticker(msg.content.finalState.rightReel, false)
+            pushSticker(msg.content.finalState.lever, false)
           default:
-            break
         }
-      }
-      switch (msg.dice.emoticon) {
-        case 'diceStickersRegular':
-          pushSticker(msg.dice, false, 100, 100)
-          break
-        case 'diceStickersSlotMachine':
-          pushSticker(msg.content.finalState.background, false)
-          pushSticker(msg.content.finalState.leftReel, false)
-          pushSticker(msg.content.finalState.centerReel, false)
-          pushSticker(msg.content.finalState.rightReel, false)
-          pushSticker(msg.content.finalState.lever, false)
-        default:
-      }
-      */
-  } if (msg.poll instanceof Api.MessageMediaPoll) {
-    const { poll } = msg
-    mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}Poll
+        */
+    } else if (msg.poll instanceof Api.MessageMediaPoll) {
+      const { poll } = msg
+      mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}Poll
 
-${poll.results.results.map(result => [poll.poll.answers.find(a => a.option === result.option).text, result.chosen ? '✔️' : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
-  } if (msg instanceof Api.MessageService) {
+  ${poll.results.results.map(result => [poll.poll.answers.find(a => a.option === result.option)?.text, result.chosen ? '✔️' : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+    }
+  }
+  if (msg instanceof Api.MessageService) {
     if (msg.action instanceof Api.MessageActionPhoneCall) {
       mapped.textHeading = [
         `${msg.action.video ? '🎥 Video ' : '📞 '}Call`,
@@ -501,7 +501,7 @@ ${poll.results.results.map(result => [poll.poll.answers.find(a => a.option === r
 
 export async function mapUser(user: Api.User): Promise<User> {
   if (!user) return
-  const imgURL = await getProfilePhotoUrl(user.id)
+  const imgURL = await getAssetUrl(user.id)
   return {
     id: user.id.toString(),
     username: user.username,
@@ -543,7 +543,7 @@ export const mapMuteFor = (seconds: number) => {
 }
 
 export async function mapThread(dialog: Dialog, messages: Message[], members: Api.User[]): Promise<Thread> {
-  const imgFile = await getProfilePhotoUrl(dialog.id)
+  const imgFile = await getAssetUrl(dialog.id)
   const t: Thread = {
     _original: inspect(dialog),
     id: String(getPeerId(dialog.id)),

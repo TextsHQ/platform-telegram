@@ -11,7 +11,7 @@ export const saveAsset = async (buffer: Buffer, filename: string) => {
   await fs.writeFile(filePath, buffer)
 }
 
-export const getAssetURL = async (id: string) => {
+export const getAssetPath = async (id: string) => {
   const filePath = path.join(ASSETS_DIR, id)
   return await fileExists(filePath) ? url.pathToFileURL(filePath).href : undefined
 }

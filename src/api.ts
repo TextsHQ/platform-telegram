@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
 // eslint-disable-next-line
 
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
@@ -10,9 +10,10 @@ import { Api } from 'telegram/tl'
 import bigInt, { BigInteger } from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { TotalList } from 'telegram/Helpers'
+import { inspect } from 'util'
 import { API_ID, API_HASH } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer } from './mappers'
-import { getAssetURL, initAssets, saveAsset } from './util'
+import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer, initMappers } from './mappers'
+import { getAssetPath, initAssets, saveAsset } from './util'
 
 type SendMessageResolveFunction = (value: Message[])=> void
 type GetAssetResolveFunction = (value: string)=> void
@@ -36,6 +37,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private authState: AuthState
 
+  private accountInfo: AccountInfo
+
   private sendMessageResolvers = new Map<number, SendMessageResolveFunction>()
 
   private getAssetResolvers = new Map<number, GetAssetResolveFunction>()
@@ -57,12 +60,14 @@ export default class TelegramAPI implements PlatformAPI {
     password: undefined,
   }
 
-  init = async (session?: string) => {
+  init = async (session?: string, accountInfo?: AccountInfo) => {
     this.stringSession = session ? new StringSession(session) : new StringSession('')
 
     this.client = new TelegramClient(this.stringSession, API_ID, API_HASH, {
       connectionRetries: 5,
     })
+
+    this.accountInfo = accountInfo
 
     await this.client.connect()
 
@@ -157,9 +162,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
+    if (message.media) {
+      this.messageStore.set(message.id.toString(), message)
+    }
     const threadID = message.chatId.toString()
     const mappedMessage = await mapMessage(message, this.me.id.toString())
-    this.emitParticipantsFromMessages(threadID, [mappedMessage])
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -170,18 +177,10 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private getProfilePhoto = async (id: BigInteger) => {
-    const assetPath = await getAssetURL(id.toString())
-    if (assetPath) return
-    const buffer = await this.client.downloadProfilePhoto(id, { isBig: false })
-    if (buffer.length !== 0) await saveAsset(buffer, id.toString())
-    await getAssetURL(id.toString())
-  }
-
   private mapThread = async (dialog: Dialog) => {
+    const messages = await this.client.getMessages(dialog.id, { limit: 20 })
+    const mappedMessages = (await mapMessages(messages.sort((a, b) => a.date - b.date), this.me.id.toString()))
     const participants: Api.User[] = await this.client.getParticipants(dialog.id, {})
-    const messages = (await this.client.getMessages(dialog.id, { limit: 20 }))
-    const mappedMessages = await mapMessages(messages, this.me.id.toString())
     messages.forEach(m => {
       if (m.media) {
         this.messageStore.set(m.id.toString(), m)
@@ -237,12 +236,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages) {
-    // TODO
     this.onEvent([
       {
         type: ServerEventType.STATE_SYNC,
         objectIDs: {
-          threadID: '0',
         },
         mutationType: 'delete',
         objectName: 'message',
@@ -375,6 +372,7 @@ export default class TelegramAPI implements PlatformAPI {
     await initAssets()
     this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
+    initMappers(this.accountInfo.accountID)
   }
 
   logout = async () => {
@@ -533,6 +531,10 @@ export default class TelegramAPI implements PlatformAPI {
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor } = pagination || { cursor: null, direction: null }
+    return {
+      items: [],
+      hasMore: false,
+    }
     const limit = 20
     const messages = await this.client.getMessages(threadID, { limit, minId: +cursor || 0 })
     const items = await (await mapMessages(messages, this.me.id.toString()))
@@ -545,10 +547,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
     const res = await this.client.sendMessage(threadID, { message: msgContent.text, replyTo: +quotedMessageID || 0 })
-    return new Promise<Message[]>(resolve => {
-      const tmpId = res.id
-      this.sendMessageResolvers.set(tmpId, resolve)
-    })
+    const mapped = await mapMessage(res, this.me.id.toString())
+    mapped.seen = true
+    return [mapped]
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
@@ -600,22 +601,18 @@ export default class TelegramAPI implements PlatformAPI {
   onThreadSelected = async () => {
   }
 
-  getAsset = async (type: string, messageId: string, assetId: string) => {
+  getAsset = async (type: string, assetId: string, messageId: string) => {
     texts.log('get asset', type, messageId, assetId)
-    console.log(type, messageId, assetId)
-    const fileId = +assetId
-    const filePath = await getAssetURL(assetId)
+    const filePath = await getAssetPath(assetId)
     if (filePath) {
       this.messageStore.delete(messageId)
       return filePath
     }
-    if (type === 'profile') {
-      await this.client.downloadProfilePhoto(fileId).then(buffer => saveAsset(buffer, assetId.toString()))
-    } if (type === 'media') {
+    if (messageId) {
       const message = this.messageStore.get(messageId)
-      await message.downloadMedia({}).then(buffer => saveAsset(buffer, assetId.toString()))
-    }
-    return getAssetURL(assetId)
+      if (message) await message.downloadMedia({}).then(buffer => saveAsset(buffer, assetId.toString()))
+    } else await this.client.downloadProfilePhoto(assetId).then(buffer => saveAsset(buffer, assetId.toString()))
+    return getAssetPath(assetId)
   }
 
   handleDeepLink = async (link: string) => {
