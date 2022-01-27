@@ -11,6 +11,10 @@ import bigInt, { BigInteger } from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { TotalList } from 'telegram/Helpers'
 import { inspect } from 'util'
+import type { SendMessageParams } from 'telegram/client/messages'
+import type { LocalPath } from 'telegram/define'
+import { CustomFile } from 'telegram/client/uploads'
+import { readFile } from 'fs/promises'
 import { API_ID, API_HASH } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer, initMappers } from './mappers'
 import { getAssetPath, initAssets, saveAsset } from './util'
@@ -32,16 +36,22 @@ if (IS_DEV) {
   require('source-map-support').install()
 }
 
+async function getMessageContent(msgContent: MessageContent) {
+  const { fileBuffer, fileName, filePath } = msgContent
+  if (filePath) {
+    const buffer = await readFile(filePath)
+    return new CustomFile(fileName, buffer.byteLength, filePath, buffer)
+  } if (fileBuffer) {
+    return new CustomFile(fileName, fileBuffer.length, filePath, fileBuffer)
+  }
+}
+
 export default class TelegramAPI implements PlatformAPI {
   private client?: TelegramClient
 
   private authState: AuthState
 
   private accountInfo: AccountInfo
-
-  private sendMessageResolvers = new Map<number, SendMessageResolveFunction>()
-
-  private getAssetResolvers = new Map<number, GetAssetResolveFunction>()
 
   private messageStore = new Map<string, Api.Message>()
 
@@ -179,8 +189,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   private mapThread = async (dialog: Dialog) => {
     const messages = await this.client.getMessages(dialog.id, { limit: 20 })
-    const mappedMessages = (await mapMessages(messages.sort((a, b) => a.date - b.date), this.me.id.toString()))
-    const participants: Api.User[] = await this.client.getParticipants(dialog.id, {})
+    const mappedMessages = (await mapMessages(messages, this.me.id.toString()))
+    if (dialog.isGroup || dialog.isChannel) {
+      this.getAndEmitParticipants(dialog)
+    }
+    const participants = (dialog.isGroup || dialog.isChannel) ? [] : await this.client.getParticipants(dialog.id, {})
     messages.forEach(m => {
       if (m.media) {
         this.messageStore.set(m.id.toString(), m)
@@ -531,12 +544,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor } = pagination || { cursor: null, direction: null }
-    return {
-      items: [],
-      hasMore: false,
-    }
     const limit = 20
-    const messages = await this.client.getMessages(threadID, { limit, minId: +cursor || 0 })
+    const messages = await this.client.getMessages(threadID, { limit, maxId: +cursor || 0 })
     const items = await (await mapMessages(messages, this.me.id.toString()))
     this.emitParticipantsFromMessages(threadID, items)
     return {
@@ -546,7 +555,15 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
-    const res = await this.client.sendMessage(threadID, { message: msgContent.text, replyTo: +quotedMessageID || 0 })
+    const { text } = msgContent
+    const file = await getMessageContent(msgContent)
+    const msgSendParams: SendMessageParams = {
+      parseMode: 'md',
+      message: text,
+      replyTo: +quotedMessageID || undefined,
+      file,
+    }
+    const res = await this.client.sendMessage(threadID, msgSendParams)
     const mapped = await mapMessage(res, this.me.id.toString())
     mapped.seen = true
     return [mapped]
@@ -555,7 +572,8 @@ export default class TelegramAPI implements PlatformAPI {
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
     let { text } = msgContent
     if (!msgContent.text || /^\s+$/.test(msgContent.text)) text = '.'
-    await this.client.editMessage(threadID, { message: +messageID, text })
+    const file = await getMessageContent(msgContent)
+    await this.client.editMessage(threadID, { message: +messageID, text, file })
     return true
   }
 
@@ -569,12 +587,12 @@ export default class TelegramAPI implements PlatformAPI {
 
   sendActivityIndicator = async (type: ActivityType, threadID: string) => {
     const action = {
-      [ActivityType.NONE]: Api.SendMessageCancelAction,
-      [ActivityType.TYPING]: Api.SendMessageTypingAction,
-      [ActivityType.RECORDING_VOICE]: Api.SendMessageRecordAudioAction,
-      [ActivityType.RECORDING_VIDEO]: Api.SendMessageRecordVideoAction,
+      [ActivityType.NONE]: new Api.SendMessageCancelAction(),
+      [ActivityType.TYPING]: new Api.SendMessageTypingAction(),
+      [ActivityType.RECORDING_VOICE]: new Api.SendMessageRecordAudioAction(),
+      [ActivityType.RECORDING_VIDEO]: new Api.SendMessageRecordVideoAction(),
     }[type]
-    if (action) return
+    if (!action) return
     await this.client.invoke(new Api.messages.SetTyping({ peer: threadID, topMsgId: +threadID, action }))
   }
 
