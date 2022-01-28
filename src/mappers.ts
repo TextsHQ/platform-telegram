@@ -1,17 +1,19 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
-import type { BigInteger } from 'big-integer'
 import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import { inspect } from 'util'
+import type bigInt from 'big-integer'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 
-let accountId = ''
+const mapperData = {
+  accountID: undefined,
+}
 
-export function initMappers(id: string) {
-  accountId = id
+export function initMappers(accountID: string) {
+  mapperData.accountID = accountID
 }
 
 function transformOffset(text: string, entities: TextEntity[]) {
@@ -112,13 +114,13 @@ function getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, chatID
   }
 }
 
-export function getMessageButtons(replyMarkup: Api.TypeReplyMarkup, accountID: string, chatID: number, messageID: number) {
+export function getMessageButtons(replyMarkup: Api.TypeReplyMarkup, chatID: number, messageID: number) {
   if (!replyMarkup) return
   switch (replyMarkup.className) {
     case 'ReplyInlineMarkup':
       return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => ({
         label: row.text,
-        linkURL: getButtonLinkURL(row, accountID, chatID, messageID),
+        linkURL: getButtonLinkURL(row, mapperData.accountID, chatID, messageID),
       })))
     case 'ReplyKeyboardMarkup':
       return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
@@ -134,17 +136,17 @@ export function getMessageButtons(replyMarkup: Api.TypeReplyMarkup, accountID: s
   }
 }
 
-const getAssetUrl = async (id: BigInteger, messageId: number = undefined) => `asset://${accountId}/media/${id}/${messageId ?? ''}`
+const getMediaUrl = async (id: bigInt.BigInteger, messageId?: number) => `asset://${mapperData.accountID}/media/${id}${messageId ? '/' + messageId : ''}`
 
 async function mapLinkImg(photo: Api.Photo, messageId: number): Promise<Partial<MessageLink>> {
   if (photo.sizes.length < 1) return
-  const photoSize = photo.sizes.slice(-1)[0]
-  if (photoSize.className === 'PhotoSize') {
+  const photoSize = photo.sizes.find(size => size instanceof Api.PhotoSize)
+  if (photoSize instanceof Api.PhotoSize) {
     const { w, h } = photoSize
     const imgSize = { width: w, height: h }
     const file = photo
 
-    const img = await getAssetUrl(file.id, messageId)
+    const img = await getMediaUrl(file.id, messageId)
     return { img, imgSize }
   }
 }
@@ -186,31 +188,24 @@ export function mapMessageUpdateText(messageID: string, newContent: Api.Message)
 }
 
 function mapCallReason(discardReason: Api.TypePhoneCallDiscardReason) {
-  if (discardReason instanceof Api.PhoneCallDiscardReasonMissed) {
-    return 'Missed'
-  } if (discardReason instanceof Api.PhoneCallDiscardReasonBusy) {
-    return 'Declined'
-  } if (discardReason instanceof Api.PhoneCallDiscardReasonDisconnect) {
-    return 'Disconnected'
-  } if (discardReason instanceof Api.PhoneCallDiscardReasonHangup) {
-    return 'Hung up'
-  }
+  if (discardReason instanceof Api.PhoneCallDiscardReasonMissed) return 'Missed'
+  if (discardReason instanceof Api.PhoneCallDiscardReasonBusy) return 'Declined'
+  if (discardReason instanceof Api.PhoneCallDiscardReasonDisconnect) return 'Disconnected'
+  if (discardReason instanceof Api.PhoneCallDiscardReasonHangup) return 'Hung up'
   return ''
 }
-export async function mapMessage(msg: CustomMessage, accountID: string) {
+
+export async function mapMessage(msg: CustomMessage) {
   const mapped: Message = {
     _original: inspect(msg),
     id: String(msg.id),
     timestamp: new Date(msg.date * 1000),
     editedTimestamp: msg.editDate && !msg.reactions?.recentReactons.length ? new Date(msg.editDate * 1000) : undefined,
-    text: undefined,
     forwardedCount: msg.forwards,
-    textAttributes: undefined,
     senderID: String(getSenderID(msg)),
     isSender: msg.out,
-    attachments: undefined,
     linkedMessageID: msg.replyTo ? String(msg.replyToMsgId) : undefined,
-    buttons: getMessageButtons(msg.replyMarkup, accountID, msg.chatId.toJSNumber(), msg.id),
+    buttons: getMessageButtons(msg.replyMarkup, msg.chatId.toJSNumber(), msg.id),
     expiresInSeconds: msg.ttlPeriod,
   }
 
@@ -232,106 +227,83 @@ export async function mapMessage(msg: CustomMessage, accountID: string) {
     mapped.textAttributes = mapTextAttributes(msgText, msgEntities)
   }
   const pushSticker = async (sticker: Api.Document, messageId: number) => {
-    const sizeAttribute = sticker.attributes.find(a => a.className === 'DocumentAttributeImageSize')?.[0]
-    const size = sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined
-    const animatedAttributes = sticker.attributes.find(a => a.className === 'DocumentAttributeAnimated')
+    const animated = sticker.mimeType === 'application/x-tgsticker'
     mapped.attachments = mapped.attachments || []
     mapped.attachments.push({
       id: sticker.id.toString(),
-      srcURL: await getAssetUrl(sticker.id, messageId),
-      mimeType: animatedAttributes ? 'image/tgs' : undefined,
+      srcURL: await getMediaUrl(sticker.id, messageId),
+      mimeType: animated ? 'image/tgs' : undefined,
       type: MessageAttachmentType.IMG,
       isGif: true,
       isSticker: true,
-      size,
+      size: { width: 512, height: 512 },
       extra: {
+        loop: animated,
       },
     })
   }
 
-  if (msg.text) {
-    setFormattedText(msg.rawText, msg.entities)
-    if (msg.webPreview) {
-      mapped.links = [mapMessageLink(msg.webPreview, msg.id)]
-    }
-  }
-  if (msg.media) {
-    if (msg.photo instanceof Api.Photo) {
+  const mapMessageMedia = async () => {
+    if (msg.photo) {
       const { photo } = msg
       mapped.attachments = mapped.attachments || []
-      if (photo.sizes[0].className === 'PhotoSize') {
-        mapped.attachments.push({
-          id: String(photo.id),
-          srcURL: await getAssetUrl(photo.id, msg.id),
-          type: MessageAttachmentType.IMG,
-          size: photo.sizes ? { width: photo.sizes[0].w, height: photo.sizes[0].h } : undefined,
-        })
-      }
-    } else if (msg.video instanceof Api.Document) {
+      mapped.attachments.push({
+        id: String(photo.id),
+        srcURL: await getMediaUrl(photo.id, msg.id),
+        type: MessageAttachmentType.IMG,
+      })
+    } else if (msg.video) {
       const { video } = msg
       mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(video.id),
-        srcURL: await getAssetUrl(video.id, msg.id),
+        srcURL: await getMediaUrl(video.id, msg.id),
         type: MessageAttachmentType.VIDEO,
         fileName: video.accessHash.toString(),
         mimeType: video.mimeType,
         size: video.videoThumbs ? { width: video.videoThumbs[0].w, height: video.videoThumbs[0].h } : undefined,
       })
-    } else if (msg.audio instanceof Api.Document) {
+    } else if (msg.audio) {
       const { audio } = msg
       mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(audio.id),
-        srcURL: await getAssetUrl(audio.id, msg.id),
+        srcURL: await getMediaUrl(audio.id, msg.id),
         type: MessageAttachmentType.AUDIO,
         fileName: audio.accessHash.toString(),
         mimeType: audio.mimeType,
       })
-    } else if (msg.document instanceof Api.Document) {
-      const { document } = msg
-      mapped.attachments = mapped.attachments || []
-      const fileName = (document.attributes.find(f => f instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename)?.fileName
-        ?? document.accessHash.toString()
-      mapped.attachments.push({
-        id: String(document.id),
-        type: MessageAttachmentType.UNKNOWN,
-        srcURL: await getAssetUrl(document.id, msg.id),
-        fileName,
-        mimeType: document.mimeType,
-        fileSize: document.size,
-      })
-    } else if (msg.videoNote instanceof Api.Document) {
+    } else if (msg.videoNote) {
       const { videoNote } = msg
       mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
       mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(videoNote.id),
-        srcURL: await getAssetUrl(videoNote.id, msg.id),
+        srcURL: await getMediaUrl(videoNote.id, msg.id),
         type: MessageAttachmentType.VIDEO,
       })
-    } else if (msg.voice instanceof Api.Document) {
+    } else if (msg.voice) {
       const { voice } = msg
       mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: String(voice.id),
-        srcURL: await getAssetUrl(voice.id, msg.id),
+        srcURL: await getMediaUrl(voice.id, msg.id),
         type: MessageAttachmentType.AUDIO,
       })
-    } else if (msg.gif instanceof Api.Document) {
+    } else if (msg.gif) {
       const animation = msg.gif
       mapped.attachments = mapped.attachments || []
       const size = animation.thumbs[0] as Api.PhotoSize
       mapped.attachments.push({
         id: String(animation.id),
-        srcURL: await getAssetUrl(animation.id, msg.id),
+        srcURL: await getMediaUrl(animation.id, msg.id),
         type: MessageAttachmentType.VIDEO,
         isGif: true,
         fileName: animation.accessHash.toString(),
         mimeType: animation.mimeType,
         size: { width: size.w, height: size.h },
       })
-    } else if (msg.sticker instanceof Api.Document) {
+    } else if (msg.sticker) {
       pushSticker(msg.sticker, msg.id)
     } else if (msg.contact) {
       const { contact } = msg
@@ -342,60 +314,40 @@ export async function mapMessage(msg: CustomMessage, accountID: string) {
         data: Buffer.from(contact.vcard, 'utf-8'),
         fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
       })
-    } else if (msg.geo instanceof Api.GeoPoint) {
-      const location = msg.geo
+    } else if (msg.document) {
+      const { document } = msg
+      mapped.attachments = mapped.attachments || []
+      const fileName = (document.attributes.find(f => f instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename)?.fileName
+        ?? document.accessHash.toString()
+      mapped.attachments.push({
+        id: String(document.id),
+        type: MessageAttachmentType.UNKNOWN,
+        srcURL: await getMediaUrl(document.id, msg.id),
+        fileName,
+        mimeType: document.mimeType,
+        fileSize: document.size,
+      })
+    } else if (msg.dice) {
       if (mapped.textHeading) mapped.textHeading += '\n'
       else mapped.textHeading = ''
-      mapped.textHeading += '📍 Location'
-      mapped.text = `https://www.google.com/maps?q=${location.lat},${location.long}`
-    } else if (msg.venue instanceof Api.MessageMediaVenue) {
-      const { venue } = msg
-      mapped.textHeading = '📍 Venue'
-      mapped.text = [
-        venue.title,
-        venue.address,
-        venue.geo instanceof Api.GeoPoint ? `https://www.google.com/maps?q=${venue.geo.lat},${venue.geo.long}` : '',
-      ].join('\n')
-    } else if (msg.dice instanceof Api.MessageMediaDice) {
-      /* TODO
-        if (mapped.textHeading) mapped.textHeading += '\n'
-        else mapped.textHeading = ''
-        if (msg.dice.emoticon) {
-          mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
-        } else {
-          mapped.text = msg.dice.emoticon
-          switch (msg.dice.emoticon) {
-            case 'diceStickersRegular':
-              mapped.textHeading = `Dice: ${msg.dice.value}`
-              break
-            case 'diceStickersSlotMachine':
-              mapped.textHeading = `Slot Machine: ${msg.dice.value}`
-              break
-            default:
-              break
-          }
-        }
-        switch (msg.dice.emoticon) {
-          case 'diceStickersRegular':
-            pushSticker(msg.dice, false, 100, 100)
-            break
-          case 'diceStickersSlotMachine':
-            pushSticker(msg.content.finalState.background, false)
-            pushSticker(msg.content.finalState.leftReel, false)
-            pushSticker(msg.content.finalState.centerReel, false)
-            pushSticker(msg.content.finalState.rightReel, false)
-            pushSticker(msg.content.finalState.lever, false)
-          default:
-        }
-        */
-    } else if (msg.poll instanceof Api.MessageMediaPoll) {
-      const { poll } = msg
-      mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}Poll
 
-  ${poll.results.results.map(result => [poll.poll.answers.find(a => a.option === result.option)?.text, result.chosen ? '✔️' : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+      mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
+      mapped.text = msg.dice.emoticon
+      mapped.textHeading = `Dice: ${msg.dice.value}`
+    } else if (msg.poll) {
+      const { poll } = msg
+      const pollAnswers = poll.poll.answers.map(a => a.text)
+      mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}Poll\n\n
+        
+  ${poll.results.results.map((result, index) => [pollAnswers[index], result.chosen
+    ? '✔️'
+    : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+    } else {
+      mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
     }
   }
-  if (msg instanceof Api.MessageService) {
+
+  const mapMessageService = () => {
     if (msg.action instanceof Api.MessageActionPhoneCall) {
       mapped.textHeading = [
         `${msg.action.video ? '🎥 Video ' : '📞 '}Call`,
@@ -428,94 +380,106 @@ export async function mapMessage(msg: CustomMessage, accountID: string) {
         participantIDs: msg.action.users.map(num => String(num)),
         actorParticipantID: undefined,
       }
+    } else if (msg.action instanceof Api.MessageActionChatDeleteUser) {
+      mapped.text = `{{${msg.action.userId}}} left the group`
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
+        participantIDs: [String(msg.action.userId)],
+        actorParticipantID: undefined,
+      }
+    } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
+      mapped.text = '{{sender}} joined the group via invite link'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+        participantIDs: [mapped.senderID],
+        actorParticipantID: undefined,
+      }
+    } else if (msg.action instanceof Api.ChannelAdminLogEventActionChangePhoto) {
+      mapped.text = '{{sender}} updated the group photo'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_IMG_CHANGED,
+        actorParticipantID: mapped.senderID,
+      }
+    } else if (msg.action instanceof Api.MessageActionChatDeletePhoto) {
+      mapped.text = '{{sender}} deleted the group photo'
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.THREAD_IMG_CHANGED,
+        actorParticipantID: mapped.senderID,
+      }
+    } else if (msg.action instanceof Api.MessageActionChatCreate || msg.action instanceof Api.MessageActionChannelCreate) {
+      mapped.text = `{{sender}} created the group "${msg.chat.id}"`
+      mapped.isAction = true
+      mapped.parseTemplate = true
+      mapped.action = {
+        type: MessageActionType.GROUP_THREAD_CREATED,
+        actorParticipantID: mapped.senderID,
+        title: msg.chat.id.toString(),
+      }
+    } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
+      mapped.text = `{{sender}} created the group "${msg.chat.id}"`
+      mapped.isAction = true
+      mapped.parseTemplate = true
+    } else if (msg.action instanceof Api.MessageActionCustomAction) {
+      mapped.text = msg.text
+      mapped.isAction = true
+      mapped.parseTemplate = true
+    } else if (msg.action instanceof Api.MessageActionPaymentSent) {
+      mapped.text = `You have successfully transfered ${msg.action.currency} ${msg.action.totalAmount}`
+      mapped.isAction = true
+      mapped.parseTemplate = true
     } else {
-      mapped.textHeading = 'Unsupported Telegram message'
+      mapped.textHeading = `Unsupported Telegram message ${msg.media?.className} ${msg.action?.className}`
     }
   }
+
+  if (msg.text) {
+    setFormattedText(msg.rawText, msg.entities)
+    if (msg.webPreview) {
+      mapped.links = [mapMessageLink(msg.webPreview, msg.id)]
+    }
+  }
+  if (msg.reactions) {
+    setReactions(msg.reactions)
+  }
+  if (msg.media) {
+    await mapMessageMedia()
+  }
+
+  if (msg instanceof Api.MessageService) {
+    mapMessageService()
+  }
+
+  if (msg.geo instanceof Api.GeoPoint) {
+    const location = msg.geo
+    if (mapped.textHeading) mapped.textHeading += '\n'
+    else mapped.textHeading = ''
+    mapped.textHeading += '📍 Location'
+    mapped.text = `https://www.google.com/maps?q=${location.lat},${location.long}`
+  }
+  if (msg.venue) {
+    const { venue } = msg
+    mapped.textHeading = '📍 Venue'
+    mapped.text = [
+      venue.title,
+      venue.address,
+      venue.geo instanceof Api.GeoPoint ? `https://www.google.com/maps?q=${venue.geo.lat},${venue.geo.long}` : '',
+    ].join('\n')
+  }
+
   return mapped
-  /*
-      case 'messageChatDeleteMember':
-        mapped.text = `{{${msg.content.userId}}} left the group`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
-          participantIDs: [String(msg.content.userId)],
-          actorParticipantID: undefined,
-        }
-        break
-      case 'messageChatJoinByLink':
-        mapped.text = '{{sender}} joined the group via invite link'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: [mapped.senderID],
-          actorParticipantID: undefined,
-        }
-        break
-      case 'messageChatChangePhoto':
-        mapped.text = '{{sender}} updated the group photo'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_IMG_CHANGED,
-          actorParticipantID: mapped.senderID,
-        }
-        break
-      case 'messageChatDeletePhoto':
-        mapped.text = '{{sender}} deleted the group photo'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_IMG_CHANGED,
-          actorParticipantID: mapped.senderID,
-        }
-        break
-      case 'messageBasicGroupChatCreate':
-      case 'messageSupergroupChatCreate':
-        mapped.text = `{{sender}} created the group "${msg.content.title}"`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.GROUP_THREAD_CREATED,
-          actorParticipantID: mapped.senderID,
-          title: msg.content.title,
-        }
-        break
-      case 'messageChatUpgradeFrom':
-        mapped.text = `{{sender}} created the group "${msg.content.title}"`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        break
-      case 'messageExpiredPhoto':
-        mapped.text = '{{sender}} sent a self-destructing photo.'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        break
-      case 'messageExpiredVideo':
-        mapped.text = '{{sender}} sent a self-destructing video.'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        break
-      case 'messageCustomServiceAction':
-        mapped.text = msg.content.text
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        break
-      case 'messagePaymentSuccessful':
-        mapped.text = `You have successfully transfered ${msg.content.currency} ${msg.content.totalAmount}`
-        mapped.linkedMessageID = String(msg.content.invoiceMessageId)
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        break
-      }
-      */
 }
 
 export async function mapUser(user: Api.User): Promise<User> {
   if (!user) return
-  const imgURL = await getAssetUrl(user.id)
+  const imgURL = await getMediaUrl(user.id)
   return {
     id: user.id.toString(),
     username: user.username,
@@ -557,7 +521,7 @@ export const mapMuteFor = (seconds: number) => {
 }
 
 export async function mapThread(dialog: Dialog, messages: Message[], members: Api.User[]): Promise<Thread> {
-  const imgFile = await getAssetUrl(dialog.id)
+  const imgFile = await getMediaUrl(dialog.id)
   const t: Thread = {
     _original: inspect(dialog),
     id: String(getPeerId(dialog.id)),
@@ -582,12 +546,11 @@ export async function mapThread(dialog: Dialog, messages: Message[], members: Ap
   return t
 }
 
-export const mapMessages = async (messages: Api.Message[], accountID: string) =>
-  Promise.all(messages.map(m => mapMessage(m, accountID)))
+export const mapMessages = async (messages: Api.Message[]) =>
+  Promise.all(messages.sort((a, b) => a.date - b.date).map(m => mapMessage(m)))
 
 // https://github.com/evgeny-nadymov/telegram-react/blob/afd90f19b264895806359c23f985edccda828aca/src/Utils/Chat.js#L445
 export function mapUserAction(update: Api.UpdateUserTyping): UserActivityEvent {
-  // TODO
   const threadID = update.userId.toString()
   const participantID = update.userId.toString()
   const customActivity = (customLabel: string): UserActivityEvent => ({

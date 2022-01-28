@@ -9,10 +9,11 @@ export const fileExists = (filePath: string) =>
 export const saveAsset = async (buffer: Buffer, filename: string) => {
   const filePath = path.join(ASSETS_DIR, filename)
   await fs.writeFile(filePath, buffer)
+  return filePath
 }
 
-export const getAssetPath = async (id: string) => {
-  const filePath = path.join(ASSETS_DIR, id)
+export const getAssetPath = async (id: string | number) => {
+  const filePath = path.join(ASSETS_DIR, id.toString())
   return await fileExists(filePath) ? url.pathToFileURL(filePath).href : undefined
 }
 

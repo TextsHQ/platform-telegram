@@ -4,7 +4,7 @@ import { REACTIONS } from './constants'
 const info: PlatformInfo = {
   name: 'telegram',
   version: '1.0.1',
-  displayName: 'Telegram MTProto',
+  displayName: 'Telegram',
   tags: ['Beta'],
   icon: `<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="16" height="16" rx="5" fill="#179CDE"/>

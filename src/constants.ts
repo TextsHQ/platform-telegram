@@ -1,5 +1,4 @@
 import path from 'path'
-import { texts } from '@textshq/platform-sdk'
 import { SupportedReaction, texts } from '@textshq/platform-sdk'
 
 export const BINARIES_DIR_PATH = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')

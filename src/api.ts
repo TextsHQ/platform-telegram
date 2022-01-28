@@ -7,20 +7,16 @@ import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { StringSession } from 'telegram/sessions'
 import { Api } from 'telegram/tl'
-import bigInt, { BigInteger } from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
-import type { TotalList } from 'telegram/Helpers'
-import { inspect } from 'util'
 import type { SendMessageParams } from 'telegram/client/messages'
-import type { LocalPath } from 'telegram/define'
 import { CustomFile } from 'telegram/client/uploads'
 import { readFile } from 'fs/promises'
-import { API_ID, API_HASH, REACTIONS } from './constants'
+import bigInt from 'big-integer'
+import { inspect } from 'util'
+import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer, initMappers } from './mappers'
 import { getAssetPath, initAssets, saveAsset } from './util'
 
-type SendMessageResolveFunction = (value: Message[])=> void
-type GetAssetResolveFunction = (value: string)=> void
 type LoginEventCallback = (authState: any)=> void
 
 const { IS_DEV } = texts
@@ -53,13 +49,13 @@ export default class TelegramAPI implements PlatformAPI {
 
   private accountInfo: AccountInfo
 
-  private messageStore = new Map<string, Api.Message>()
+  private messageMediaStore = new Map<number, Api.Message>()
 
   private loginEventCallback: LoginEventCallback
 
   private stringSession?: StringSession
 
-  private dialogs?: TotalList<Dialog>
+  private dialogs?: Map<string, Dialog>
 
   private me: Api.User
 
@@ -123,7 +119,6 @@ export default class TelegramAPI implements PlatformAPI {
         {
           this.loginInfo.phoneCode = creds.custom.code
           if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
-          console.log(creds.custom)
           const res = await this.client.invoke(new Api.auth.SignIn({
             phoneNumber: this.loginInfo.phoneNumber,
             phoneCodeHash: this.loginInfo.phoneCodeHash,
@@ -170,21 +165,13 @@ export default class TelegramAPI implements PlatformAPI {
     return { type: 'wait' }
   }
 
-  addReaction = (threadID: string, messageID: string, reactionKey: string) => {
-    this.client.invoke(new Api.messages.SendReaction({
-      msgId: Number(messageID),
-      peer: threadID,
-      reaction: REACTIONS[reactionKey].render,
-    }))
-  }
-
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
-    if (message.media) {
-      this.messageStore.set(message.id.toString(), message)
+    if (message.media && !(message.media instanceof Api.MessageMediaEmpty)) {
+      this.messageMediaStore.set(message.id, message)
     }
     const threadID = message.chatId.toString()
-    const mappedMessage = await mapMessage(message, this.me.id.toString())
+    const mappedMessage = await mapMessage(message)
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -197,17 +184,17 @@ export default class TelegramAPI implements PlatformAPI {
 
   private mapThread = async (dialog: Dialog) => {
     const messages = await this.client.getMessages(dialog.id, { limit: 20 })
-    const mappedMessages = (await mapMessages(messages, this.me.id.toString()))
-    if (dialog.isGroup || dialog.isChannel) {
+    const mappedMessages = await mapMessages(messages)
+
+    const participants = (dialog.isGroup || dialog.isChannel) ? [] : await this.client.getParticipants(dialog.id, {})
+    if (!participants.length) {
       this.getAndEmitParticipants(dialog)
     }
-    const participants = (dialog.isGroup || dialog.isChannel) ? [] : await this.client.getParticipants(dialog.id, {})
-    messages.forEach(m => {
-      if (m.media) {
-        this.messageStore.set(m.id.toString(), m)
-      }
-    })
-    const thread = mapThread(dialog, mappedMessages, participants)
+
+    messages.forEach(msg => this.messageMediaStore.set(msg.id, msg))
+
+    participants.push(this.me)
+    const thread = await mapThread(dialog, mappedMessages, participants)
     const presenceEvents = participants.map(x => mapUserPresence(x.id.toJSNumber(), x.status))
     this.onEvent(presenceEvents)
     return thread
@@ -330,22 +317,23 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([mapUserPresence(update.userId.toJSNumber(), update.status)])
   }
 
-  private onUpdateEditMessage(update: Api.UpdateEditMessage) {
+  private async onUpdateEditMessage(update: Api.UpdateEditMessage) {
+    if (update.message instanceof Api.MessageEmpty) return
+    const threadID = idFromPeer(update.message.peerId).toString()
+    const updatedMessage = await mapMessage(update.message)
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
       objectName: 'message',
-      objectIDs: { threadID: String(idFromPeer(update.message.peerId)), messageID: String(update.message.id) },
-      entries: [{
-        id: String(update.message.id),
-      }],
+      objectIDs: { threadID, messageID: update.message.id.toString() },
+      entries: [updatedMessage],
     }])
   }
 
   private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents) => {
     const messageID = String(update.messages[0])
     const res = await this.client.getMessages(undefined, { ids: update.messages })
-    const entries = await mapMessages(res, this.me.id.toString())
+    const entries = await mapMessages(res)
     if (res.length === 0) return
     const threadID = res[0].chatId?.toString()
     this.onEvent([{
@@ -361,17 +349,18 @@ export default class TelegramAPI implements PlatformAPI {
     this.client.addEventHandler(this.onUpdateNewMessage, new NewMessage({}))
     this.client.addEventHandler(async (update: Api.TypeUpdate) => {
       if (update instanceof Api.UpdateChat) await this.onUpdateChat(update)
-      else if (update instanceof Api.ChatParticipant) await this.onUpdateChatParticipant(update)
-      else if (update instanceof Api.ChannelParticipant) await this.onUpdateChannelParticipant(update)
-      else if (update instanceof Api.UpdateNotifySettings) await this.onUpdateNotifySettings(update)
-      else if (update instanceof Api.UpdateDeleteMessages) await this.onUpdateDeleteMessages(update)
-      else if (update instanceof Api.UpdateUserTyping) await this.onUpdateUserTyping(update)
-      else if (update instanceof Api.UpdateDialogUnreadMark) await this.onUpdateDialogUnreadMark(update)
-      else if (update instanceof Api.UpdateReadChannelInbox) await this.onUpdateReadChannelInbox(update)
-      else if (update instanceof Api.UpdateReadChannelOutbox) await this.onUpdateReadChannelOutbox(update)
-      else if (update instanceof Api.UpdateUserStatus) await this.onUpdateUserStatus(update)
+      else if (update instanceof Api.ChatParticipant) this.onUpdateChatParticipant(update)
+      else if (update instanceof Api.ChannelParticipant) this.onUpdateChannelParticipant(update)
+      else if (update instanceof Api.UpdateNotifySettings) this.onUpdateNotifySettings(update)
+      else if (update instanceof Api.UpdateDeleteMessages) this.onUpdateDeleteMessages(update)
+      else if (update instanceof Api.UpdateUserTyping) this.onUpdateUserTyping(update)
+      else if (update instanceof Api.UpdateDialogUnreadMark) this.onUpdateDialogUnreadMark(update)
+      else if (update instanceof Api.UpdateReadChannelInbox) this.onUpdateReadChannelInbox(update)
+      else if (update instanceof Api.UpdateReadChannelOutbox) this.onUpdateReadChannelOutbox(update)
+      else if (update instanceof Api.UpdateUserStatus) this.onUpdateUserStatus(update)
       else if (update instanceof Api.UpdateEditMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
+      else if (IS_DEV) console.log(inspect(update))
     })
   }
 
@@ -396,19 +385,6 @@ export default class TelegramAPI implements PlatformAPI {
     initMappers(this.accountInfo.accountID)
   }
 
-  logout = async () => {
-    await this.client?.disconnect()
-  }
-
-  dispose = async () => {
-  }
-
-  getCurrentUser = (): CurrentUser => (
-    {
-      id: this.me.id.toString(),
-      displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phone),
-    })
-
   private pendingEvents: ServerEvent[] = []
 
   private onEvent: OnServerEventCallback = (events: ServerEvent[]) => {
@@ -425,84 +401,9 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  subscribeToEvents = (onServerEvent: OnServerEventCallback) => {
-    this.onServerEvent = onServerEvent
-  }
-
-  serializeSession = () => this.stringSession.save()
-
-  searchUsers = async (query: string) => {
-    const res = await this.client.invoke(new Api.contacts.Search({
-      q: query,
-    }))
-    const userIds = res.users.map(user => user.id.toJSNumber())
-    return Promise.all(userIds.map(async userId => {
-      const user = await this.getTGUser(userId)
-      return mapUser(user)
-    }))
-  }
-
-  createThread = async (userIDs: string[], title?: string) => {
-    if (userIDs.length === 0) return
-    const chat = await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
-    texts.log('createThread', chat)
-    return true
-    // return this.asyncMapThread(chat)
-  }
-
-  updateThread = async (threadID: string, updates: Partial<Thread>) => {
-    if ('mutedUntil' in updates) {
-      /* TODO
-      await this.client.setChatNotificationSettings({
-        chatId: +threadID,
-        notificationSettings: {
-          _: 'chatNotificationSettings',
-          muteFor: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0,
-        },
-      })
-      */
-      return true
-    }
-  }
-
-  deleteThread = async (threadID: string) => {
-    await this.client.invoke(new Api.messages.DeleteHistory({
-      peer: threadID,
-      revoke: true,
-    }))
-    await this.client.invoke(new Api.messages.DeleteChatUser({
-      userId: 'me',
-      chatId: bigInt(parseInt(threadID, 10)),
-      revokeHistory: true,
-    }))
-  }
-
-  reportThread = async (type: 'spam', threadID: string) => {
-    const res = await this.client.invoke(new Api.account.ReportPeer({
-      peer: threadID,
-      reason: new Api.InputReportReasonSpam(),
-    }))
-    await this.deleteThread(threadID)
-    return res
-  }
-
-  private getTGUser = async (userId: number) => {
-    const res = await this.client.getEntity(
-      userId,
-    )
-    if (res instanceof Api.User) return res
-  }
-
-  getUser = async ({ username }: { username: string }) => {
-    if (!username) return
-    const res = await this.client.invoke(
-      new Api.contacts.Search({
-        q: username,
-      }),
-    )
-    const { users } = res
-    if (users.length === 0) return
-    const user = await this.getTGUser(users[0].id.toJSNumber())
+  private getUserById = async (userId: number | string) => {
+    if (!userId) return
+    const user = this.client.getEntity(userId)
     if (user instanceof Api.User) {
       return mapUser(user)
     }
@@ -527,22 +428,87 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(String(channel.id), mappedMembers)
   }
 
-  private emitParticipantsFromMessages = async (threadID: string, messages: Message[]) => {
-    const senderIDs = [...new Set(messages.map(m => (m.senderID.startsWith('$thread') ? null : +m.senderID)).filter(Boolean))]
-    const members = await Promise.all(senderIDs.map(x => this.getTGUser(x)))
-    const mappedMembers = await Promise.all(members.map(m => mapUser(m)))
-    this.upsertParticipants(threadID, mappedMembers)
+  logout = async () => {
+    await this.client?.disconnect()
+  }
+
+  dispose = async () => {
+  }
+
+  getCurrentUser = (): CurrentUser => {
+    const user: CurrentUser = {
+      id: this.me.id.toString(),
+      displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phone),
+    }
+    return user
+  }
+
+  subscribeToEvents = (onServerEvent: OnServerEventCallback) => {
+    this.onServerEvent = onServerEvent
+  }
+
+  serializeSession = () => this.stringSession.save()
+
+  searchUsers = async (query: string) => {
+    const res = await this.client.invoke(new Api.contacts.Search({
+      q: query,
+    }))
+    const userIds = res.users.map(user => user.id.toJSNumber())
+    return Promise.all(userIds.map(async userId =>
+      this.getUserById(userId)))
+  }
+
+  createThread = async (userIDs: string[], title?: string) => {
+    if (userIDs.length === 0) return
+    if (!title) return
+    await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
+    return true
+  }
+
+  updateThread = async (threadID: string, updates: Partial<Thread>) => {
+    if ('mutedUntil' in updates) {
+      await this.client.invoke(new Api.account.UpdateNotifySettings({
+        peer: new Api.InputNotifyPeer({
+          peer: this.dialogs[threadID].eqr,
+        }),
+        settings: new Api.InputPeerNotifySettings({
+          muteUntil: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0,
+        }),
+      }))
+    }
+  }
+
+  deleteThread = async (threadID: string) => {
+    this.client.invoke(new Api.messages.DeleteHistory({
+      peer: threadID,
+      revoke: true,
+    }))
+    this.client.invoke(new Api.messages.DeleteChatUser({
+      userId: 'me',
+      chatId: bigInt(threadID),
+      revokeHistory: true,
+    }))
+  }
+
+  reportThread = async (type: 'spam', threadID: string) => {
+    await this.client.invoke(new Api.account.ReportPeer({
+      peer: threadID,
+      reason: new Api.InputReportReasonSpam(),
+    }))
+    await this.deleteThread(threadID)
+    return true
   }
 
   getThread = async (threadID: string) => {
-    const dialogThread = await this.dialogs.find(dialog => dialog.id.toString() === threadID)
+    const dialogThread = this.dialogs[threadID]
     return this.mapThread(dialogThread)
   }
 
   getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
-    this.dialogs = await this.client.getDialogs({})
-    const threads = await Promise.all(this.dialogs.map(dialog => this.mapThread(dialog)))
+    const dialogs = await this.client.getDialogs({})
+    const threads = await Promise.all(dialogs.map(dialog => this.mapThread(dialog)))
+    dialogs.forEach(dialog => this.dialogs.set(dialog.id.toString(), dialog))
     return {
       items: threads,
       oldestCursor: '*',
@@ -554,8 +520,7 @@ export default class TelegramAPI implements PlatformAPI {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     const messages = await this.client.getMessages(threadID, { limit, maxId: +cursor || 0 })
-    const items = await (await mapMessages(messages, this.me.id.toString()))
-    this.emitParticipantsFromMessages(threadID, items)
+    const items = await mapMessages(messages)
     return {
       items,
       hasMore: messages.length !== 0,
@@ -571,10 +536,8 @@ export default class TelegramAPI implements PlatformAPI {
       replyTo: +quotedMessageID || undefined,
       file,
     }
-    const res = await this.client.sendMessage(threadID, msgSendParams)
-    const mapped = await mapMessage(res, this.me.id.toString())
-    mapped.seen = true
-    return [mapped]
+    await this.client.sendMessage(threadID, msgSendParams)
+    return true
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
@@ -601,48 +564,45 @@ export default class TelegramAPI implements PlatformAPI {
       [ActivityType.RECORDING_VIDEO]: new Api.SendMessageRecordVideoAction(),
     }[type]
     if (!action) return
-    await this.client.invoke(new Api.messages.SetTyping({ peer: threadID, topMsgId: +threadID, action }))
+    this.client.invoke(new Api.messages.SetTyping({ peer: threadID, topMsgId: +threadID, action }))
   }
 
   deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
-    const res = await this.client.deleteMessages(undefined, [parseInt(messageID, 10)], { revoke: forEveryone })
-    return res.length !== 0
+    await this.client.deleteMessages(undefined, [Number(messageID)], { revoke: forEveryone })
+    return true
   }
 
-  sendReadReceipt = async (threadID: string, messageID: string) => {
-    await this.client.markAsRead(+threadID, +messageID)
-    const res = await this.client.markAsRead(threadID, +messageID, { clearMentions: true })
-    return res
-  }
+  sendReadReceipt = async (threadID: string, messageID: string) =>
+    this.client.markAsRead(threadID, +messageID, { clearMentions: true })
 
   markAsUnread = () => {
     this.client.invoke(new Api.messages.MarkDialogUnread({ unread: true }))
   }
 
   archiveThread = async () => {
-    // TDLib only?
     // await this.client.invoke(Api.{ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } })
   }
 
-  onThreadSelected = async () => {
-  }
-
   getAsset = async (type: string, assetId: string, messageId: string) => {
-    texts.log('get asset', type, messageId, assetId)
     const filePath = await getAssetPath(assetId)
     if (filePath) {
-      this.messageStore.delete(messageId)
       return filePath
     }
-    if (messageId) {
-      const message = this.messageStore.get(messageId)
-      if (message) await message.downloadMedia({}).then(buffer => saveAsset(buffer, assetId.toString()))
-    } else await this.client.downloadProfilePhoto(assetId).then(buffer => saveAsset(buffer, assetId.toString()))
-    return getAssetPath(assetId)
+    const buffer = await (() => {
+      if (messageId) {
+        const message = this.messageMediaStore.get(+messageId)
+        if (!message) return
+        this.messageMediaStore.delete(+messageId)
+        return message.downloadMedia({})
+      }
+      return this.client.downloadProfilePhoto(assetId)
+    })()
+
+    return saveAsset(buffer, assetId)
   }
 
   handleDeepLink = async (link: string) => {
-    const [,,,, type, chatID, messageID, data] = link.split('/')
+    const [, , , , type, chatID, messageID, data] = link.split('/')
     if (type !== 'callback') return
     const res = await this.client.invoke(new Api.messages.GetBotCallbackAnswer({
       data: Buffer.from(data),
@@ -656,5 +616,13 @@ export default class TelegramAPI implements PlatformAPI {
         text: res.message,
       },
     }])
+  }
+
+  addReaction = async (threadID: string, messageID: string, reactionKey: string) => {
+    await this.client.invoke(new Api.messages.SendReaction({
+      msgId: Number(messageID),
+      peer: threadID,
+      reaction: REACTIONS[reactionKey].render,
+    }))
   }
 }
