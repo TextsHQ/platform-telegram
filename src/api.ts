@@ -55,7 +55,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private stringSession?: StringSession
 
-  private dialogs?: Map<string, Dialog>
+  private dialogs?: Map<string, Dialog> = new Map<string, Dialog>()
 
   private me: Api.User
 
