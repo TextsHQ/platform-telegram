@@ -151,7 +151,8 @@ async function mapLinkImg(photo: Api.Photo, messageId: number): Promise<Partial<
   }
 }
 
-function mapMessageLink(webPage: Api.WebPage, messageId: number) {
+function mapMessageLink(webPage: Api.TypeWebPage, messageId: number) {
+  if (!(webPage instanceof Api.WebPage)) return
   const { url: originalURL, displayUrl, title, description, photo } = webPage
   const link: MessageLink = {
     url: displayUrl,
@@ -342,7 +343,10 @@ export async function mapMessage(msg: CustomMessage) {
   ${poll.results.results.map((result, index) => [pollAnswers[index], result.chosen
     ? '✔️'
     : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+    } else if (msg.media instanceof Api.MessageMediaWebPage) {
+      mapped.links = [mapMessageLink(msg.media.webpage, msg.id)]
     } else {
+      console.log(inspect(msg.media))
       mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
     }
   }
