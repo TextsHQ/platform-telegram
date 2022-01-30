@@ -346,7 +346,6 @@ export async function mapMessage(msg: CustomMessage) {
     } else if (msg.media instanceof Api.MessageMediaWebPage) {
       mapped.links = [mapMessageLink(msg.media.webpage, msg.id)]
     } else {
-      console.log(inspect(msg.media))
       mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
     }
   }

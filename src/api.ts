@@ -13,6 +13,8 @@ import { CustomFile } from 'telegram/client/uploads'
 import { readFile } from 'fs/promises'
 import bigInt from 'big-integer'
 import { inspect } from 'util'
+import { getPeerId } from 'telegram/Utils'
+import type { CustomMessage } from 'telegram/tl/custom/message'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer, initMappers } from './mappers'
 import { getAssetPath, initAssets, saveAsset } from './util'
@@ -49,13 +51,15 @@ export default class TelegramAPI implements PlatformAPI {
 
   private accountInfo: AccountInfo
 
-  private messageMediaStore = new Map<number, Api.Message>()
-
   private loginEventCallback: LoginEventCallback
 
   private stringSession?: StringSession
 
   private dialogs?: Map<string, Dialog> = new Map<string, Dialog>()
+
+  private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
+
+  private messageChatId = new Map<number, bigInt.BigInteger>()
 
   private me: Api.User
 
@@ -165,11 +169,15 @@ export default class TelegramAPI implements PlatformAPI {
     return { type: 'wait' }
   }
 
+  private storeMessage(message: CustomMessage) {
+    if (message.media) {
+      this.messageMediaStore.set(message.id, message.media)
+    }
+    this.messageChatId.set(message.id, message.chatId)
+  }
+
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
-    if (message.media && !(message.media instanceof Api.MessageMediaEmpty)) {
-      this.messageMediaStore.set(message.id, message)
-    }
     const threadID = message.chatId.toString()
     const mappedMessage = await mapMessage(message)
     const event: ServerEvent = {
@@ -179,19 +187,18 @@ export default class TelegramAPI implements PlatformAPI {
       objectIDs: { threadID },
       entries: [mappedMessage],
     }
+    this.storeMessage(message)
     this.onEvent([event])
   }
 
   private mapThread = async (dialog: Dialog) => {
     const messages = await this.client.getMessages(dialog.id, { limit: 20 })
     const mappedMessages = await mapMessages(messages)
-
+    messages.forEach(m => this.storeMessage(m))
     const participants = (dialog.isGroup || dialog.isChannel) ? [] : await this.client.getParticipants(dialog.id, {})
     if (!participants.length) {
       this.getAndEmitParticipants(dialog)
     }
-
-    messages.forEach(msg => this.messageMediaStore.set(msg.id, msg))
 
     participants.push(this.me)
     const thread = await mapThread(dialog, mappedMessages, participants)
@@ -244,14 +251,17 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages) {
+    if (!update.messages?.length) return
+    const threadID = this.messageChatId.get(update.messages[0])
     this.onEvent([
       {
         type: ServerEventType.STATE_SYNC,
         objectIDs: {
+          threadID: threadID.toString(),
         },
         mutationType: 'delete',
         objectName: 'message',
-        entries: update.messages.map(x => x.toString()),
+        entries: update.messages.map(id => id.toString()),
       },
     ])
   }
@@ -279,8 +289,8 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private onUpdateReadChannelInbox(update: Api.UpdateReadChannelInbox) {
-    const threadID = update.channelId.toString()
+  private onUpdateReadHistoryInbox(update: Api.UpdateReadHistoryInbox) {
+    const threadID = getPeerId(update.peer)
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
@@ -295,8 +305,8 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private onUpdateReadChannelOutbox(update: Api.UpdateReadChannelOutbox) {
-    const threadID = update.channelId.toString()
+  private onUpdateReadHistoryOutbox(update: Api.UpdateReadHistoryOutbox) {
+    const threadID = getPeerId(update.peer)
     const messageID = update.maxId.toString()
     const event: StateSyncEvent = {
       type: ServerEventType.STATE_SYNC,
@@ -355,12 +365,12 @@ export default class TelegramAPI implements PlatformAPI {
       else if (update instanceof Api.UpdateDeleteMessages) this.onUpdateDeleteMessages(update)
       else if (update instanceof Api.UpdateUserTyping) this.onUpdateUserTyping(update)
       else if (update instanceof Api.UpdateDialogUnreadMark) this.onUpdateDialogUnreadMark(update)
-      else if (update instanceof Api.UpdateReadChannelInbox) this.onUpdateReadChannelInbox(update)
-      else if (update instanceof Api.UpdateReadChannelOutbox) this.onUpdateReadChannelOutbox(update)
+      else if (update instanceof Api.UpdateReadHistoryInbox) this.onUpdateReadHistoryInbox(update)
+      else if (update instanceof Api.UpdateReadHistoryOutbox) this.onUpdateReadHistoryOutbox(update)
       else if (update instanceof Api.UpdateUserStatus) this.onUpdateUserStatus(update)
       else if (update instanceof Api.UpdateEditMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
-      else if (IS_DEV) console.log(inspect(update))
+      else if (IS_DEV) console.log(inspect(update.className))
     })
   }
 
@@ -537,10 +547,7 @@ export default class TelegramAPI implements PlatformAPI {
       file,
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
-    if (file) {
-      this.messageMediaStore.set(res.id, res)
-    }
-
+    this.storeMessage(res)
     return [await mapMessage(res)]
   }
 
@@ -594,10 +601,10 @@ export default class TelegramAPI implements PlatformAPI {
     }
     const buffer = await (() => {
       if (messageId) {
-        const message = this.messageMediaStore.get(+messageId)
-        if (!message) return
+        const media = this.messageMediaStore.get(+messageId)
+        if (!media) return
         this.messageMediaStore.delete(+messageId)
-        return message.downloadMedia({})
+        return this.client.downloadMedia(media, {})
       }
       return this.client.downloadProfilePhoto(assetId)
     })()
