@@ -59,7 +59,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
 
-  private messageChatId = new Map<number, bigInt.BigInteger>()
+  private chatIdMessageId = new Map<bigInt.BigInteger, number[]>()
 
   private me: Api.User
 
@@ -173,7 +173,12 @@ export default class TelegramAPI implements PlatformAPI {
     if (message.media) {
       this.messageMediaStore.set(message.id, message.media)
     }
-    this.messageChatId.set(message.id, message.chatId)
+    const thread = this.chatIdMessageId.get(message.chatId)
+    if (thread) {
+      thread.push(message.id)
+    } else {
+      this.chatIdMessageId.set(message.chatId, [message.id])
+    }
   }
 
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
@@ -252,12 +257,13 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages) {
     if (!update.messages?.length) return
-    const threadID = this.messageChatId.get(update.messages[0])
+    const threadID = Array.from(this.chatIdMessageId.entries()).find(thread => thread[1].find(message => message === update.messages[0]))
+    if (!threadID) return
     this.onEvent([
       {
         type: ServerEventType.STATE_SYNC,
         objectIDs: {
-          threadID: threadID.toString(),
+          threadID: threadID[0].toString(),
         },
         mutationType: 'delete',
         objectName: 'message',
