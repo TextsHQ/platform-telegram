@@ -536,8 +536,12 @@ export default class TelegramAPI implements PlatformAPI {
       replyTo: +quotedMessageID || undefined,
       file,
     }
-    await this.client.sendMessage(threadID, msgSendParams)
-    return true
+    const res = await this.client.sendMessage(threadID, msgSendParams)
+    if (file) {
+      this.messageMediaStore.set(res.id, res)
+    }
+
+    return [await mapMessage(res)]
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
@@ -597,8 +601,10 @@ export default class TelegramAPI implements PlatformAPI {
       }
       return this.client.downloadProfilePhoto(assetId)
     })()
-
-    return saveAsset(buffer, assetId)
+    if (buffer) {
+      return saveAsset(buffer, assetId)
+    }
+    if (IS_DEV) console.log(`No buffer or path for media ${type}/${assetId}/${messageId}`)
   }
 
   handleDeepLink = async (link: string) => {
