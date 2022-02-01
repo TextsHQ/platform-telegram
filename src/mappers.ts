@@ -5,25 +5,17 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import { getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
-import path from 'path'
-import { existsSync, mkdirSync } from 'fs'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
-type MapperData = { accountID: string, assetsDir: string, mediaDir: string, photosDir: string }
+type MapperData = { accountID: string }
 export default class TelegramMapper {
   private mapperData: MapperData
 
   constructor(accountInfo: AccountInfo) {
     this.mapperData = {
       accountID: accountInfo.accountID,
-      assetsDir: accountInfo.dataDirPath,
-      mediaDir: path.join(accountInfo.dataDirPath, 'media'),
-      photosDir: path.join(accountInfo.dataDirPath, 'photos'),
     }
-    if (!existsSync(this.mapperData.assetsDir)) mkdirSync(this.mapperData.assetsDir)
-    if (!existsSync(this.mapperData.mediaDir)) mkdirSync(this.mapperData.mediaDir)
-    if (!existsSync(this.mapperData.photosDir)) mkdirSync(this.mapperData.photosDir)
   }
 
   static* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {

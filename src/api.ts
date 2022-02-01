@@ -15,11 +15,10 @@ import fs from 'fs/promises'
 import url from 'url'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
-import { threadId } from 'worker_threads'
+import BigInteger from 'big-integer'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
-import BigInteger from 'big-integer'
 
 type LoginEventCallback = (authState: any)=> void
 type AirgramSession = { dbKey: string }
