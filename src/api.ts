@@ -12,13 +12,11 @@ import type { SendMessageParams } from 'telegram/client/messages'
 import { CustomFile } from 'telegram/client/uploads'
 import { readFile } from 'fs/promises'
 import bigInt from 'big-integer'
-import { inspect } from 'util'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
-import { RPCError } from 'telegram/errors'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
-import { getAssetPath, initAssets, saveAsset, stringifyCircular } from './util'
+import { stringifyCircular } from './util'
 
 type LoginEventCallback = (authState: any)=> void
 
@@ -372,7 +370,7 @@ export default class TelegramAPI implements PlatformAPI {
       else if (update instanceof Api.UpdateUserStatus) this.onUpdateUserStatus(update)
       else if (update instanceof Api.UpdateEditMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
-      else if (IS_DEV) console.log(inspect(update.className))
+      else if (IS_DEV) console.log(stringifyCircular(update.className))
     })
   }
 
@@ -391,10 +389,9 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    await initAssets()
     this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
-    this.mapper = new TelegramMapper(this.accountInfo.accountID)
+    this.mapper = new TelegramMapper(this.accountInfo)
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -456,10 +453,11 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   logout = async () => {
-    await this.client?.disconnect()
+    await this.mapper.deleteAssetsDir()
   }
 
   dispose = async () => {
+    await this.client?.disconnect()
   }
 
   getCurrentUser = (): CurrentUser => {
@@ -613,22 +611,31 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getAsset = async (type: string, assetId: string, messageId: string) => {
-    const filePath = await getAssetPath(assetId)
+    if (type !== 'media' && type !== 'photos') return
+    const filePath = await this.mapper.getAssetPath(type, assetId)
     if (filePath) {
       return filePath
     }
-    const buffer = await (() => {
-      if (messageId) {
-        const media = this.messageMediaStore.get(+messageId)
-        if (!media) return
+
+    let buffer: Buffer
+    if (type === 'media') {
+      const media = this.messageMediaStore.get(+messageId)
+      if (media) {
         this.messageMediaStore.delete(+messageId)
-        return this.client.downloadMedia(media, {})
+        buffer = await this.client.downloadMedia(media, {})
       }
-      return this.client.downloadProfilePhoto(assetId)
-    })()
-    if (buffer) {
-      return saveAsset(buffer, assetId)
+    } else if (type === 'photos') {
+      console.log(assetId)
+      buffer = await this.client.downloadProfilePhoto(assetId)
+    } else {
+      if (IS_DEV) console.log(`Not a valid media type: ${type}`)
+      return
     }
+
+    if (buffer) {
+      return this.mapper.saveAsset(buffer, type, assetId)
+    }
+
     if (IS_DEV) console.log(`No buffer or path for media ${type}/${assetId}/${messageId}`)
   }
 

@@ -3,8 +3,6 @@ import { SupportedReaction, texts } from '@textshq/platform-sdk'
 
 export const BINARIES_DIR_PATH = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')
 
-export const ASSETS_DIR = path.join(BINARIES_DIR_PATH, 'telegram-assets')
-
 export const API_ID = 1216419
 
 export const API_HASH = '7353efc824823e14ad31cd2b05272466'
