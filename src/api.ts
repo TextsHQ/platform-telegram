@@ -16,7 +16,7 @@ import { inspect } from 'util'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
-import { mapThread, mapMessage, mapMessages, mapUser, mapUserPresence, mapUserAction, idFromPeer, initMappers } from './mappers'
+import TelegramMapper from './mappers'
 import { getAssetPath, initAssets, saveAsset } from './util'
 
 type LoginEventCallback = (authState: any)=> void
@@ -62,6 +62,8 @@ export default class TelegramAPI implements PlatformAPI {
   private chatIdMessageId = new Map<bigInt.BigInteger, number[]>()
 
   private me: Api.User
+
+  private mapper: TelegramMapper
 
   private loginInfo = {
     phoneNumber: undefined,
@@ -184,7 +186,7 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
     const threadID = message.chatId.toString()
-    const mappedMessage = await mapMessage(message)
+    const mappedMessage = await this.mapper.mapMessage(message)
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -198,7 +200,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private mapThread = async (dialog: Dialog) => {
     const messages = await this.client.getMessages(dialog.id, { limit: 20 })
-    const mappedMessages = await mapMessages(messages)
+    const mappedMessages = await this.mapper.mapMessages(messages)
     messages.forEach(m => this.storeMessage(m))
     const participants = (dialog.isGroup || dialog.isChannel) ? [] : await this.client.getParticipants(dialog.id, {})
     if (!participants.length) {
@@ -206,8 +208,8 @@ export default class TelegramAPI implements PlatformAPI {
     }
 
     participants.push(this.me)
-    const thread = await mapThread(dialog, mappedMessages, participants)
-    const presenceEvents = participants.map(x => mapUserPresence(x.id.toJSNumber(), x.status))
+    const thread = await this.mapper.mapThread(dialog, mappedMessages, participants)
+    const presenceEvents = participants.map(x => TelegramMapper.mapUserPresence(x.id.toJSNumber(), x.status))
     this.onEvent(presenceEvents)
     return thread
   }
@@ -249,7 +251,7 @@ export default class TelegramAPI implements PlatformAPI {
       mutationType: 'update',
       objectName: 'thread',
       entries: [{
-        id: idFromPeer(update.peer.peer).toString(),
+        id: TelegramMapper.idFromPeer(update.peer.peer).toString(),
         mutedUntil: new Date(update.notifySettings.muteUntil),
       }],
     }])
@@ -273,7 +275,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateUserTyping(update: Api.UpdateUserTyping) {
-    const event = mapUserAction(update)
+    const event = TelegramMapper.mapUserAction(update)
     if (event) this.onEvent([event])
   }
 
@@ -330,13 +332,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateUserStatus(update: Api.UpdateUserStatus) {
-    this.onEvent([mapUserPresence(update.userId.toJSNumber(), update.status)])
+    this.onEvent([TelegramMapper.mapUserPresence(update.userId.toJSNumber(), update.status)])
   }
 
   private async onUpdateEditMessage(update: Api.UpdateEditMessage) {
     if (update.message instanceof Api.MessageEmpty) return
-    const threadID = idFromPeer(update.message.peerId).toString()
-    const updatedMessage = await mapMessage(update.message)
+    const threadID = TelegramMapper.idFromPeer(update.message.peerId).toString()
+    const updatedMessage = await this.mapper.mapMessage(update.message)
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
@@ -349,7 +351,7 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents) => {
     const messageID = String(update.messages[0])
     const res = await this.client.getMessages(undefined, { ids: update.messages })
-    const entries = await mapMessages(res)
+    const entries = await this.mapper.mapMessages(res)
     if (res.length === 0) return
     const threadID = res[0].chatId?.toString()
     this.onEvent([{
@@ -398,7 +400,7 @@ export default class TelegramAPI implements PlatformAPI {
     await initAssets()
     this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
-    initMappers(this.accountInfo.accountID)
+    this.mapper = new TelegramMapper(this.accountInfo.accountID)
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -421,7 +423,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (!userId) return
     const user = this.client.getEntity(userId)
     if (user instanceof Api.User) {
-      return mapUser(user)
+      return this.mapper.mapUser(user)
     }
   }
 
@@ -440,7 +442,7 @@ export default class TelegramAPI implements PlatformAPI {
   private getAndEmitParticipants = async (channel: Dialog) => {
     const members = await this.client.getParticipants(channel.id, {})
     if (!members.length) return
-    const mappedMembers = await Promise.all(members.map(m => mapUser(m)))
+    const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
     this.upsertParticipants(String(channel.id), mappedMembers)
   }
 
@@ -536,7 +538,7 @@ export default class TelegramAPI implements PlatformAPI {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     const messages = await this.client.getMessages(threadID, { limit, maxId: +cursor || 0 })
-    const items = await mapMessages(messages)
+    const items = await this.mapper.mapMessages(messages)
     return {
       items,
       hasMore: messages.length !== 0,
@@ -554,7 +556,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
     this.storeMessage(res)
-    return [await mapMessage(res)]
+    return [await this.mapper.mapMessage(res)]
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
