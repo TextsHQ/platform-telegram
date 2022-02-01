@@ -21,7 +21,7 @@ export const initAssets = async () => { if (!await fileExists(ASSETS_DIR)) await
 
 const getCircularReplacer = () => {
   const seen = new WeakSet()
-  return (key, value) => {
+  return (key: string, value: any) => {
     if (typeof value === 'object' && value !== null) {
       if (seen.has(value)) {
         return
