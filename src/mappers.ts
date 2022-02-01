@@ -4,9 +4,9 @@ import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
-import { inspect } from 'util'
 import type bigInt from 'big-integer'
 import { MUTED_FOREVER_CONSTANT } from './constants'
+import { stringifyCircular } from './util'
 
 type MapperData = { accountID: string }
 export default class TelegramMapper {
@@ -285,7 +285,7 @@ export default class TelegramMapper {
 
   async mapMessage(msg: CustomMessage) {
     const mapped: Message = {
-      _original: inspect(msg),
+      _original: stringifyCircular(msg),
       id: String(msg.id),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactons.length ? new Date(msg.editDate * 1000) : undefined,
@@ -589,7 +589,7 @@ export default class TelegramMapper {
   async mapThread(dialog: Dialog, messages: Message[], members: Api.User[]): Promise<Thread> {
     const imgFile = await this.getMediaUrl(dialog.id)
     const t: Thread = {
-      _original: inspect(dialog),
+      _original: stringifyCircular(dialog),
       id: String(getPeerId(dialog.id)),
       type: dialog instanceof Api.Chat ? 'single' : 'group',
       timestamp: messages[0]?.timestamp,

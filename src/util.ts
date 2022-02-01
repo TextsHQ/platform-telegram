@@ -18,3 +18,18 @@ export const getAssetPath = async (id: string | number) => {
 }
 
 export const initAssets = async () => { if (!await fileExists(ASSETS_DIR)) await fs.mkdir(ASSETS_DIR) }
+
+const getCircularReplacer = () => {
+  const seen = new WeakSet()
+  return (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return
+      }
+      seen.add(value)
+    }
+    return value
+  }
+}
+
+export const stringifyCircular = (value: any, space?: number) => JSON.stringify(value, getCircularReplacer, space)
