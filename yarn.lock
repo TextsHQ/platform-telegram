@@ -1569,7 +1569,7 @@ __metadata:
   resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=5d06670b165b83d129baadcceaed54deed8649be"
   dependencies:
     form-data: ^4.0.0
-  checksum: 64e26f13c22f419d1e5154bce779b7f2371061c84e77fb888fc5c41aac7e4d3a1c656c0bc3ebf221eef51edef723160b147e82e057d9b7553ee800d2835baa11
+  checksum: 53ceb0e28098bcaa53d5bb12ccd0e2938b9f60c0ab5aeae7853cd169a27dbbbb72370a4eadda5501ba2eafff928c74c069ed0ed89e38f2c44073a50e6e76523d
   languageName: node
   linkType: hard
 
