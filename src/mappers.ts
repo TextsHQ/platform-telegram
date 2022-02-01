@@ -288,7 +288,7 @@ export default class TelegramMapper {
       _original: stringifyCircular(msg),
       id: String(msg.id),
       timestamp: new Date(msg.date * 1000),
-      editedTimestamp: msg.editDate && !msg.reactions?.recentReactons.length ? new Date(msg.editDate * 1000) : undefined,
+      editedTimestamp: msg.editDate && !msg.reactions?.recentReactons?.length ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards,
       senderID: String(this.getSenderID(msg)),
       isSender: msg.out,

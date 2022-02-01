@@ -15,9 +15,10 @@ import bigInt from 'big-integer'
 import { inspect } from 'util'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
+import { RPCError } from 'telegram/errors'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
-import { getAssetPath, initAssets, saveAsset } from './util'
+import { getAssetPath, initAssets, saveAsset, stringifyCircular } from './util'
 
 type LoginEventCallback = (authState: any)=> void
 
@@ -202,15 +203,11 @@ export default class TelegramAPI implements PlatformAPI {
     const messages = await this.client.getMessages(dialog.id, { limit: 20 })
     const mappedMessages = await this.mapper.mapMessages(messages)
     messages.forEach(m => this.storeMessage(m))
-    const participants = (dialog.isGroup || dialog.isChannel) ? [] : await this.client.getParticipants(dialog.id, {})
-    if (!participants.length) {
-      this.getAndEmitParticipants(dialog)
-    }
-
-    participants.push(this.me)
+    const participants = [this.me]
     const thread = await this.mapper.mapThread(dialog, mappedMessages, participants)
     const presenceEvents = participants.map(x => TelegramMapper.mapUserPresence(x.id.toJSNumber(), x.status))
     this.onEvent(presenceEvents)
+    this.emitParticipants(dialog)
     return thread
   }
 
@@ -439,11 +436,26 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private getAndEmitParticipants = async (channel: Dialog) => {
-    const members = await this.client.getParticipants(channel.id, {})
+  private emitParticipants = async (dialog: Dialog) => {
+    // limit is max number of supergroup users
+    const limit = 10000
+    const members = await (async () => {
+      try {
+        return await this.client.getParticipants(dialog.id, { showTotal: true, limit })
+      } catch (e) {
+        if (e.code === 400) {
+          // only channel admins can request users
+          if (IS_DEV) console.log(`Admin required for this channel: ${dialog.name}`)
+          return []
+        }
+        if (IS_DEV) console.log(`${Function.name} ${stringifyCircular(e, 2)}`)
+        return []
+      }
+    })()
+
     if (!members.length) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
-    this.upsertParticipants(String(channel.id), mappedMembers)
+    this.upsertParticipants(String(dialog.id), mappedMembers)
   }
 
   logout = async () => {
