@@ -203,10 +203,7 @@ export default class TelegramAPI implements PlatformAPI {
     const messages = await this.client.getMessages(dialog.id, { limit: 20 })
     const mappedMessages = await this.mapper.mapMessages(messages)
     messages.forEach(m => this.storeMessage(m))
-    const participants = [this.me]
-    const thread = await this.mapper.mapThread(dialog, mappedMessages, participants)
-    const presenceEvents = participants.map(x => TelegramMapper.mapUserPresence(x.id.toJSNumber(), x.status))
-    this.onEvent(presenceEvents)
+    const thread = await this.mapper.mapThread(dialog, mappedMessages)
     this.emitParticipants(dialog)
     return thread
   }

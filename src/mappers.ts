@@ -3,8 +3,8 @@ import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import { getPeerId } from 'telegram/Utils'
-import type { Dialog } from 'telegram/tl/custom/dialog'
 import type bigInt from 'big-integer'
+import type { Dialog } from 'telegram/tl/custom/dialog'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
@@ -586,12 +586,12 @@ export default class TelegramMapper {
     return addSeconds(new Date(), seconds)
   }
 
-  async mapThread(dialog: Dialog, messages: Message[], members: Api.User[]): Promise<Thread> {
+  async mapThread(dialog: Dialog, messages: Message[]): Promise<Thread> {
     const imgFile = await this.getMediaUrl(dialog.id)
     const t: Thread = {
       _original: stringifyCircular(dialog),
       id: String(getPeerId(dialog.id)),
-      type: dialog instanceof Api.Chat ? 'single' : 'group',
+      type: dialog.dialog.peer instanceof Api.PeerUser ? 'single' : 'group',
       timestamp: messages[0]?.timestamp,
       isUnread: dialog.unreadCount !== 0,
       isReadOnly: false,
@@ -606,7 +606,7 @@ export default class TelegramMapper {
       },
       participants: {
         hasMore: false,
-        items: await Promise.all(members.map(m => this.mapUser(m))),
+        items: [],
       },
     }
     return t
