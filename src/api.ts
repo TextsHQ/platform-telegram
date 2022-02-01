@@ -591,6 +591,7 @@ export default class TelegramAPI implements PlatformAPI {
     const action = {
       [ActivityType.NONE]: new Api.SendMessageCancelAction(),
       [ActivityType.TYPING]: new Api.SendMessageTypingAction(),
+      [ActivityType.NONE]: new Api.SendMessageCancelAction(),
       [ActivityType.RECORDING_VOICE]: new Api.SendMessageRecordAudioAction(),
       [ActivityType.RECORDING_VIDEO]: new Api.SendMessageRecordVideoAction(),
     }[type]
