@@ -10,15 +10,19 @@ import { Api } from 'telegram/tl'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { SendMessageParams } from 'telegram/client/messages'
 import { CustomFile } from 'telegram/client/uploads'
-import { readFile } from 'fs/promises'
-import bigInt from 'big-integer'
+import path from 'path'
+import fs from 'fs/promises'
+import url from 'url'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
+import { threadId } from 'worker_threads'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
-import { stringifyCircular } from './util'
+import { fileExists, stringifyCircular } from './util'
+import BigInteger from 'big-integer'
 
 type LoginEventCallback = (authState: any)=> void
+type AirgramSession = { dbKey: string }
 
 const { IS_DEV } = texts
 export enum AuthState {
@@ -36,11 +40,14 @@ if (IS_DEV) {
 async function getMessageContent(msgContent: MessageContent) {
   const { fileBuffer, fileName, filePath } = msgContent
   if (filePath) {
-    const buffer = await readFile(filePath)
+    const buffer = await fs.readFile(filePath)
     return new CustomFile(fileName, buffer.byteLength, filePath, buffer)
   } if (fileBuffer) {
     return new CustomFile(fileName, fileBuffer.length, filePath, fileBuffer)
   }
+}
+function isAirgramSession(session: string | AirgramSession): session is AirgramSession {
+  return (session as AirgramSession).dbKey !== undefined
 }
 
 export default class TelegramAPI implements PlatformAPI {
@@ -71,8 +78,13 @@ export default class TelegramAPI implements PlatformAPI {
     password: undefined,
   }
 
-  init = async (session?: string, accountInfo?: AccountInfo) => {
-    this.stringSession = session ? new StringSession(session) : new StringSession('')
+  init = async (session?: string | AirgramSession, accountInfo?: AccountInfo) => {
+    if (isAirgramSession(session)) {
+      console.log(accountInfo.dataDirPath)
+      console.log(session.dbKey)
+    } else {
+      this.stringSession = session ? new StringSession(session) : new StringSession('')
+    }
 
     this.client = new TelegramClient(this.stringSession, API_ID, API_HASH, {
       connectionRetries: 5,
@@ -452,8 +464,23 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(String(dialog.id), mappedMembers)
   }
 
+  private saveAsset = async (buffer: Buffer, assetType: 'media' | 'photos', filename: string) => {
+    const filePath = path.join(this.accountInfo.dataDirPath, assetType, filename)
+    await fs.writeFile(filePath, buffer)
+    return filePath
+  }
+
+  private getAssetPath = async (assetType: 'media' | 'photos', id: string | number) => {
+    const filePath = path.join(this.accountInfo.dataDirPath, assetType, id.toString())
+    return await fileExists(filePath) ? url.pathToFileURL(filePath).href : undefined
+  }
+
+  private deleteAssetsDir = async () => {
+    await fs.rm(this.accountInfo.dataDirPath, { recursive: true })
+  }
+
   logout = async () => {
-    await this.mapper.deleteAssetsDir()
+    await this.deleteAssetsDir()
   }
 
   dispose = async () => {
@@ -510,7 +537,7 @@ export default class TelegramAPI implements PlatformAPI {
     }))
     this.client.invoke(new Api.messages.DeleteChatUser({
       userId: 'me',
-      chatId: bigInt(threadID),
+      chatId: BigInteger(threadID),
       revokeHistory: true,
     }))
   }
@@ -612,7 +639,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getAsset = async (type: string, assetId: string, messageId: string) => {
     if (type !== 'media' && type !== 'photos') return
-    const filePath = await this.mapper.getAssetPath(type, assetId)
+    const filePath = await this.getAssetPath(type, assetId)
     if (filePath) {
       return filePath
     }
@@ -633,7 +660,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
 
     if (buffer) {
-      return this.mapper.saveAsset(buffer, type, assetId)
+      return this.saveAsset(buffer, type, assetId)
     }
 
     if (IS_DEV) console.log(`No buffer or path for media ${type}/${assetId}/${messageId}`)

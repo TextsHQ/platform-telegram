@@ -1,16 +1,14 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, texts } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import { getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
-import url from 'url'
 import path from 'path'
-import fs from 'fs/promises'
 import { existsSync, mkdirSync } from 'fs'
 import { MUTED_FOREVER_CONSTANT } from './constants'
-import { fileExists, stringifyCircular } from './util'
+import { stringifyCircular } from './util'
 
 type MapperData = { accountID: string, assetsDir: string, mediaDir: string, photosDir: string }
 export default class TelegramMapper {
@@ -26,21 +24,6 @@ export default class TelegramMapper {
     if (!existsSync(this.mapperData.assetsDir)) mkdirSync(this.mapperData.assetsDir)
     if (!existsSync(this.mapperData.mediaDir)) mkdirSync(this.mapperData.mediaDir)
     if (!existsSync(this.mapperData.photosDir)) mkdirSync(this.mapperData.photosDir)
-  }
-
-  saveAsset = async (buffer: Buffer, assetType: 'media' | 'photos', filename: string) => {
-    const filePath = path.join(this.mapperData.assetsDir, assetType, filename)
-    await fs.writeFile(filePath, buffer)
-    return filePath
-  }
-
-  getAssetPath = async (assetType: 'media' | 'photos', id: string | number) => {
-    const filePath = path.join(this.mapperData.assetsDir, assetType, id.toString())
-    return await fileExists(filePath) ? url.pathToFileURL(filePath).href : undefined
-  }
-
-  deleteAssetsDir = async () => {
-    await fs.rm(this.mapperData.assetsDir, { recursive: true })
   }
 
   static* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {
