@@ -407,6 +407,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
     this.mapper = new TelegramMapper(this.accountInfo)
+    await this.createAssetsDir()
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -493,6 +494,13 @@ export default class TelegramAPI implements PlatformAPI {
   private getAssetPath = async (assetType: 'media' | 'photos', id: string | number) => {
     const filePath = path.join(this.accountInfo.dataDirPath, assetType, id.toString())
     return await fileExists(filePath) ? url.pathToFileURL(filePath).href : undefined
+  }
+
+  private createAssetsDir = async () => {
+    if (await fileExists(this.accountInfo.dataDirPath)) return
+    await fs.mkdir(this.accountInfo.dataDirPath)
+    await fs.mkdir(path.join(this.accountInfo.dataDirPath, 'media'))
+    await fs.mkdir(path.join(this.accountInfo.dataDirPath, 'photos'))
   }
 
   private deleteAssetsDir = async () => {
