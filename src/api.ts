@@ -603,6 +603,7 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 20
     const messages = await this.client.getMessages(threadID, { limit, maxId: +cursor || 0 })
     const items = this.mapper.mapMessages(messages)
+    messages.forEach(m => this.storeMessage(m))
     return {
       items,
       hasMore: messages.length !== 0,
