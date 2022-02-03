@@ -16,7 +16,7 @@ import url from 'url'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
-import { off } from 'process'
+import type bigInt from 'big-integer'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -66,6 +66,8 @@ export default class TelegramAPI implements PlatformAPI {
   private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
 
   private chatIdMessageId = new Map<bigInt.BigInteger, number[]>()
+
+  private dialogToParticipantIds = new Map<bigInt.BigInteger, bigInt.BigInteger[]>()
 
   private me: Api.User
 
@@ -197,7 +199,11 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
     const threadID = message.chatId.toString()
-    const mappedMessage = await this.mapper.mapMessage(message)
+    const mappedMessage = this.mapper.mapMessage(message)
+    const chatParticipants = this.dialogToParticipantIds.get(message.chatId)
+    if (!chatParticipants?.find(m => m === message.senderId)) {
+      this.emitParticipantFromMessage(message.chatId, message.senderId)
+    }
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -210,7 +216,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    const thread = await this.mapper.mapThread(dialog)
+    const thread = this.mapper.mapThread(dialog)
     this.emitParticipants(dialog)
     return thread
   }
@@ -339,7 +345,7 @@ export default class TelegramAPI implements PlatformAPI {
   private async onUpdateEditMessage(update: Api.UpdateEditMessage) {
     if (update.message instanceof Api.MessageEmpty) return
     const threadID = TelegramMapper.idFromPeer(update.message.peerId).toString()
-    const updatedMessage = await this.mapper.mapMessage(update.message)
+    const updatedMessage = this.mapper.mapMessage(update.message)
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
@@ -352,7 +358,7 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents) => {
     const messageID = String(update.messages[0])
     const res = await this.client.getMessages(undefined, { ids: update.messages })
-    const entries = await this.mapper.mapMessages(res)
+    const entries = this.mapper.mapMessages(res)
     if (res.length === 0) return
     const threadID = res[0].chatId?.toString()
     this.onEvent([{
@@ -439,9 +445,24 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
+  private dialogToParticipantIdsUpdate(dialogId: bigInt.BigInteger, participantIds: bigInt.BigInteger[]) {
+    if (this.dialogToParticipantIds.has(dialogId)) this.dialogToParticipantIds.get(dialogId).push(...participantIds)
+    else {
+      this.dialogToParticipantIds.set(dialogId, participantIds)
+    }
+  }
+
+  private emitParticipantFromMessage = async (dialogId: bigInt.BigInteger, userId: bigInt.BigInteger) => {
+    const user = await this.client.getEntity(userId)
+    if (user instanceof Api.InputUser) {
+      const mappedUser = this.mapper.mapUser(user)
+      this.dialogToParticipantIdsUpdate(dialogId, [userId])
+      this.upsertParticipants(String(dialogId), [mappedUser])
+    }
+  }
+
   private emitParticipants = async (dialog: Dialog) => {
-    // limit is max number of supergroup users
-    const limit = 10000
+    const limit = 256
     const members = await (async () => {
       try {
         return await this.client.getParticipants(dialog.id, { showTotal: true, limit })
@@ -458,6 +479,8 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (!members.length) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
+
+    this.dialogToParticipantIdsUpdate(dialog.id, members.map(m => m.id))
     this.upsertParticipants(String(dialog.id), mappedMembers)
   }
 
@@ -571,7 +594,7 @@ export default class TelegramAPI implements PlatformAPI {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     const messages = await this.client.getMessages(threadID, { limit, maxId: +cursor || 0 })
-    const items = await this.mapper.mapMessages(messages)
+    const items = this.mapper.mapMessages(messages)
     return {
       items,
       hasMore: messages.length !== 0,
@@ -589,7 +612,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
     this.storeMessage(res)
-    return [await this.mapper.mapMessage(res)]
+    return [this.mapper.mapMessage(res)]
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {

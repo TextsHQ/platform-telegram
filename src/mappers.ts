@@ -236,11 +236,11 @@ export default class TelegramMapper {
     }
   }
 
-  getMediaUrl = async (id: bigInt.BigInteger, messageId: number) => `asset://${this.mapperData.accountID}/media/${id}/${messageId}`
+  getMediaUrl = (id: bigInt.BigInteger, messageId: number) => `asset://${this.mapperData.accountID}/media/${id}/${messageId}`
 
-  getProfilePhotoUrl = async (id: bigInt.BigInteger) => `asset://${this.mapperData.accountID}/photos/${id}`
+  getProfilePhotoUrl = (id: bigInt.BigInteger) => `asset://${this.mapperData.accountID}/photos/${id}`
 
-  async mapLinkImg(photo: Api.Photo, messageId: number): Promise<Partial<MessageLink>> {
+  mapLinkImg(photo: Api.Photo, messageId: number): Partial<MessageLink> {
     if (photo.sizes.length < 1) return
     const photoSize = photo.sizes.find(size => size instanceof Api.PhotoSize)
     if (photoSize instanceof Api.PhotoSize) {
@@ -248,7 +248,7 @@ export default class TelegramMapper {
       const imgSize = { width: w, height: h }
       const file = photo
 
-      const img = await this.getMediaUrl(file.id, messageId)
+      const img = this.getMediaUrl(file.id, messageId)
       return { img, imgSize }
     }
   }
@@ -285,7 +285,7 @@ export default class TelegramMapper {
     }
   }
 
-  async mapMessage(msg: CustomMessage) {
+  mapMessage(msg: CustomMessage) {
     const mapped: Message = {
       _original: stringifyCircular(msg),
       id: String(msg.id),
@@ -316,12 +316,12 @@ export default class TelegramMapper {
       mapped.text = msgText
       mapped.textAttributes = TelegramMapper.mapTextAttributes(msgText, msgEntities)
     }
-    const pushSticker = async (sticker: Api.Document, messageId: number) => {
+    const pushSticker = (sticker: Api.Document, messageId: number) => {
       const animated = sticker.mimeType === 'application/x-tgsticker'
       mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: sticker.id.toString(),
-        srcURL: await this.getMediaUrl(sticker.id, messageId),
+        srcURL: this.getMediaUrl(sticker.id, messageId),
         mimeType: animated ? 'image/tgs' : undefined,
         type: MessageAttachmentType.IMG,
         isGif: true,
@@ -333,13 +333,13 @@ export default class TelegramMapper {
       })
     }
 
-    const mapMessageMedia = async () => {
+    const mapMessageMedia = () => {
       if (msg.photo) {
         const { photo } = msg
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(photo.id),
-          srcURL: await this.getMediaUrl(photo.id, msg.id),
+          srcURL: this.getMediaUrl(photo.id, msg.id),
           type: MessageAttachmentType.IMG,
         })
       } else if (msg.video) {
@@ -347,7 +347,7 @@ export default class TelegramMapper {
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(video.id),
-          srcURL: await this.getMediaUrl(video.id, msg.id),
+          srcURL: this.getMediaUrl(video.id, msg.id),
           type: MessageAttachmentType.VIDEO,
           fileName: video.accessHash.toString(),
           mimeType: video.mimeType,
@@ -358,7 +358,7 @@ export default class TelegramMapper {
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(audio.id),
-          srcURL: await this.getMediaUrl(audio.id, msg.id),
+          srcURL: this.getMediaUrl(audio.id, msg.id),
           type: MessageAttachmentType.AUDIO,
           fileName: audio.accessHash.toString(),
           mimeType: audio.mimeType,
@@ -369,7 +369,7 @@ export default class TelegramMapper {
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(videoNote.id),
-          srcURL: await this.getMediaUrl(videoNote.id, msg.id),
+          srcURL: this.getMediaUrl(videoNote.id, msg.id),
           type: MessageAttachmentType.VIDEO,
         })
       } else if (msg.voice) {
@@ -377,7 +377,7 @@ export default class TelegramMapper {
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(voice.id),
-          srcURL: await this.getMediaUrl(voice.id, msg.id),
+          srcURL: this.getMediaUrl(voice.id, msg.id),
           type: MessageAttachmentType.AUDIO,
         })
       } else if (msg.gif) {
@@ -386,7 +386,7 @@ export default class TelegramMapper {
         const size = animation.thumbs[0] as Api.PhotoSize
         mapped.attachments.push({
           id: String(animation.id),
-          srcURL: await this.getMediaUrl(animation.id, msg.id),
+          srcURL: this.getMediaUrl(animation.id, msg.id),
           type: MessageAttachmentType.VIDEO,
           isGif: true,
           fileName: animation.accessHash.toString(),
@@ -412,7 +412,7 @@ export default class TelegramMapper {
         mapped.attachments.push({
           id: String(document.id),
           type: MessageAttachmentType.UNKNOWN,
-          srcURL: await this.getMediaUrl(document.id, msg.id),
+          srcURL: this.getMediaUrl(document.id, msg.id),
           fileName,
           mimeType: document.mimeType,
           fileSize: document.size,
@@ -542,7 +542,7 @@ export default class TelegramMapper {
       setReactions(msg.reactions)
     }
     if (msg.media) {
-      await mapMessageMedia()
+      mapMessageMedia()
     }
 
     if (msg instanceof Api.MessageService) {
@@ -569,9 +569,9 @@ export default class TelegramMapper {
     return mapped
   }
 
-  async mapUser(user: Api.User): Promise<User> {
+  mapUser(user: Api.User): User {
     if (!user) return
-    const imgURL = await this.getProfilePhotoUrl(user.id)
+    const imgURL = this.getProfilePhotoUrl(user.id)
     return {
       id: user.id.toString(),
       username: user.username,
@@ -588,8 +588,8 @@ export default class TelegramMapper {
     return addSeconds(new Date(), seconds)
   }
 
-  async mapThread(dialog: Dialog): Promise<Thread> {
-    const imgFile = await this.getProfilePhotoUrl(dialog.id)
+  mapThread(dialog: Dialog): Thread {
+    const imgFile = this.getProfilePhotoUrl(dialog.id)
     const t: Thread = {
       _original: stringifyCircular(dialog),
       id: String(getPeerId(dialog.id)),
@@ -607,14 +607,12 @@ export default class TelegramMapper {
       },
       messages: {
         hasMore: true,
-        items: dialog.message ? [await this.mapMessage(dialog.message)] : [],
+        items: dialog.message ? [this.mapMessage(dialog.message)] : [],
       },
     }
     return t
   }
 
-  mapMessages = async (messages: Api.Message[]) =>
-    Promise.all(messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m)))
-
-  // https://github.com/evgeny-nadymov/telegram-react/blob/afd90f19b264895806359c23f985edccda828aca/src/Utils/Chat.js#L445
+  mapMessages = (messages: Api.Message[]) =>
+    messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m))
 }
