@@ -17,6 +17,7 @@ import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
 import type bigInt from 'big-integer'
+import PQueue from 'p-queue'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -183,6 +184,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.loginEventCallback(this.authState)
     return { type: 'wait' }
   }
+
+  downloadQueue: any
 
   private storeMessage(message: CustomMessage) {
     if (message.media) {
@@ -407,7 +410,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
     this.mapper = new TelegramMapper(this.accountInfo)
-    await this.createAssetsDir()
+    this.downloadQueue = new PQueue({ concurrency: 8 })
+    this.createAssetsDir()
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -496,11 +500,14 @@ export default class TelegramAPI implements PlatformAPI {
     return await fileExists(filePath) ? url.pathToFileURL(filePath).href : undefined
   }
 
-  private createAssetsDir = async () => {
-    if (await fileExists(this.accountInfo.dataDirPath)) return
-    await fs.mkdir(this.accountInfo.dataDirPath)
-    await fs.mkdir(path.join(this.accountInfo.dataDirPath, 'media'))
-    await fs.mkdir(path.join(this.accountInfo.dataDirPath, 'photos'))
+  private createAssetsDir = () => {
+    const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
+    const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
+
+    // doing it this way so there isn't a lot of try/catch
+    fs.access(this.accountInfo.dataDirPath).catch(() => (fs.mkdir(this.accountInfo.dataDirPath)).catch())
+    fs.access(mediaDir).catch(() => (fs.mkdir(mediaDir)).catch())
+    fs.access(photosDir).catch(() => (fs.mkdir(photosDir)).catch())
   }
 
   private deleteAssetsDir = async () => {
@@ -676,28 +683,26 @@ export default class TelegramAPI implements PlatformAPI {
     }
 
     let buffer: Buffer
-
     try {
       if (type === 'media') {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
           this.messageMediaStore.delete(+messageId)
-          buffer = await this.client.downloadMedia(media, {})
+          buffer = await this.downloadQueue.add(() => this.client.downloadMedia(media, {}))
         }
       } else if (type === 'photos') {
-        buffer = await this.client.downloadProfilePhoto(assetId)
+        buffer = await this.downloadQueue.add(() => this.client.downloadProfilePhoto(assetId))
       } else {
         if (IS_DEV) console.log(`Not a valid media type: ${type}`)
         return
       }
+      if (buffer) {
+        const savePath = await this.downloadQueue.add(() => this.saveAsset(buffer, type, assetId))
+        return savePath
+      }
     } catch (e) {
       if (IS_DEV) console.log(e)
     }
-
-    if (buffer) {
-      return this.saveAsset(buffer, type, assetId)
-    }
-
     if (IS_DEV) console.log(`No buffer or path for media ${type}/${assetId}/${messageId}`)
   }
 

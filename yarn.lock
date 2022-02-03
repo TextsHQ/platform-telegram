@@ -1583,6 +1583,7 @@ __metadata:
     "@types/eslint": ^7.2.6
     "@types/lodash": ^4.14.168
     "@types/node": ^17.0.12
+    "@types/p-queue": ^3.2.1
     "@types/react": 17.0.2
     "@types/react-phone-number-input": ^3.0.13
     big-integer: ^1.6.51
@@ -1591,6 +1592,7 @@ __metadata:
     eslint: ^7.21.0
     husky: ^4.3.5
     lodash: ^4.17.21
+    p-queue: 6.6.2
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: ^3.1.16
     source-map-support: ^0.5.21
@@ -1655,6 +1657,15 @@ __metadata:
   version: 17.0.12
   resolution: "@types/node@npm:17.0.12"
   checksum: f7e4c384b72648550391c2c8bd42560dfccf5b7a0506fb5842f326f8b176286be279dd63f62af621fe6d409d474ea5d312855061f512132e999f4e902a22e4db
+  languageName: node
+  linkType: hard
+
+"@types/p-queue@npm:^3.2.1":
+  version: 3.2.1
+  resolution: "@types/p-queue@npm:3.2.1"
+  dependencies:
+    p-queue: "*"
+  checksum: 7efb260e0a25e37314f63e3379a584336aac2e5662b9a740336c801e2f3917f36c981b737e8526360baf844c22b086a0097d311c32a58cd5adbe92d4b0e3a007
   languageName: node
   linkType: hard
 
@@ -3324,6 +3335,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"eventemitter3@npm:^4.0.4, eventemitter3@npm:^4.0.7":
+  version: 4.0.7
+  resolution: "eventemitter3@npm:4.0.7"
+  checksum: 1875311c42fcfe9c707b2712c32664a245629b42bb0a5a84439762dd0fd637fc54d078155ea83c2af9e0323c9ac13687e03cfba79b03af9f40c89b4960099374
+  languageName: node
+  linkType: hard
+
 "ext@npm:^1.1.2":
   version: 1.6.0
   resolution: "ext@npm:1.6.0"
@@ -4597,6 +4615,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"p-finally@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "p-finally@npm:1.0.0"
+  checksum: 93a654c53dc805dd5b5891bab16eb0ea46db8f66c4bfd99336ae929323b1af2b70a8b0654f8f1eae924b2b73d037031366d645f1fd18b3d30cbd15950cc4b1d4
+  languageName: node
+  linkType: hard
+
 "p-limit@npm:^1.1.0":
   version: 1.3.0
   resolution: "p-limit@npm:1.3.0"
@@ -4639,6 +4664,42 @@ __metadata:
   dependencies:
     aggregate-error: ^3.0.0
   checksum: cb0ab21ec0f32ddffd31dfc250e3afa61e103ef43d957cc45497afe37513634589316de4eb88abdfd969fe6410c22c0b93ab24328833b8eb1ccc087fc0442a1c
+  languageName: node
+  linkType: hard
+
+"p-queue@npm:*":
+  version: 7.2.0
+  resolution: "p-queue@npm:7.2.0"
+  dependencies:
+    eventemitter3: ^4.0.7
+    p-timeout: ^5.0.2
+  checksum: 53630ee58a96558f8a835a56679cec7caca4db08724167f009cd04811f24911e9de0804f1dfea68fe7e6b29c8cd727d50b0273d8e943fed09e305656994e57c8
+  languageName: node
+  linkType: hard
+
+"p-queue@npm:6.6.2":
+  version: 6.6.2
+  resolution: "p-queue@npm:6.6.2"
+  dependencies:
+    eventemitter3: ^4.0.4
+    p-timeout: ^3.2.0
+  checksum: 832642fcc4ab6477b43e6d7c30209ab10952969ed211c6d6f2931be8a4f9935e3578c72e8cce053dc34f2eb6941a408a2c516a54904e989851a1a209cf19761c
+  languageName: node
+  linkType: hard
+
+"p-timeout@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "p-timeout@npm:3.2.0"
+  dependencies:
+    p-finally: ^1.0.0
+  checksum: 3dd0eaa048780a6f23e5855df3dd45c7beacff1f820476c1d0d1bcd6648e3298752ba2c877aa1c92f6453c7dd23faaf13d9f5149fc14c0598a142e2c5e8d649c
+  languageName: node
+  linkType: hard
+
+"p-timeout@npm:^5.0.2":
+  version: 5.0.2
+  resolution: "p-timeout@npm:5.0.2"
+  checksum: 69eda717e2cbc3d831617a805e069ce69f8cbf51b70f1d1760d3d118536c6b891bbc74f758a4e0d337180ff053f65cdbfc9f5dd04f368ab38173e76f47cf13a8
   languageName: node
   linkType: hard
 
