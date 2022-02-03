@@ -2,7 +2,7 @@
 // eslint-disable-next-line
 
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo } from '@textshq/platform-sdk'
-import { debounce } from 'lodash'
+import { debounce, min } from 'lodash'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { StringSession } from 'telegram/sessions'
@@ -16,6 +16,7 @@ import url from 'url'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
+import { off } from 'process'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -46,7 +47,7 @@ async function getMessageContent(msgContent: MessageContent) {
   }
 }
 function isAirgramSession(session: string | AirgramSession): session is AirgramSession {
-  return (session as AirgramSession).dbKey !== undefined
+  return (session as AirgramSession)?.dbKey !== undefined
 }
 
 export default class TelegramAPI implements PlatformAPI {
@@ -209,10 +210,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    const messages = await this.client.getMessages(dialog.id, { limit: 20 })
-    const mappedMessages = await this.mapper.mapMessages(messages)
-    messages.forEach(m => this.storeMessage(m))
-    const thread = await this.mapper.mapThread(dialog, mappedMessages)
+    const thread = await this.mapper.mapThread(dialog)
     this.emitParticipants(dialog)
     return thread
   }
@@ -557,13 +555,15 @@ export default class TelegramAPI implements PlatformAPI {
 
   getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
-    const dialogs = await this.client.getDialogs({})
+    const limit = 1
+    const offsetDate = min(Array.from(this.dialogs.values()).map(dialog => dialog.date))
+    const dialogs = await this.client.getDialogs(new Api.messages.GetDialogs({ limit, ...(offsetDate && { offsetDate }) }))
     const threads = await Promise.all(dialogs.map(dialog => this.mapThread(dialog)))
     dialogs.forEach(dialog => this.dialogs.set(dialog.id.toString(), dialog))
     return {
       items: threads,
       oldestCursor: '*',
-      hasMore: false,
+      hasMore: dialogs.length !== 0,
     }
   }
 
@@ -644,18 +644,22 @@ export default class TelegramAPI implements PlatformAPI {
     }
 
     let buffer: Buffer
-    if (type === 'media') {
-      const media = this.messageMediaStore.get(+messageId)
-      if (media) {
-        this.messageMediaStore.delete(+messageId)
-        buffer = await this.client.downloadMedia(media, {})
+
+    try {
+      if (type === 'media') {
+        const media = this.messageMediaStore.get(+messageId)
+        if (media) {
+          this.messageMediaStore.delete(+messageId)
+          buffer = await this.client.downloadMedia(media, {})
+        }
+      } else if (type === 'photos') {
+        buffer = await this.client.downloadProfilePhoto(assetId)
+      } else {
+        if (IS_DEV) console.log(`Not a valid media type: ${type}`)
+        return
       }
-    } else if (type === 'photos') {
-      console.log(assetId)
-      buffer = await this.client.downloadProfilePhoto(assetId)
-    } else {
-      if (IS_DEV) console.log(`Not a valid media type: ${type}`)
-      return
+    } catch (e) {
+      if (IS_DEV) console.log(e)
     }
 
     if (buffer) {

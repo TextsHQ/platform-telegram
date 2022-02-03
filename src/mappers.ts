@@ -588,27 +588,26 @@ export default class TelegramMapper {
     return addSeconds(new Date(), seconds)
   }
 
-  async mapThread(dialog: Dialog, messages: Message[]): Promise<Thread> {
+  async mapThread(dialog: Dialog): Promise<Thread> {
     const imgFile = await this.getProfilePhotoUrl(dialog.id)
     const t: Thread = {
       _original: stringifyCircular(dialog),
       id: String(getPeerId(dialog.id)),
       type: dialog.dialog.peer instanceof Api.PeerUser ? 'single' : 'group',
-      timestamp: messages[0]?.timestamp,
+      timestamp: dialog.message ? new Date(dialog.message.date) : undefined,
       isUnread: dialog.unreadCount !== 0,
       isReadOnly: false,
       lastReadMessageID: String(Math.max(dialog.dialog.readInboxMaxId, dialog.dialog.readOutboxMaxId)),
       mutedUntil: this.mapMuteFor(dialog.dialog.notifySettings.muteUntil),
       imgURL: imgFile,
       title: dialog.title,
-      messages: {
-        hasMore: true,
-        oldestCursor: messages[0]?.id || '',
-        items: messages,
-      },
       participants: {
         hasMore: false,
         items: [],
+      },
+      messages: {
+        hasMore: true,
+        items: dialog.message ? [await this.mapMessage(dialog.message)] : [],
       },
     }
     return t
