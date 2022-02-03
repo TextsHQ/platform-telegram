@@ -464,7 +464,7 @@ export default class TelegramAPI implements PlatformAPI {
   private saveAsset = async (buffer: Buffer, assetType: 'media' | 'photos', filename: string) => {
     const filePath = path.join(this.accountInfo.dataDirPath, assetType, filename)
     await fs.writeFile(filePath, buffer)
-    return filePath
+    return url.pathToFileURL(filePath).href
   }
 
   private getAssetPath = async (assetType: 'media' | 'photos', id: string | number) => {
