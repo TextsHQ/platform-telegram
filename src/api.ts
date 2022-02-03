@@ -593,7 +593,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
-    const limit = 1
+    const limit = 10
     const offsetDate = min(Array.from(this.dialogs.values()).map(dialog => dialog.date))
     const dialogs = await this.client.getDialogs(new Api.messages.GetDialogs({ limit, ...(offsetDate && { offsetDate }) }))
     const threads = await Promise.all(dialogs.map(dialog => this.mapThread(dialog)))
