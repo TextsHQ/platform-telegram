@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
 // eslint-disable-next-line
 
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo } from '@textshq/platform-sdk'
-import { debounce, min } from 'lodash'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
+import { debounce } from 'lodash'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { StringSession } from 'telegram/sessions'
@@ -13,9 +13,10 @@ import { CustomFile } from 'telegram/client/uploads'
 import path from 'path'
 import fs from 'fs/promises'
 import url from 'url'
-import { getPeerId, resolveId } from 'telegram/Utils'
+import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
+import type bigInt from 'big-integer'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -69,6 +70,8 @@ export default class TelegramAPI implements PlatformAPI {
   private dialogToParticipantIds = new Map<bigInt.BigInteger, bigInt.BigInteger[]>()
 
   private me: Api.User
+
+  private meMapped: User
 
   private mapper: TelegramMapper
 
@@ -184,8 +187,6 @@ export default class TelegramAPI implements PlatformAPI {
     return { type: 'wait' }
   }
 
-  downloadQueue: any
-
   private storeMessage(message: CustomMessage) {
     if (message.media) {
       this.messageMediaStore.set(message.id, message.media)
@@ -253,14 +254,14 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChatParticipant(update: Api.UpdateChatParticipant) {
     if (update.prevParticipant) {
-      const chatId = update.chatId.toJSNumber()
+      const chatId = update.chatId.toString()
       this.emitDeleteThread(chatId)
     }
   }
 
   private onUpdateChannelParticipant(update: Api.UpdateChannelParticipant) {
     if (update.prevParticipant) {
-      const chatId = update.channelId.toJSNumber()
+      const chatId = update.channelId.toString()
       this.emitDeleteThread(chatId)
     }
   }
@@ -273,7 +274,7 @@ export default class TelegramAPI implements PlatformAPI {
       mutationType: 'update',
       objectName: 'thread',
       entries: [{
-        id: TelegramMapper.idFromPeer(update.peer.peer).toString(),
+        id: getPeerId(update.peer.peer).toString(),
         mutedUntil: new Date(update.notifySettings.muteUntil),
       }],
     }])
@@ -354,12 +355,12 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateUserStatus(update: Api.UpdateUserStatus) {
-    this.onEvent([TelegramMapper.mapUserPresence(update.userId.toJSNumber(), update.status)])
+    this.onEvent([TelegramMapper.mapUserPresence(update.userId, update.status)])
   }
 
   private async onUpdateEditMessage(update: Api.UpdateEditMessage) {
     if (update.message instanceof Api.MessageEmpty) return
-    const threadID = TelegramMapper.idFromPeer(update.message.peerId).toString()
+    const threadID = getPeerId(update.message.peerId).toString()
     const updatedMessage = this.mapper.mapMessage(update.message)
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
@@ -404,8 +405,7 @@ export default class TelegramAPI implements PlatformAPI {
     })
   }
 
-  private emitDeleteThread(chatId: number) {
-    const threadID = chatId.toString()
+  private emitDeleteThread(threadID: string) {
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'delete',
@@ -419,10 +419,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    this.me = await this.client.getMe() as Api.User
-    this.registerUpdateListeners()
-    this.mapper = new TelegramMapper(this.accountInfo)
     this.createAssetsDir()
+    // for perfomance testing
+    // await this.deleteAssetsDir()
+    this.mapper = new TelegramMapper(this.accountInfo)
+    this.me = await this.client.getMe() as Api.User
+    this.meMapped = this.mapper.mapUser(this.me)
+    this.registerUpdateListeners()
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -449,13 +452,13 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private upsertParticipants(threadID: string, entries: Participant[]) {
+  private upsertParticipants(threadID: bigInt.BigNumber, entries: Participant[]) {
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'participant',
       objectIDs: {
-        threadID,
+        threadID: threadID.toString(),
       },
       entries,
     }])
@@ -473,7 +476,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (user instanceof Api.User) {
       const mappedUser = this.mapper.mapUser(user)
       this.dialogToParticipantIdsUpdate(dialogId, [userId])
-      this.upsertParticipants(String(dialogId), [mappedUser])
+      this.upsertParticipants(dialogId, [mappedUser])
     }
   }
 
@@ -495,7 +498,6 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (!members.length) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
-
     this.dialogToParticipantIdsUpdate(dialog.id, members.map(m => m.id))
     this.upsertParticipants(String(dialog.id), mappedMembers)
   }
@@ -535,7 +537,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   getCurrentUser = (): CurrentUser => {
     const user: CurrentUser = {
-      id: this.me.id.toString(),
+      id: this.meMapped.id,
+      username: this.me.username,
+      fullName: this.meMapped.fullName,
       displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phone),
     }
     return user
@@ -551,7 +555,7 @@ export default class TelegramAPI implements PlatformAPI {
     const res = await this.client.invoke(new Api.contacts.Search({
       q: query,
     }))
-    const userIds = res.users.map(user => user.id.toJSNumber())
+    const userIds = res.users.map(user => user.id.toString())
     return Promise.all(userIds.map(async userId =>
       this.getUserById(userId)))
   }

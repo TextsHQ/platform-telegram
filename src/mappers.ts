@@ -113,7 +113,7 @@ export default class TelegramMapper {
     return ''
   }
 
-  static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, chatID: number, messageID: number) {
+  static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, chatID: bigInt.BigInteger, messageID: number) {
     switch (row.className) {
       case 'KeyboardButtonUrl':
       case 'KeyboardButtonUrlAuth':
@@ -129,7 +129,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapUserPresence(userId: number, status: Api.TypeUserStatus): UserPresenceEvent {
+  static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
     const presence: UserPresence = {
       userID: userId.toString(),
       lastActive: null,
@@ -208,13 +208,7 @@ export default class TelegramMapper {
     }
   }
 
-  static idFromPeer(peer: Api.TypePeer): number {
-    if (peer instanceof Api.PeerChat) { return peer.chatId.toJSNumber() }
-    if (peer instanceof Api.PeerChannel) { return peer.channelId.toJSNumber() }
-    return peer.userId.toJSNumber()
-  }
-
-  getMessageButtons(replyMarkup: Api.TypeReplyMarkup, chatID: number, messageID: number) {
+  getMessageButtons(replyMarkup: Api.TypeReplyMarkup, chatID: bigInt.BigInteger, messageID: number) {
     if (!replyMarkup) return
     switch (replyMarkup.className) {
       case 'ReplyInlineMarkup':
@@ -270,8 +264,6 @@ export default class TelegramMapper {
 
   mapTextFooter = (interactionInfo: Api.MessageInteractionCounters) => [...TelegramMapper.getTextFooter(interactionInfo)].join(' · ')
 
-  getSenderID = (msg: CustomMessage) => msg.senderId
-
   mapMessageUpdateText(messageID: string, newContent: Api.Message) {
     if ('text' in newContent) {
       return {
@@ -288,14 +280,14 @@ export default class TelegramMapper {
   mapMessage(msg: CustomMessage) {
     const mapped: Message = {
       _original: stringifyCircular(msg),
-      id: String(msg.id),
+      id: msg.id.toString(),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactons?.length ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards,
-      senderID: String(this.getSenderID(msg)),
+      senderID: msg.senderId.toString(),
       isSender: msg.out,
       linkedMessageID: msg.replyTo ? String(msg.replyToMsgId) : undefined,
-      buttons: this.getMessageButtons(msg.replyMarkup, msg.chatId.toJSNumber(), msg.id),
+      buttons: this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id),
       expiresInSeconds: msg.ttlPeriod,
     }
 
@@ -507,16 +499,18 @@ export default class TelegramMapper {
           actorParticipantID: mapped.senderID,
         }
       } else if (msg.action instanceof Api.MessageActionChatCreate || msg.action instanceof Api.MessageActionChannelCreate) {
-        mapped.text = `{{sender}} created the group "${msg.chat.id}"`
+        const title = 'title' in msg.chat ? msg.chat.title : ''
+        mapped.text = `{{sender}} created the group "${title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
           type: MessageActionType.GROUP_THREAD_CREATED,
           actorParticipantID: mapped.senderID,
-          title: msg.chat.id.toString(),
+          title,
         }
       } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
-        mapped.text = `{{sender}} created the group "${msg.chat.id}"`
+        const title = 'title' in msg.chat ? msg.chat.title : ''
+        mapped.text = `{{sender}} migrated the group "${title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionCustomAction) {
