@@ -289,6 +289,7 @@ export default class TelegramMapper {
     const mapped: Message = {
       _original: stringifyCircular(msg),
       id: String(msg.id),
+      threadID: msg.chatId.toString(),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactons?.length ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards,
@@ -447,15 +448,15 @@ export default class TelegramMapper {
           TelegramMapper.mapCallReason(msg.action.reason),
         ].filter(Boolean).join('\n')
       } else if (msg.action instanceof Api.MessageActionPinMessage) {
-        mapped.text = '{{sender}} pinned a message'
+        mapped.text = '{\'username\' in msg.sender ? msg.sender.username : msg.sender.id} pinned a message'
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionContactSignUp) {
-        mapped.text = '{{sender}} joined Telegram'
+        mapped.text = '{\'username\' in msg.sender ? msg.sender.username : msg.sender.id} joined Telegram'
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionChatEditTitle) {
-        mapped.text = `{{sender}} changed the thread title to "${msg.action.title}"`
+        mapped.text = `${'username' in msg.sender ? msg.sender.username : msg.sender.id} changed the thread title to "${msg.action.title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -482,7 +483,7 @@ export default class TelegramMapper {
           actorParticipantID: undefined,
         }
       } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
-        mapped.text = '{{sender}} joined the group via invite link'
+        mapped.text = `${'username' in msg.sender ? msg.sender.username : msg.sender.id} joined the group via invite link`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -491,7 +492,7 @@ export default class TelegramMapper {
           actorParticipantID: undefined,
         }
       } else if (msg.action instanceof Api.ChannelAdminLogEventActionChangePhoto) {
-        mapped.text = '{{sender}} updated the group photo'
+        mapped.text = `${'username' in msg.sender ? msg.sender.username : msg.sender.id} updated the group photo`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -499,7 +500,7 @@ export default class TelegramMapper {
           actorParticipantID: mapped.senderID,
         }
       } else if (msg.action instanceof Api.MessageActionChatDeletePhoto) {
-        mapped.text = '{{sender}} deleted the group photo'
+        mapped.text = `${'username' in msg.sender ? msg.sender.username : msg.sender.id} deleted the group photo`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -507,7 +508,7 @@ export default class TelegramMapper {
           actorParticipantID: mapped.senderID,
         }
       } else if (msg.action instanceof Api.MessageActionChatCreate || msg.action instanceof Api.MessageActionChannelCreate) {
-        mapped.text = `{{sender}} created the group "${msg.chat.id}"`
+        mapped.text = `${'username' in msg.sender ? msg.sender.username : msg.sender.id} created the group "${'title' in msg.chat ? msg.chat.title : ''}"`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -516,7 +517,7 @@ export default class TelegramMapper {
           title: msg.chat.id.toString(),
         }
       } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
-        mapped.text = `{{sender}} created the group "${msg.chat.id}"`
+        mapped.text = `${'username' in msg.sender ? msg.sender.username : msg.sender.id} created the group "${'title' in msg.chat ? msg.chat.title : ''}"`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionCustomAction) {
