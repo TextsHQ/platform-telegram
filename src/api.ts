@@ -13,10 +13,9 @@ import { CustomFile } from 'telegram/client/uploads'
 import path from 'path'
 import fs from 'fs/promises'
 import url from 'url'
-import { getPeerId } from 'telegram/Utils'
+import { getPeerId, resolveId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
-import type bigInt from 'big-integer'
 import PQueue from 'p-queue'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
@@ -605,19 +604,21 @@ export default class TelegramAPI implements PlatformAPI {
     return this.mapThread(dialogThread)
   }
 
-  getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
+  getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
+    const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 10
-    const offsetDate = min(Array.from(this.dialogs.values()).map(dialog => dialog.date))
-    for await (const dialog of this.client.iterDialogs({ limit, ...(offsetDate && { offsetDate }) })) {
+    let lastDate = 0
+    for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
       this.dialogs[dialog.id.toString()] = dialog
       this.emitThread(this.mapThread(dialog))
+      lastDate = dialog.message?.date
     }
 
     return {
       items: [],
-      oldestCursor: '*',
-      hasMore: false,
+      oldestCursor: lastDate.toString() ?? '*',
+      hasMore: lastDate !== 0,
     }
   }
 
