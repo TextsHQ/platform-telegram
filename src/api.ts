@@ -91,6 +91,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.client = new TelegramClient(this.stringSession, API_ID, API_HASH, {
       connectionRetries: 5,
+      maxConcurrentDownloads: 4,
     })
 
     this.accountInfo = accountInfo
@@ -218,10 +219,23 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private mapThread = async (dialog: Dialog) => {
+  private mapThread = (dialog: Dialog) => {
     const thread = this.mapper.mapThread(dialog)
     this.emitParticipants(dialog)
     return thread
+  }
+
+  private emitThread = async (thread: Thread) => {
+    const event: ServerEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'upsert',
+      objectName: 'thread',
+      objectIDs: {
+        threadID: thread.id,
+      },
+      entries: [thread],
+    }
+    this.onEvent([event])
   }
 
   private onUpdateChat = async (update: Api.UpdateChat) => {
@@ -410,7 +424,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
     this.mapper = new TelegramMapper(this.accountInfo)
-    this.downloadQueue = new PQueue({ concurrency: 8 })
+    this.downloadQueue = new PQueue({ concurrency: 4 })
     this.createAssetsDir()
   }
 
@@ -432,7 +446,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private getUserById = async (userId: number | string) => {
     if (!userId) return
-    const user = this.client.getEntity(userId)
+    const user = this.client.getInputEntity(userId)
     if (user instanceof Api.User) {
       return this.mapper.mapUser(user)
     }
@@ -459,7 +473,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emitParticipantFromMessage = async (dialogId: bigInt.BigInteger, userId: bigInt.BigInteger) => {
     const user = await this.client.getEntity(userId)
-    if (user instanceof Api.InputUser) {
+    if (user instanceof Api.User) {
       const mappedUser = this.mapper.mapUser(user)
       this.dialogToParticipantIdsUpdate(dialogId, [userId])
       this.upsertParticipants(String(dialogId), [mappedUser])
@@ -593,26 +607,30 @@ export default class TelegramAPI implements PlatformAPI {
 
   getThreads = async (inboxName: InboxName): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
-    const limit = 1
+    const limit = 20
     const offsetDate = min(Array.from(this.dialogs.values()).map(dialog => dialog.date))
-    const dialogs = await this.client.getDialogs(new Api.messages.GetDialogs({ limit, ...(offsetDate && { offsetDate }) }))
-    const threads = await Promise.all(dialogs.map(dialog => this.mapThread(dialog)))
-    dialogs.forEach(dialog => this.dialogs.set(dialog.id.toString(), dialog))
+    for await (const dialog of this.client.iterDialogs({ limit, ...(offsetDate && { offsetDate }) })) {
+      this.dialogs[dialog.id.toString()] = dialog
+      this.emitThread(this.mapThread(dialog))
+    }
+
     return {
-      items: threads,
+      items: [],
       oldestCursor: '*',
-      hasMore: dialogs.length !== 0,
+      hasMore: false,
     }
   }
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
-    const messages = await this.client.getMessages(threadID, { limit, maxId: +cursor || 0 })
-    const items = this.mapper.mapMessages(messages)
-    messages.forEach(m => this.storeMessage(m))
+    const messages = []
+    for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
+      this.storeMessage(msg)
+      messages.push(msg)
+    }
     return {
-      items,
+      items: this.mapper.mapMessages(messages),
       hasMore: messages.length !== 0,
     }
   }
@@ -688,10 +706,10 @@ export default class TelegramAPI implements PlatformAPI {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
           this.messageMediaStore.delete(+messageId)
-          buffer = await this.downloadQueue.add(() => this.client.downloadMedia(media, {}))
+          buffer = await this.downloadQueue.add(() => this.client.downloadMedia(media, { sizeType: 's' }))
         }
       } else if (type === 'photos') {
-        buffer = await this.downloadQueue.add(() => this.client.downloadProfilePhoto(assetId))
+        buffer = await this.downloadQueue.add(() => this.client.downloadProfilePhoto(assetId, { isBig: false }))
       } else {
         if (IS_DEV) console.log(`Not a valid media type: ${type}`)
         return
