@@ -23,7 +23,6 @@
     "bluebird": "^3.7.2",
     "date-fns": "^2.27.0",
     "lodash": "^4.17.21",
-    "p-queue": "6.6.2",
     "react": "https://github.com/TextsHQ/react-global-shim",
     "react-phone-number-input": "^3.1.16",
     "telegram": "^2.4.3"

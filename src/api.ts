@@ -16,7 +16,6 @@ import url from 'url'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
-import PQueue from 'p-queue'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -423,7 +422,6 @@ export default class TelegramAPI implements PlatformAPI {
     this.me = await this.client.getMe() as Api.User
     this.registerUpdateListeners()
     this.mapper = new TelegramMapper(this.accountInfo)
-    this.downloadQueue = new PQueue({ concurrency: 4 })
     this.createAssetsDir()
   }
 
@@ -707,16 +705,16 @@ export default class TelegramAPI implements PlatformAPI {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
           this.messageMediaStore.delete(+messageId)
-          buffer = await this.downloadQueue.add(() => this.client.downloadMedia(media, { sizeType: 's' }))
+          buffer = await this.client.downloadMedia(media, { sizeType: 's' })
         }
       } else if (type === 'photos') {
-        buffer = await this.downloadQueue.add(() => this.client.downloadProfilePhoto(assetId, { isBig: false }))
+        buffer = await this.client.downloadProfilePhoto(assetId, { isBig: false })
       } else {
         if (IS_DEV) console.log(`Not a valid media type: ${type}`)
         return
       }
       if (buffer) {
-        const savePath = await this.downloadQueue.add(() => this.saveAsset(buffer, type, assetId))
+        const savePath = await this.saveAsset(buffer, type, assetId)
         return savePath
       }
     } catch (e) {
