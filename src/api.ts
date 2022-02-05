@@ -47,7 +47,7 @@ async function getMessageContent(msgContent: MessageContent) {
   }
 }
 function isAirgramSession(session: string | AirgramSession): session is AirgramSession {
-  return (session as AirgramSession)?.dbKey !== undefined
+  return (session as AirgramSession).dbKey !== undefined
 }
 
 export default class TelegramAPI implements PlatformAPI {
@@ -92,7 +92,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.client = new TelegramClient(this.stringSession, API_ID, API_HASH, {
       connectionRetries: 5,
-      maxConcurrentDownloads: 4,
+      maxConcurrentDownloads: 2,
     })
 
     this.accountInfo = accountInfo
@@ -419,11 +419,11 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    this.createAssetsDir()
     // for perfomance testing
     // await this.deleteAssetsDir()
-    this.mapper = new TelegramMapper(this.accountInfo)
-    this.me = await this.client.getMe() as Api.User
+    this.createAssetsDir()
+    this.me = this.me || await this.client.getMe() as Api.User
+    this.mapper = new TelegramMapper(this.accountInfo, this.me)
     this.meMapped = this.mapper.mapUser(this.me)
     this.registerUpdateListeners()
   }
@@ -491,7 +491,7 @@ export default class TelegramAPI implements PlatformAPI {
           if (IS_DEV) console.log(`Admin required for this channel: ${dialog.name}`)
           return []
         }
-        if (IS_DEV) console.log(`${Function.name} ${stringifyCircular(e, 2)}`)
+        if (IS_DEV) console.log(`emitParticipants(): ${stringifyCircular(e, 2)}`)
         return []
       }
     })()
@@ -535,7 +535,7 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client?.disconnect()
   }
 
-  getCurrentUser = (): CurrentUser => {
+  getCurrentUser = async (): Promise<CurrentUser> => {
     const user: CurrentUser = {
       id: this.meMapped.id,
       username: this.me.username,
@@ -609,7 +609,7 @@ export default class TelegramAPI implements PlatformAPI {
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     const { cursor } = pagination || { cursor: null, direction: null }
-    const limit = 10
+    const limit = 20
     let lastDate = 0
     for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
       this.dialogs[dialog.id.toString()] = dialog
@@ -648,7 +648,6 @@ export default class TelegramAPI implements PlatformAPI {
       file,
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
-    this.storeMessage(res)
     return [this.mapper.mapMessage(res)]
   }
 
@@ -696,7 +695,7 @@ export default class TelegramAPI implements PlatformAPI {
     // await this.client.invoke(Api.{ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } })
   }
 
-  getAsset = async (type: string, assetId: string, messageId: string) => {
+  getAsset = async (type: 'media' | 'photos', assetId: string, messageId: string) => {
     if (type !== 'media' && type !== 'photos') return
     const filePath = await this.getAssetPath(type, assetId)
     if (filePath) {
@@ -709,17 +708,18 @@ export default class TelegramAPI implements PlatformAPI {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
           this.messageMediaStore.delete(+messageId)
-          buffer = await this.client.downloadMedia(media, { sizeType: 's' })
+          buffer = await this.client.downloadMedia(media, {workers: 4})
         }
       } else if (type === 'photos') {
-        buffer = await this.client.downloadProfilePhoto(assetId, { isBig: false })
+        buffer = await this.client.downloadProfilePhoto(assetId, {})
+        return buffer
       } else {
+
         if (IS_DEV) console.log(`Not a valid media type: ${type}`)
         return
       }
       if (buffer) {
-        const savePath = await this.saveAsset(buffer, type, assetId)
-        return savePath
+        return this.saveAsset(buffer, type, assetId)
       }
     } catch (e) {
       if (IS_DEV) console.log(e)

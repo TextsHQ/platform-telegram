@@ -5,16 +5,18 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import { getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
+import { inspect } from 'util'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
-type MapperData = { accountID: string }
+type MapperData = { accountID: string, me: Api.User }
 export default class TelegramMapper {
   private mapperData: MapperData
 
-  constructor(accountInfo: AccountInfo) {
+  constructor(accountInfo: AccountInfo, me: Api.User) {
     this.mapperData = {
       accountID: accountInfo.accountID,
+      me,
     }
   }
 
@@ -282,21 +284,21 @@ export default class TelegramMapper {
       _original: stringifyCircular(msg),
       id: msg.id.toString(),
       timestamp: new Date(msg.date * 1000),
-      editedTimestamp: msg.editDate && !msg.reactions?.recentReactons?.length ? new Date(msg.editDate * 1000) : undefined,
+      editedTimestamp: msg.editDate && !msg.reactions?.recentReactions?.length ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards,
-      senderID: msg.senderId.toString(),
+      senderID: msg.senderId?.toString() ?? this.mapperData.me.id.toString(),
       isSender: msg.out,
-      linkedMessageID: msg.replyTo ? String(msg.replyToMsgId) : undefined,
+      linkedMessageID: msg.replyTo ? msg.replyToMsgId.toString() : undefined,
       buttons: this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id),
       expiresInSeconds: msg.ttlPeriod,
     }
 
     const setReactions = (reactions: Api.MessageReactions) => {
-      if (reactions && reactions.recentReactons) {
-        const mappedReactions: MessageReaction[] = reactions.recentReactons.map(r => (
+      if (reactions && reactions.recentReactions) {
+        const mappedReactions: MessageReaction[] = reactions.recentReactions.map(r => (
           {
-            id: r.userId.toString(),
-            participantID: r.userId.toString(),
+            id: r.peerId.toString(),
+            participantID: r.peerId.toString(),
             emoji: true,
             reactionKey: r.reaction.replace('❤', '❤️'),
           }))
@@ -571,6 +573,7 @@ export default class TelegramMapper {
       username: user.username,
       phoneNumber: user.phone ? '+' + user.phone : undefined,
       isVerified: user.verified,
+      isSelf: user.id === this.mapperData.me.id,
       fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
       imgURL,
     }
@@ -588,7 +591,8 @@ export default class TelegramMapper {
       _original: stringifyCircular(dialog),
       id: String(getPeerId(dialog.id)),
       type: dialog.dialog.peer instanceof Api.PeerUser ? 'single' : 'group',
-      timestamp: dialog.message ? new Date(dialog.message.date) : undefined,
+      isPinned: dialog.pinned,
+      timestamp: dialog.dialog.topMessage ? new Date(dialog.date) : undefined,
       isUnread: dialog.unreadCount !== 0,
       isReadOnly: false,
       lastReadMessageID: String(Math.max(dialog.dialog.readInboxMaxId, dialog.dialog.readOutboxMaxId)),
