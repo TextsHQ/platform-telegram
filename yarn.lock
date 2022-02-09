@@ -1600,12 +1600,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk":
+"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#main":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=41d62587e3fa87126b87a64bff49bc265f07cb19"
+  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=406d5a603d4c06ee8952031f8695611f161e3222"
   dependencies:
     form-data: ^4.0.0
-  checksum: 6c1e639b7e2a7d334eba6ba0c81fcd33164f2d2b029032adb2ebce9d2e8d908f3e6266846fd10334f2a1474c3b40e349382bc79fb829758dd623177eee106100
+  checksum: 49492245b523af451dde570103ee1a608b201ffb2213098f23f64a45d0ffaf4f295782561e8da35bdf7d77f83684405f515d6ebf2d7a80e8eb92f873fc33c681
   languageName: node
   linkType: hard
 
@@ -1614,7 +1614,7 @@ __metadata:
   resolution: "@textshq/platform-telegram@workspace:."
   dependencies:
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk"
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#main"
     "@types/bluebird": ^3.5.33
     "@types/eslint": ^7.2.6
     "@types/lodash": ^4.14.168
