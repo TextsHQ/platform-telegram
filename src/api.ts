@@ -46,9 +46,8 @@ async function getMessageContent(msgContent: MessageContent) {
     return new CustomFile(fileName, fileBuffer.length, filePath, fileBuffer)
   }
 }
-function isAirgramSession(session: string | AirgramSession): session is AirgramSession {
-  return (session as AirgramSession).dbKey !== undefined
-}
+const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
+  !!(session as AirgramSession)?.dbKey
 
 export default class TelegramAPI implements PlatformAPI {
   private client?: TelegramClient
