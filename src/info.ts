@@ -39,6 +39,14 @@ const info: PlatformInfo = {
     supportsCaption: true,
     recordedAudioMimeType: 'audio/ogg',
     gifMimeType: 'video/mp4',
+    maxSize: {
+      // https://telegram.org/blog/profile-videos-people-nearby-and-more
+      // "From now on, you can send unlimited numbers of media and files of any kind – up to 2 GB each."
+      image: 2 * 1024 * 1024 * 1024,
+      video: 2 * 1024 * 1024 * 1024,
+      audio: 2 * 1024 * 1024 * 1024,
+      files: 2 * 1024 * 1024 * 1024,
+    },
   },
   getUserProfileLink: ({ username }) =>
     (username ? `https://t.me/${username}` : null),
