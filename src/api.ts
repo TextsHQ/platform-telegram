@@ -5,7 +5,6 @@ import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Mes
 import { debounce } from 'lodash'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
-import { StringSession } from 'telegram/sessions'
 import { Api } from 'telegram/tl'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { SendMessageParams } from 'telegram/client/messages'
@@ -17,11 +16,13 @@ import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
 import type bigInt from 'big-integer'
+import { randomBytes } from 'crypto'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
+import { DbSession } from './dbSession'
 
-type LoginEventCallback = (authState: any)=> void
+type LoginEventCallback = (authState: any) => void
 type AirgramSession = { dbKey: string }
 
 const { IS_DEV } = texts
@@ -47,7 +48,7 @@ async function getMessageContent(msgContent: MessageContent) {
   }
 }
 function isAirgramSession(session: string | AirgramSession): session is AirgramSession {
-  return (session as AirgramSession).dbKey !== undefined
+  return (session as AirgramSession)?.dbKey !== undefined
 }
 
 export default class TelegramAPI implements PlatformAPI {
@@ -59,7 +60,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginEventCallback: LoginEventCallback
 
-  private stringSession?: StringSession
+  private dbSession?: DbSession
 
   private dialogs?: Map<string, Dialog> = new Map<string, Dialog>()
 
@@ -75,6 +76,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private mapper: TelegramMapper
 
+  private sessionName
+
   private loginInfo = {
     phoneNumber: undefined,
     phoneCodeHash: undefined,
@@ -82,24 +85,23 @@ export default class TelegramAPI implements PlatformAPI {
     password: undefined,
   }
 
-  init = async (session?: string | AirgramSession, accountInfo?: AccountInfo) => {
-    if (isAirgramSession(session)) {
-      console.log(accountInfo.dataDirPath)
-      console.log(session.dbKey)
-    } else {
-      this.stringSession = session ? new StringSession(session) : new StringSession('')
-    }
+  init = async (session?: string, accountInfo?: AccountInfo) => {
+    this.accountInfo = accountInfo
+    this.sessionName = session || randomBytes(8).toString('hex')
+    const dbPath = path.join(accountInfo.dataDirPath, this.sessionName) + '.sqlite'
+    this.dbSession = new DbSession({
+      dbPath,
+    })
 
-    this.client = new TelegramClient(this.stringSession, API_ID, API_HASH, {
+    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
       connectionRetries: 5,
       maxConcurrentDownloads: 2,
     })
 
     this.accountInfo = accountInfo
-
     await this.client.connect()
-
     this.authState = AuthState.PHONE_INPUT
+
     if (session) await this.afterLogin()
   }
 
@@ -116,68 +118,68 @@ export default class TelegramAPI implements PlatformAPI {
       return message
     }
 
-    if (IS_DEV) console.log(JSON.stringify(creds.custom, null, 4))
+    if (IS_DEV) console.log('CREDS_CUSTOM', JSON.stringify(creds.custom, null, 4))
     try {
+      console.log(this.authState)
       switch (this.authState) {
         case AuthState.PHONE_INPUT:
-        {
-          this.loginInfo.phoneNumber = creds.custom.phoneNumber
-          const res = await this.client.invoke(new Api.auth.SendCode({
-            apiHash: API_HASH,
-            apiId: API_ID,
-            phoneNumber: this.loginInfo.phoneNumber,
-            settings: new Api.CodeSettings({
-              allowFlashcall: true,
-              currentNumber: true,
-              allowAppHash: true,
-            }),
-          }))
-          if (IS_DEV) console.log('PHONE_INPUT', JSON.stringify(res))
-          this.loginInfo.phoneCodeHash = res.phoneCodeHash
-          this.authState = AuthState.CODE_INPUT
-          break
-        }
-        case AuthState.CODE_INPUT:
-        {
-          this.loginInfo.phoneCode = creds.custom.code
-          if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
-          const res = await this.client.invoke(new Api.auth.SignIn({
-            phoneNumber: this.loginInfo.phoneNumber,
-            phoneCodeHash: this.loginInfo.phoneCodeHash,
-            phoneCode: this.loginInfo.phoneCode,
-          }))
-          if (IS_DEV) console.log('CODE_INPUT', JSON.stringify(res))
-          this.authState = AuthState.READY
-          break
-        }
-        case AuthState.PASSWORD_INPUT:
-        {
-          this.loginInfo.password = creds.custom.password
-          await this.client.signInWithPassword({
-            apiHash: API_HASH,
-            apiId: API_ID,
-          }, {
-            password: async () => this.loginInfo.password,
-            onError: async err => { console.log(err); return true },
-          })
-          this.authState = AuthState.READY
-          break
-        }
-        case AuthState.READY:
-        {
-          if (IS_DEV) {
-            const sessionString = this.stringSession.save()
-            console.log((sessionString))
+          {
+            this.loginInfo.phoneNumber = creds.custom.phoneNumber
+            const res = await this.client.invoke(new Api.auth.SendCode({
+              apiHash: API_HASH,
+              apiId: API_ID,
+              phoneNumber: this.loginInfo.phoneNumber,
+              settings: new Api.CodeSettings({
+                allowFlashcall: true,
+                currentNumber: true,
+                allowAppHash: true,
+              }),
+            }))
+            if (IS_DEV) console.log('PHONE_INPUT', JSON.stringify(res))
+            this.loginInfo.phoneCodeHash = res.phoneCodeHash
+            this.authState = AuthState.CODE_INPUT
+            break
           }
-          await this.afterLogin()
-          return { type: 'success' }
-        }
+        case AuthState.CODE_INPUT:
+          {
+            this.loginInfo.phoneCode = creds.custom.code
+            if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
+            const res = await this.client.invoke(new Api.auth.SignIn({
+              phoneNumber: this.loginInfo.phoneNumber,
+              phoneCodeHash: this.loginInfo.phoneCodeHash,
+              phoneCode: this.loginInfo.phoneCode,
+            }))
+            if (IS_DEV) console.log('CODE_INPUT', JSON.stringify(res))
+            this.authState = AuthState.READY
+            break
+          }
+        case AuthState.PASSWORD_INPUT:
+          {
+            this.loginInfo.password = creds.custom.password
+            await this.client.signInWithPassword({
+              apiHash: API_HASH,
+              apiId: API_ID,
+            }, {
+              password: async () => this.loginInfo.password,
+              onError: async err => { console.log(`Auth error ${err}`); return true },
+            })
+            this.authState = AuthState.READY
+            break
+          }
+        case AuthState.READY:
+          {
+            if (IS_DEV) console.log('READY')
+            await this.afterLogin()
+            return { type: 'success' }
+          }
         default:
-        {
-          return { type: 'error' }
-        }
+          {
+            if (IS_DEV) console.log(`Auth state is ${this.authState}`)
+            return { type: 'error' }
+          }
       }
     } catch (e) {
+      console.log(e)
       if (IS_DEV) console.log(JSON.stringify(e, null, 4))
       if (e.code === 401) this.authState = AuthState.PASSWORD_INPUT
       else return { type: 'error', errorMessage: mapError(e.errorMessage) }
@@ -532,6 +534,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
+    this.dbSession?.save()
     await this.client?.disconnect()
   }
 
@@ -549,7 +552,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.onServerEvent = onServerEvent
   }
 
-  serializeSession = () => this.stringSession.save()
+  serializeSession = () => this.sessionName
 
   searchUsers = async (query: string) => {
     const res = await this.client.invoke(new Api.contacts.Search({
@@ -648,6 +651,7 @@ export default class TelegramAPI implements PlatformAPI {
       file,
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
+    this.storeMessage(res)
     return [this.mapper.mapMessage(res)]
   }
 
@@ -708,18 +712,16 @@ export default class TelegramAPI implements PlatformAPI {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
           this.messageMediaStore.delete(+messageId)
-          buffer = await this.client.downloadMedia(media, {workers: 4})
+          buffer = await this.client.downloadMedia(media, { workers: 4 })
         }
       } else if (type === 'photos') {
         buffer = await this.client.downloadProfilePhoto(assetId, {})
-        return buffer
       } else {
-
         if (IS_DEV) console.log(`Not a valid media type: ${type}`)
         return
       }
       if (buffer) {
-        return this.saveAsset(buffer, type, assetId)
+        return await this.saveAsset(buffer, type, assetId)
       }
     } catch (e) {
       if (IS_DEV) console.log(e)
