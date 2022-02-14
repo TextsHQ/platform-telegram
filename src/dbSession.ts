@@ -2,18 +2,17 @@ import bigInt from 'big-integer'
 import { isArrayLike } from 'lodash'
 import { utils } from 'telegram'
 import { Api } from 'telegram/tl'
-import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
 import { returnBigInt } from 'telegram/Helpers'
-import { MemorySession } from 'telegram/sessions'
-import { getDisplayName, getInputPeer, getPeerId } from 'telegram/Utils'
-import { IAsyncSqlite, texts } from '@textshq/platform-sdk'
+import { Session } from 'telegram/sessions'
+import { getDisplayName, getPeerId } from 'telegram/Utils'
+import { texts } from '@textshq/platform-sdk'
 import { mkdir, stat } from 'fs/promises'
 import { dirname } from 'path'
-import { stringifyCircular } from './util'
+import Database from 'better-sqlite3'
+import { AuthKey } from 'telegram/crypto/AuthKey'
 
 const { IS_DEV } = texts
-const AsyncSqlite = (globalThis as any).AsyncSqlite as IAsyncSqlite
 
 interface EntityObject {
   id: string
@@ -23,43 +22,120 @@ interface EntityObject {
   name?: string
 }
 
-export class DbSession extends MemorySession {
+export class DbSession extends Session {
   private sessionSchema = `
     CREATE TABLE version (version integer primary key);
 
     CREATE TABLE session (
         dc_id integer not null primary key,
-        address text not null,
-        port integer not null,
-        auth blob not null
+        address text,
+        port integer,
+        auth blob
     );
     
     CREATE TABLE entity (
-        id integer not null primary key,
-        hash integer,
+        id text not null primary key,
+        hash text,
         username text,
         phone text,
         name text
     );`
 
-  private db: IAsyncSqlite
+  private db: Database.Database
 
   private dbPath: string
 
   private version = 1
 
-  private _entityObjects: EntityObject[]
+  protected _serverAddress?: string
+
+  protected _dcId: number
+
+  protected _port?: number
+
+  protected _takeoutId: undefined
+
+  protected _authKey?: AuthKey
 
   constructor({ dbPath }: { dbPath: string }) {
     super()
+    this._serverAddress = undefined
+    this._dcId = 0
+    this._port = undefined
+    this._takeoutId = undefined
+
     this.dbPath = dbPath
-    this.db = new AsyncSqlite()
-    this._entityObjects = []
+  }
+
+  get dcId() {
+    return this._dcId
+  }
+
+  get serverAddress() {
+    return this._serverAddress!
+  }
+
+  get port() {
+    return this._port!
+  }
+
+  get authKey() {
+    return this._authKey
+  }
+
+  set authKey(value) {
+    this._authKey = value
+  }
+
+  get takeoutId() {
+    return this._takeoutId
+  }
+
+  set takeoutId(value) {
+    this._takeoutId = value
+  }
+
+  getAuthKey(dcId?: number) {
+    if (dcId && dcId !== this.dcId) {
+      // Not supported.
+      return undefined
+    }
+
+    return this.authKey
+  }
+
+  setAuthKey(authKey?: AuthKey, dcId?: number) {
+    if (dcId && dcId !== this.dcId) {
+      // Not supported.
+      return undefined
+    }
+    this.db.prepare('insert or ignore into session (dc_id, auth) values (?,?)').run(dcId, authKey.getKey())
+    this.db.prepare('update session SET auth = ? WHERE dc_id = ?').run(authKey.getKey(), dcId)
+
+    this.authKey = authKey
+  }
+
+  close(): void {
+    this.db.close()
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  save(): void {}
+
+  // eslint-disable-next-line class-methods-use-this
+  delete(): void {}
+
+  setDC(dcId: number, serverAddress: string, port: number) {
+    this._dcId = dcId | 0
+    this._serverAddress = serverAddress
+    this._port = port
+    this.db.prepare('insert or ignore into session (dc_id, address, port) values (?,?,?)').run(dcId, serverAddress, port)
+    this.db.prepare('update session set address = ?, port = ? WHERE dc_id = ?').run(serverAddress, port, dcId)
   }
 
   private createTables = async () => {
-    await this.db.exec(this.sessionSchema)
-    await this.db.run('insert into version values (?)', [this.version])
+    this.db.exec(this.sessionSchema)
+    this.db.prepare('insert into version values (?)').run(this.version)
   }
 
   async load() {
@@ -68,36 +144,21 @@ export class DbSession extends MemorySession {
     } catch {
       await mkdir(dirname(this.dbPath))
     }
+    this.db = new Database(this.dbPath, {})
     if (IS_DEV) console.log(`load DB path: ${this.dbPath}`)
-    await this.db.init(this.dbPath, {})
     if (
-      !(await this.db.get(
-        'select name from sqlite_master where type=\'table\' and name=\'version\'',
-      ))
+      !(this.db.prepare(
+        'select name from sqlite_master where type = ? and name = ?',
+      ).get('table', 'version'))
     ) {
       await this.createTables()
       return
     }
-    const session = await this.db.get('select * from session')
+    const session = await this.db.prepare('select * from session').get()
     if (!session) return
-    this._dcId = session.dc_id
-    this._serverAddress = session.serverAddress
-    this._port = session.port
+    this.setDC(session.dc_id, session.address, session.port)
     this._authKey = new AuthKey()
     await this._authKey.setKey(session.auth)
-
-    const entities = await this.db.raw_all('select * from entity')
-    if (entities) {
-      this._entityObjects = [
-        entities.map(e => ({
-          id: e.id,
-          hash: e.hash,
-          name: e.name,
-          phone: e.phone,
-          username: e.username,
-        })),
-      ]
-    }
   }
 
   processEntities(tlo: any): any {
@@ -122,20 +183,20 @@ export class DbSession extends MemorySession {
         entities = entities.concat(tlo.users)
       }
     }
-    entities = entities.filter(
-      (e: { className: string }) => e.className !== 'constructor',
-    )
+    entities = entities.filter((e: { className: string }) => e.className !== 'constructor')
+
+    const stmt = this.db.prepare('insert or replace into entity (id, hash, username, phone, name) VALUES (?,?,?,?,?)')
     for (const e of entities) {
-      const entityObject = this.entityObject(e)
+      const entityObject: EntityObject = this.entityObject(e)
       if (entityObject) {
-        this._entityObjects.push(entityObject)
+        stmt.run(entityObject.id, entityObject.hash, entityObject.username, entityObject.phone, entityObject.name)
       }
     }
   }
 
   private entityObject = (e: any): EntityObject => {
     try {
-      const peer = getInputPeer(e, false)
+      const peer = this.getInputEntity(e)
       const peerId = getPeerId(peer)
       const hash = 'accessHash' in peer ? peer.accessHash : bigInt.zero
       const username = e.username?.toLowerCase()
@@ -147,30 +208,27 @@ export class DbSession extends MemorySession {
     }
   }
 
-  private getEntityByPhone = (phone: string) =>
-    this._entityObjects.find(e => e.phone === phone)
+  private getEntityByPhone = (phone: string) => this.db.prepare('select * from entity where phone = ?').get(phone)
 
-  private getEntityByUsername = (username: string) =>
-    this._entityObjects.find(e => e.username === username)
+  private getEntityByUsername = (username: string) => this.db.prepare('select * from entity where username = ?').get(username)
 
-  private getEntityByName = (name: string) =>
-    this._entityObjects.find(e => e.name === name)
+  private getEntityByName = (name: string) => this.db.prepare('select * from entity where name = ?').get(name)
 
   private getEntityById = (id: string, exact = true) => {
     if (exact) {
-      return this._entityObjects.find(e => e.id === id)
+      return this.db.prepare('select * from entity where id = ?').get(id)
     }
     const ids = [
       utils.getPeerId(new Api.PeerUser({ userId: returnBigInt(id) })),
       utils.getPeerId(new Api.PeerChat({ chatId: returnBigInt(id) })),
       utils.getPeerId(new Api.PeerChannel({ channelId: returnBigInt(id) })),
     ]
-    return this._entityObjects.find(e => ids.includes(e.id))
+    return this.db.prepare('select * from entity where id IN(?)').get(ids)
   }
 
   getInputEntity(key: EntityLike): Api.TypeInputPeer {
     let entityKey = key
-    if (IS_DEV) console.log(`getInputEntity: ${stringifyCircular(entityKey, 2)}`)
+    // if (IS_DEV) console.log(`getInputEntity: ${stringifyCircular(entityKey, 2).substring(0, 20)}`)
     let exact: boolean
     if (
       typeof entityKey === 'object'
@@ -206,7 +264,7 @@ export class DbSession extends MemorySession {
     ) {
       entityKey = entityKey.toString()
     }
-    let result: EntityObject
+    let result
     if (typeof entityKey === 'string') {
       const phone = utils.parsePhone(entityKey)
       if (phone) {
@@ -250,28 +308,5 @@ export class DbSession extends MemorySession {
       throw new Error('Could not find input entity with key ' + entityKey)
     }
     throw new Error('Could not find input entity with key ' + entityKey)
-  }
-
-  close() {
-    this.db.dispose()
-  }
-
-  save() {
-    this.db.run('insert or replace into session values (?,?,?,?)', [
-      this.dcId,
-      this.serverAddress,
-      this.port,
-      this.authKey.getKey(),
-    ])
-    const set = new Set(this._entityObjects)
-    for (const e of set) {
-      this.db.run('insert or replace into entity values (?, ?, ?, ?, ?)', [
-        e.id,
-        e.hash,
-        e.username,
-        e.phone,
-        e.name,
-      ])
-    }
   }
 }

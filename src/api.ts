@@ -177,7 +177,6 @@ export default class TelegramAPI implements PlatformAPI {
         }
       }
     } catch (e) {
-      console.log(e)
       if (IS_DEV) console.log(JSON.stringify(e, null, 4))
       if (e.code === 401) this.authState = AuthState.PASSWORD_INPUT
       else return { type: 'error', errorMessage: mapError(e.errorMessage) }
@@ -418,17 +417,19 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private afterLogin = async () => {
+  private emptyAssets = async () => {
     // for perfomance testing
-    /*
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
     const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
     try {
-      await fs.rmdir(mediaDir)
-      await fs.rmdir(photosDir)
+      await fs.rm(mediaDir, { recursive: true })
+      await fs.rm(photosDir, { recursive: true })
     // eslint-disable-next-line no-empty
     } catch {}
-*/
+  }
+
+  private afterLogin = async () => {
+    // await this.emptyAssets()
     this.createAssetsDir()
     this.me = this.me || await this.client.getMe() as Api.User
     this.mapper = new TelegramMapper(this.accountInfo, this.me)
@@ -540,7 +541,6 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    this.dbSession?.save()
     await this.client?.disconnect()
   }
 
