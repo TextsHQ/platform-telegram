@@ -119,63 +119,62 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (IS_DEV) console.log('CREDS_CUSTOM', JSON.stringify(creds.custom, null, 4))
     try {
-      console.log(this.authState)
       switch (this.authState) {
         case AuthState.PHONE_INPUT:
-          {
-            this.loginInfo.phoneNumber = creds.custom.phoneNumber
-            const res = await this.client.invoke(new Api.auth.SendCode({
-              apiHash: API_HASH,
-              apiId: API_ID,
-              phoneNumber: this.loginInfo.phoneNumber,
-              settings: new Api.CodeSettings({
-                allowFlashcall: true,
-                currentNumber: true,
-                allowAppHash: true,
-              }),
-            }))
-            if (IS_DEV) console.log('PHONE_INPUT', JSON.stringify(res))
-            this.loginInfo.phoneCodeHash = res.phoneCodeHash
-            this.authState = AuthState.CODE_INPUT
-            break
-          }
+        {
+          this.loginInfo.phoneNumber = creds.custom.phoneNumber
+          const res = await this.client.invoke(new Api.auth.SendCode({
+            apiHash: API_HASH,
+            apiId: API_ID,
+            phoneNumber: this.loginInfo.phoneNumber,
+            settings: new Api.CodeSettings({
+              allowFlashcall: true,
+              currentNumber: true,
+              allowAppHash: true,
+            }),
+          }))
+          if (IS_DEV) console.log('PHONE_INPUT', JSON.stringify(res))
+          this.loginInfo.phoneCodeHash = res.phoneCodeHash
+          this.authState = AuthState.CODE_INPUT
+          break
+        }
         case AuthState.CODE_INPUT:
-          {
-            this.loginInfo.phoneCode = creds.custom.code
-            if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
-            const res = await this.client.invoke(new Api.auth.SignIn({
-              phoneNumber: this.loginInfo.phoneNumber,
-              phoneCodeHash: this.loginInfo.phoneCodeHash,
-              phoneCode: this.loginInfo.phoneCode,
-            }))
-            if (IS_DEV) console.log('CODE_INPUT', JSON.stringify(res))
-            this.authState = AuthState.READY
-            break
-          }
+        {
+          this.loginInfo.phoneCode = creds.custom.code
+          if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
+          const res = await this.client.invoke(new Api.auth.SignIn({
+            phoneNumber: this.loginInfo.phoneNumber,
+            phoneCodeHash: this.loginInfo.phoneCodeHash,
+            phoneCode: this.loginInfo.phoneCode,
+          }))
+          if (IS_DEV) console.log('CODE_INPUT', JSON.stringify(res))
+          this.authState = AuthState.READY
+          break
+        }
         case AuthState.PASSWORD_INPUT:
-          {
-            this.loginInfo.password = creds.custom.password
-            await this.client.signInWithPassword({
-              apiHash: API_HASH,
-              apiId: API_ID,
-            }, {
-              password: async () => this.loginInfo.password,
-              onError: async err => { console.log(`Auth error ${err}`); return true },
-            })
-            this.authState = AuthState.READY
-            break
-          }
+        {
+          this.loginInfo.password = creds.custom.password
+          await this.client.signInWithPassword({
+            apiHash: API_HASH,
+            apiId: API_ID,
+          }, {
+            password: async () => this.loginInfo.password,
+            onError: async err => { console.log(`Auth error ${err}`); return true },
+          })
+          this.authState = AuthState.READY
+          break
+        }
         case AuthState.READY:
-          {
-            if (IS_DEV) console.log('READY')
-            await this.afterLogin()
-            return { type: 'success' }
-          }
+        {
+          if (IS_DEV) console.log('READY')
+          await this.afterLogin()
+          return { type: 'success' }
+        }
         default:
-          {
-            if (IS_DEV) console.log(`Auth state is ${this.authState}`)
-            return { type: 'error' }
-          }
+        {
+          if (IS_DEV) console.log(`Auth state is ${this.authState}`)
+          return { type: 'error' }
+        }
       }
     } catch (e) {
       console.log(e)
@@ -421,7 +420,15 @@ export default class TelegramAPI implements PlatformAPI {
 
   private afterLogin = async () => {
     // for perfomance testing
-    // await this.deleteAssetsDir()
+    /*
+    const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
+    const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
+    try {
+      await fs.rmdir(mediaDir)
+      await fs.rmdir(photosDir)
+    // eslint-disable-next-line no-empty
+    } catch {}
+*/
     this.createAssetsDir()
     this.me = this.me || await this.client.getMe() as Api.User
     this.mapper = new TelegramMapper(this.accountInfo, this.me)

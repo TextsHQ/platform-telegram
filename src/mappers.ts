@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
@@ -236,19 +236,6 @@ export default class TelegramMapper {
 
   getProfilePhotoUrl = (id: bigInt.BigInteger) => `asset://${this.mapperData.accountID}/photos/${id}`
 
-  mapLinkImg(photo: Api.Photo, messageId: number): Partial<MessageLink> {
-    if (photo.sizes.length < 1) return
-    const photoSize = photo.sizes.find(size => size instanceof Api.PhotoSize)
-    if (photoSize instanceof Api.PhotoSize) {
-      const { w, h } = photoSize
-      const imgSize = { width: w, height: h }
-      const file = photo
-
-      const img = this.getMediaUrl(file.id, messageId)
-      return { img, imgSize }
-    }
-  }
-
   mapMessageLink(webPage: Api.TypeWebPage, messageId: number) {
     if (!(webPage instanceof Api.WebPage)) return
     const { url: originalURL, displayUrl, title, description, photo } = webPage
@@ -260,7 +247,7 @@ export default class TelegramMapper {
       img: undefined,
       imgSize: undefined,
     }
-    if (photo instanceof Api.Photo) Object.assign(link, this.mapLinkImg(photo, messageId))
+    if (photo instanceof Api.Photo) link.img = this.getMediaUrl(photo.id, messageId)
     return link
   }
 
@@ -311,16 +298,22 @@ export default class TelegramMapper {
       mapped.textAttributes = TelegramMapper.mapTextAttributes(msgText, msgEntities)
     }
     const pushSticker = (sticker: Api.Document, messageId: number) => {
-      const animated = sticker.mimeType === 'application/x-tgsticker'
+      const isWebm = sticker.mimeType === 'video/webm'
+      const animated = sticker.mimeType === 'application/x-tgsticker' || isWebm
+      const mimeType = sticker.mimeType === 'application/x-tgsticker' ? 'image/tgs' : sticker.mimeType
+      const size: Size = {
+        width: 512,
+        height: 512,
+      }
       mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: sticker.id.toString(),
         srcURL: this.getMediaUrl(sticker.id, messageId),
-        mimeType: animated ? 'image/tgs' : undefined,
-        type: MessageAttachmentType.IMG,
+        mimeType,
+        type: isWebm ? MessageAttachmentType.VIDEO : MessageAttachmentType.IMG,
         isGif: true,
         isSticker: true,
-        size: { width: 512, height: 512 },
+        size,
         extra: {
           loop: animated,
         },
@@ -328,7 +321,7 @@ export default class TelegramMapper {
     }
 
     const mapMessageMedia = () => {
-      if (msg.photo) {
+      if (msg.media instanceof Api.Photo) {
         const { photo } = msg
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
@@ -337,16 +330,21 @@ export default class TelegramMapper {
           type: MessageAttachmentType.IMG,
         })
       } else if (msg.video) {
-        const { video } = msg
-        mapped.attachments = mapped.attachments || []
-        mapped.attachments.push({
-          id: String(video.id),
-          srcURL: this.getMediaUrl(video.id, msg.id),
-          type: MessageAttachmentType.VIDEO,
-          fileName: video.accessHash.toString(),
-          mimeType: video.mimeType,
-          size: video.videoThumbs ? { width: video.videoThumbs[0].w, height: video.videoThumbs[0].h } : undefined,
-        })
+        if (msg.video.attributes.find(a => a.className === 'DocumentAttributeSticker')) {
+          // new animated stickers are webm
+          pushSticker(msg.video, msg.id)
+        } else {
+          const { video } = msg
+          mapped.attachments = mapped.attachments || []
+          mapped.attachments.push({
+            id: String(video.id),
+            srcURL: this.getMediaUrl(video.id, msg.id),
+            type: MessageAttachmentType.VIDEO,
+            fileName: video.accessHash.toString(),
+            mimeType: video.mimeType,
+            size: video.videoThumbs ? { width: video.videoThumbs[0].w, height: video.videoThumbs[0].h } : undefined,
+          })
+        }
       } else if (msg.audio) {
         const { audio } = msg
         mapped.attachments = mapped.attachments || []
@@ -586,11 +584,12 @@ export default class TelegramMapper {
   }
 
   mapThread(dialog: Dialog): Thread {
-    const imgFile = this.getProfilePhotoUrl(dialog.id)
+    const isSingle = dialog.dialog.peer instanceof Api.PeerUser ? 'single' : 'group'
+    const imgFile = isSingle ? undefined : this.getProfilePhotoUrl(dialog.id)
     const t: Thread = {
       _original: stringifyCircular(dialog),
       id: String(getPeerId(dialog.id)),
-      type: dialog.dialog.peer instanceof Api.PeerUser ? 'single' : 'group',
+      type: isSingle ? 'single' : 'group',
       isPinned: dialog.pinned,
       timestamp: dialog.dialog.topMessage ? new Date(dialog.date) : undefined,
       isUnread: dialog.unreadCount !== 0,
