@@ -5,7 +5,6 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import { getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
-import { inspect } from 'util'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
@@ -300,7 +299,7 @@ export default class TelegramMapper {
     const pushSticker = (sticker: Api.Document, messageId: number) => {
       const isWebm = sticker.mimeType === 'video/webm'
       const animated = sticker.mimeType === 'application/x-tgsticker' || isWebm
-      const mimeType = sticker.mimeType === 'application/x-tgsticker' ? 'image/tgs' : sticker.mimeType
+      const mimeType = sticker.mimeType === 'application/x-tgsticker' ? 'image/tgs' : isWebm ? 'video/webm' : undefined
       const size: Size = {
         width: 512,
         height: 512,
