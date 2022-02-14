@@ -5,7 +5,7 @@ import { Api } from 'telegram/tl'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
 import { returnBigInt } from 'telegram/Helpers'
-import { Session } from 'telegram/sessions'
+import { MemorySession } from 'telegram/sessions'
 import { getDisplayName, getInputPeer, getPeerId } from 'telegram/Utils'
 import { IAsyncSqlite, texts } from '@textshq/platform-sdk'
 import { mkdir, stat } from 'fs/promises'
@@ -23,7 +23,7 @@ interface EntityObject {
   name?: string
 }
 
-export class DbSession extends Session {
+export class DbSession extends MemorySession {
   private sessionSchema = `
     CREATE TABLE version (version integer primary key);
 
@@ -48,52 +48,13 @@ export class DbSession extends Session {
 
   private version = 1
 
-  private _serverAddress?: string
-
-  private _dcId?: number
-
-  private _port?: number
-
-  protected _takeoutId: undefined
-
-  private _authKey?: AuthKey
-
-  private _entities: EntityObject[]
-
-  get authKey(): AuthKey {
-    return this._authKey
-  }
-
-  get dcId(): number {
-    return this._dcId
-  }
-
-  get serverAddress(): string {
-    return this._serverAddress
-  }
-
-  get port(): number {
-    return this._port
-  }
-
-  get takeoutId() {
-    return this._takeoutId
-  }
-
-  set takeoutId(value) {
-    this._takeoutId = value
-  }
+  private _entityObjects: EntityObject[]
 
   constructor({ dbPath }: { dbPath: string }) {
     super()
-    this._serverAddress = undefined
-    this._dcId = 0
-    this._port = undefined
-    this._takeoutId = undefined
-    this._entities = []
-    this._authKey = new AuthKey()
     this.dbPath = dbPath
     this.db = new AsyncSqlite()
+    this._entityObjects = []
   }
 
   private createTables = async () => {
@@ -118,35 +79,25 @@ export class DbSession extends Session {
       return
     }
     const session = await this.db.get('select * from session')
-    if (IS_DEV) console.log(`load DB session: ${JSON.stringify(session)}`)
     if (!session) return
-    const { dc_id, address, port, auth } = session
+    this._dcId = session.dc_id
+    this._serverAddress = session.serverAddress
+    this._port = session.port
+    this._authKey = new AuthKey()
+    await this._authKey.setKey(session.auth)
+
     const entities = await this.db.raw_all('select * from entity')
-    this._entities = [
-      entities.map(e => ({
-        id: e.id,
-        hash: e.hash,
-        name: e.name,
-        phone: e.phone,
-        username: e.username,
-      })),
-    ]
-    this.setDC(dc_id, address, port)
-    await this.authKey.setKey(auth)
-  }
-
-  setDC(dcId: number, serverAddress: string, port: number): void {
-    this._dcId = dcId || 0
-    this._serverAddress = serverAddress
-    this._port = port
-  }
-
-  setAuthKey(authKey?: AuthKey, dcId?: number): void {
-    this._authKey = authKey
-  }
-
-  getAuthKey(dcId?: number): AuthKey {
-    return this.authKey
+    if (entities) {
+      this._entityObjects = [
+        entities.map(e => ({
+          id: e.id,
+          hash: e.hash,
+          name: e.name,
+          phone: e.phone,
+          username: e.username,
+        })),
+      ]
+    }
   }
 
   processEntities(tlo: any): any {
@@ -177,12 +128,12 @@ export class DbSession extends Session {
     for (const e of entities) {
       const entityObject = this.entityObject(e)
       if (entityObject) {
-        this._entities.push(entityObject)
+        this._entityObjects.push(entityObject)
       }
     }
   }
 
-  private entityObject(e: any): EntityObject {
+  private entityObject = (e: any): EntityObject => {
     try {
       const peer = getInputPeer(e, false)
       const peerId = getPeerId(peer)
@@ -191,88 +142,89 @@ export class DbSession extends Session {
       const { phone } = e
       const name = getDisplayName(e)
       return { id: peerId, hash: hash.toString(), username, phone, name }
-    } catch (e) {
-
+    } catch {
+      return null
     }
   }
 
   private getEntityByPhone = (phone: string) =>
-    this._entities.find(e => e.phone === phone)
+    this._entityObjects.find(e => e.phone === phone)
 
   private getEntityByUsername = (username: string) =>
-    this._entities.find(e => e.username === username)
+    this._entityObjects.find(e => e.username === username)
 
   private getEntityByName = (name: string) =>
-    this._entities.find(e => e.name === name)
+    this._entityObjects.find(e => e.name === name)
 
   private getEntityById = (id: string, exact = true) => {
     if (exact) {
-      return this._entities.find(e => e.id === id)
+      return this._entityObjects.find(e => e.id === id)
     }
     const ids = [
       utils.getPeerId(new Api.PeerUser({ userId: returnBigInt(id) })),
       utils.getPeerId(new Api.PeerChat({ chatId: returnBigInt(id) })),
       utils.getPeerId(new Api.PeerChannel({ channelId: returnBigInt(id) })),
     ]
-    return this._entities.find(e => ids.includes(e.id))
+    return this._entityObjects.find(e => ids.includes(e.id))
   }
 
   getInputEntity(key: EntityLike): Api.TypeInputPeer {
-    if (IS_DEV) console.log(`getInputEntity: ${stringifyCircular(key, 2)}`)
+    let entityKey = key
+    if (IS_DEV) console.log(`getInputEntity: ${stringifyCircular(entityKey, 2)}`)
     let exact: boolean
     if (
-      typeof key === 'object'
-      && !bigInt.isInstance(key)
-      && key.SUBCLASS_OF_ID
+      typeof entityKey === 'object'
+      && !bigInt.isInstance(entityKey)
+      && entityKey.SUBCLASS_OF_ID
     ) {
       if (
         // TypeInputPeer
         // TypeInputPeer
         // TypeInputChannel
-        key.SUBCLASS_OF_ID == 0xc91c90b6
-        || key.SUBCLASS_OF_ID == 0xe669bf46
-        || key.SUBCLASS_OF_ID == 0x40f202fd
+        entityKey.SUBCLASS_OF_ID === 0xc91c90b6
+        || entityKey.SUBCLASS_OF_ID === 0xe669bf46
+        || entityKey.SUBCLASS_OF_ID === 0x40f202fd
       ) {
         // @ts-expect-error
-        return key
+        return entityKey
       }
       // Try to early return if this key can be casted as input peer
-      return utils.getInputPeer(key)
+      return utils.getInputPeer(entityKey)
     }
     // Not a TLObject or can't be cast into InputPeer
-    if (typeof key === 'object') {
-      key = utils.getPeerId(key)
+    if (typeof entityKey === 'object') {
+      entityKey = utils.getPeerId(entityKey)
       exact = true
     } else {
       exact = false
     }
 
     if (
-      bigInt.isInstance(key)
-      || typeof key === 'bigint'
-      || typeof key === 'number'
+      bigInt.isInstance(entityKey)
+      || typeof entityKey === 'bigint'
+      || typeof entityKey === 'number'
     ) {
-      key = key.toString()
+      entityKey = entityKey.toString()
     }
     let result: EntityObject
-    if (typeof key === 'string') {
-      const phone = utils.parsePhone(key)
+    if (typeof entityKey === 'string') {
+      const phone = utils.parsePhone(entityKey)
       if (phone) {
         result = this.getEntityByPhone(phone)
       } else {
-        const { username, isInvite } = utils.parseUsername(key)
+        const { username, isInvite } = utils.parseUsername(entityKey)
         if (username && !isInvite) {
           result = this.getEntityByUsername(username)
         }
       }
       if (!result) {
-        const id = utils.parseID(key)
+        const id = utils.parseID(entityKey)
         if (id) {
-          result = this.getEntityById(key, exact)
+          result = this.getEntityById(entityKey, exact)
         }
       }
       if (!result) {
-        result = this.getEntityByName(key)
+        result = this.getEntityByName(entityKey)
       }
     }
     if (result) {
@@ -295,9 +247,9 @@ export class DbSession extends Session {
         })
       }
     } else {
-      throw new Error('Could not find input entity with key ' + key)
+      throw new Error('Could not find input entity with key ' + entityKey)
     }
-    throw new Error('Could not find input entity with key ' + key)
+    throw new Error('Could not find input entity with key ' + entityKey)
   }
 
   close() {
@@ -311,7 +263,7 @@ export class DbSession extends Session {
       this.port,
       this.authKey.getKey(),
     ])
-    const set = new Set(this._entities)
+    const set = new Set(this._entityObjects)
     for (const e of set) {
       this.db.run('insert or replace into entity values (?, ?, ?, ?, ?)', [
         e.id,
@@ -322,6 +274,4 @@ export class DbSession extends Session {
       ])
     }
   }
-
-  delete() {}
 }
