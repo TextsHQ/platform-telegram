@@ -75,7 +75,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private mapper: TelegramMapper
 
-  private sessionName
+  private sessionName: string
 
   private loginInfo = {
     phoneNumber: undefined,
@@ -709,7 +709,7 @@ export default class TelegramAPI implements PlatformAPI {
     // await this.client.invoke(Api.{ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } })
   }
 
-  getAsset = async (type: 'media' | 'photos', assetId: string, messageId: string) => {
+  getAsset = async (type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
     if (type !== 'media' && type !== 'photos') return
     const filePath = await this.getAssetPath(type, assetId)
     if (filePath) {
@@ -734,9 +734,12 @@ export default class TelegramAPI implements PlatformAPI {
         return await this.saveAsset(buffer, type, assetId)
       }
     } catch (e) {
-      if (IS_DEV) console.log(e)
+      texts.log('err', e, JSON.stringify(e, null, 4))
+      texts.Sentry.captureException(e)
     }
-    if (IS_DEV) console.log(`No buffer or path for media ${type}/${assetId}/${messageId}`)
+    // tgs stickers only appear to work on thread refresh
+    // only happens first time
+    texts.log(`No buffer or path for media ${type}/${assetId}/${messageId}/${extra}`)
   }
 
   handleDeepLink = async (link: string) => {
