@@ -602,7 +602,7 @@ export default class TelegramMapper {
     const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
     const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(dialog.id)
     const t: Thread = {
-      _original: stringifyCircular(dialog),
+      _original: stringifyCircular(dialog.dialog),
       id: String(getPeerId(dialog.id)),
       type: isSingle ? 'single' : isChannel ? 'channel' : 'group',
       isPinned: dialog.pinned,
