@@ -268,13 +268,15 @@ export default class TelegramMapper {
   }
 
   mapMessage(msg: CustomMessage) {
+    const isThreadMessage = msg.sender?.className === 'Channel'
+    const senderID = isThreadMessage ? '$thread' : msg.senderId?.toString() ?? this.mapperData.me.id.toString()
     const mapped: Message = {
       _original: stringifyCircular(msg),
       id: msg.id.toString(),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactions?.length ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards,
-      senderID: msg.senderId?.toString() ?? this.mapperData.me.id.toString(),
+      senderID,
       isSender: msg.out,
       linkedMessageID: msg.replyTo ? msg.replyToMsgId.toString() : undefined,
       buttons: this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id),
@@ -575,7 +577,7 @@ export default class TelegramMapper {
 
   mapUser(user: Api.User): User {
     if (!user) return
-    const imgURL = this.getProfilePhotoUrl(user.id)
+    const imgURL = user.photo instanceof Api.UserProfilePhoto ? this.getProfilePhotoUrl(user.id) : undefined
     return {
       id: user.id.toString(),
       username: user.username,
@@ -596,7 +598,9 @@ export default class TelegramMapper {
   mapThread(dialog: Dialog): Thread {
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
     const isChannel = dialog.dialog.peer instanceof Api.PeerChannel
-    const imgFile = isSingle ? undefined : this.getProfilePhotoUrl(dialog.id)
+    const photo = 'photo' in dialog.entity ? dialog.entity.photo : undefined
+    const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
+    const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(dialog.id)
     const t: Thread = {
       _original: stringifyCircular(dialog),
       id: String(getPeerId(dialog.id)),

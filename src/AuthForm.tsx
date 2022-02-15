@@ -6,7 +6,7 @@ import { AuthState } from './api'
 
 const TelegramAuth: React.FC<{
   api: PlatformAPI
-  login: (creds?: LoginCreds)=> Promise<LoginResult>
+  login: (creds?: LoginCreds) => Promise<LoginResult>
 }> = ({ api, login }) => {
   const [loading, setLoading] = React.useState(false)
   const [authState, setAuthState] = React.useState(AuthState.PHONE_INPUT)
