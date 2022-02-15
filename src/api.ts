@@ -497,10 +497,10 @@ export default class TelegramAPI implements PlatformAPI {
       } catch (e) {
         if (e.code === 400) {
           // only channel admins can request users
-          if (IS_DEV) console.log(`Admin required for this channel: ${dialog.name}`)
+          // if (IS_DEV) console.log(`Admin required for this channel: ${dialog.name}`)
           return []
         }
-        if (IS_DEV) console.log(`emitParticipants(): ${stringifyCircular(e, 2)}`)
+        // if (IS_DEV) console.log(`emitParticipants(): ${stringifyCircular(e, 2)}`)
         return []
       }
     })()
@@ -541,7 +541,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    await this.client?.disconnect()
+    await this.client?.destroy()
   }
 
   getCurrentUser = async (): Promise<CurrentUser> => {
