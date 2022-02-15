@@ -119,9 +119,12 @@ export class DbSession extends Session {
       // Not supported.
       return undefined
     }
-    this.prepareCache('insert or ignore into session (dc_id, auth) values (?,?)').run(dcId, authKey.getKey())
-    this.prepareCache('update session SET auth = ? WHERE dc_id = ?').run(authKey.getKey(), dcId)
 
+    // when DC migration happens on sign in, authKey will be null
+    if (authKey) {
+      this.prepareCache('insert or ignore into session (dc_id, auth) values (?,?)').run(dcId, authKey.getKey())
+      this.prepareCache('update session SET auth = ? WHERE dc_id = ?').run(authKey.getKey(), dcId)
+    }
     this.authKey = authKey
   }
 

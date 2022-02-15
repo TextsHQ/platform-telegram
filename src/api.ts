@@ -17,6 +17,7 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
 import type bigInt from 'big-integer'
 import { randomBytes } from 'crypto'
+import { LogLevel } from 'telegram/extensions/Logger'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -177,7 +178,8 @@ export default class TelegramAPI implements PlatformAPI {
         }
       }
     } catch (e) {
-      if (IS_DEV) console.log(JSON.stringify(e, null, 4))
+      texts.log('err', e, JSON.stringify(e, null, 4))
+      texts.Sentry.captureException()
       if (e.code === 401) this.authState = AuthState.PASSWORD_INPUT
       else return { type: 'error', errorMessage: mapError(e.errorMessage) }
     }
