@@ -99,7 +99,7 @@ export default class TelegramMapper {
               mentionedUser: { id: String(e.userId) },
             }
           default:
-            return { from, to }
+            return undefined
         }
         return undefined
       }).filter(Boolean)),
