@@ -9,7 +9,8 @@ import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { texts } from '@textshq/platform-sdk'
 import { mkdir, stat } from 'fs/promises'
 import { dirname } from 'path'
-import Database from 'better-sqlite3'
+// eslint-disable-next-line import/no-extraneous-dependencies
+import Database, { Statement } from 'better-sqlite3'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 
 const { IS_DEV } = texts
@@ -45,6 +46,8 @@ export class DbSession extends Session {
 
   private dbPath: string
 
+  private statementCache: Map<string, Statement>
+
   private version = 1
 
   protected _serverAddress?: string
@@ -63,8 +66,15 @@ export class DbSession extends Session {
     this._dcId = 0
     this._port = undefined
     this._takeoutId = undefined
-
     this.dbPath = dbPath
+    this.statementCache = new Map<string, Statement>()
+  }
+
+  private prepareCache = (sql: string): Statement => {
+    if (!this.statementCache.has(sql)) {
+      this.statementCache.set(sql, this.db.prepare(sql))
+    }
+    return this.statementCache.get(sql)
   }
 
   get dcId() {
@@ -109,8 +119,8 @@ export class DbSession extends Session {
       // Not supported.
       return undefined
     }
-    this.db.prepare('insert or ignore into session (dc_id, auth) values (?,?)').run(dcId, authKey.getKey())
-    this.db.prepare('update session SET auth = ? WHERE dc_id = ?').run(authKey.getKey(), dcId)
+    this.prepareCache('insert or ignore into session (dc_id, auth) values (?,?)').run(dcId, authKey.getKey())
+    this.prepareCache('update session SET auth = ? WHERE dc_id = ?').run(authKey.getKey(), dcId)
 
     this.authKey = authKey
   }
@@ -129,13 +139,13 @@ export class DbSession extends Session {
     this._dcId = dcId | 0
     this._serverAddress = serverAddress
     this._port = port
-    this.db.prepare('insert or ignore into session (dc_id, address, port) values (?,?,?)').run(dcId, serverAddress, port)
-    this.db.prepare('update session set address = ?, port = ? WHERE dc_id = ?').run(serverAddress, port, dcId)
+    this.prepareCache('insert or ignore into session (dc_id, address, port) values (?,?,?)').run(dcId, serverAddress, port)
+    this.prepareCache('update session set address = ?, port = ? WHERE dc_id = ?').run(serverAddress, port, dcId)
   }
 
   private createTables = async () => {
     this.db.exec(this.sessionSchema)
-    this.db.prepare('insert into version values (?)').run(this.version)
+    this.prepareCache('insert into version values (?)').run(this.version)
   }
 
   async load() {
@@ -147,14 +157,14 @@ export class DbSession extends Session {
     this.db = new Database(this.dbPath, {})
     if (IS_DEV) console.log(`load DB path: ${this.dbPath}`)
     if (
-      !(this.db.prepare(
+      !(this.prepareCache(
         'select name from sqlite_master where type = ? and name = ?',
       ).get('table', 'version'))
     ) {
       await this.createTables()
       return
     }
-    const session = await this.db.prepare('select * from session').get()
+    const session = await this.prepareCache('select * from session').get()
     if (!session) return
     this.setDC(session.dc_id, session.address, session.port)
     this._authKey = new AuthKey()
@@ -185,7 +195,7 @@ export class DbSession extends Session {
     }
     entities = entities.filter((e: { className: string }) => e.className !== 'constructor')
 
-    const stmt = this.db.prepare('insert or replace into entity (id, hash, username, phone, name) VALUES (?,?,?,?,?)')
+    const stmt = this.prepareCache('insert or replace into entity (id, hash, username, phone, name) VALUES (?,?,?,?,?)')
     for (const e of entities) {
       const entityObject: EntityObject = this.entityObject(e)
       if (entityObject) {
@@ -208,22 +218,22 @@ export class DbSession extends Session {
     }
   }
 
-  private getEntityByPhone = (phone: string) => this.db.prepare('select * from entity where phone = ?').get(phone)
+  private getEntityByPhone = (phone: string) => this.prepareCache('select * from entity where phone = ?').get(phone)
 
-  private getEntityByUsername = (username: string) => this.db.prepare('select * from entity where username = ?').get(username)
+  private getEntityByUsername = (username: string) => this.prepareCache('select * from entity where username = ?').get(username)
 
-  private getEntityByName = (name: string) => this.db.prepare('select * from entity where name = ?').get(name)
+  private getEntityByName = (name: string) => this.prepareCache('select * from entity where name = ?').get(name)
 
   private getEntityById = (id: string, exact = true) => {
     if (exact) {
-      return this.db.prepare('select * from entity where id = ?').get(id)
+      return this.prepareCache('select * from entity where id = ?').get(id)
     }
     const ids = [
       utils.getPeerId(new Api.PeerUser({ userId: returnBigInt(id) })),
       utils.getPeerId(new Api.PeerChat({ chatId: returnBigInt(id) })),
       utils.getPeerId(new Api.PeerChannel({ channelId: returnBigInt(id) })),
     ]
-    return this.db.prepare('select * from entity where id IN(?)').get(ids)
+    return this.prepareCache('select * from entity where id IN(?)').get(ids)
   }
 
   getInputEntity(key: EntityLike): Api.TypeInputPeer {
