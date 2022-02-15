@@ -13,8 +13,6 @@ import { dirname } from 'path'
 import Database, { Statement } from 'better-sqlite3'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 
-const { IS_DEV } = texts
-
 interface EntityObject {
   id: string
   hash: string
@@ -59,6 +57,8 @@ export class DbSession extends Session {
   protected _takeoutId: undefined
 
   protected _authKey?: AuthKey
+
+  private _key?: Buffer
 
   constructor({ dbPath }: { dbPath: string }) {
     super()
@@ -120,11 +120,6 @@ export class DbSession extends Session {
       return undefined
     }
 
-    // when DC migration happens on sign in, authKey will be null
-    if (authKey) {
-      this.prepareCache('insert or ignore into session (dc_id, auth) values (?,?)').run(dcId, authKey.getKey())
-      this.prepareCache('update session SET auth = ? WHERE dc_id = ?').run(authKey.getKey(), dcId)
-    }
     this.authKey = authKey
   }
 
@@ -132,8 +127,13 @@ export class DbSession extends Session {
     this.db.close()
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  save(): void {}
+  save() {
+    this.prepareCache('delete from session').run()
+    if (this.authKey?.getKey() && this.serverAddress && this.port) {
+      this.prepareCache('insert into session (dc_id, address, port, auth) values (?,?,?,?)')
+        .run(this.dcId, this.serverAddress, this.port, this.authKey.getKey())
+    }
+  }
 
   // eslint-disable-next-line class-methods-use-this
   delete(): void {}
@@ -142,8 +142,6 @@ export class DbSession extends Session {
     this._dcId = dcId | 0
     this._serverAddress = serverAddress
     this._port = port
-    this.prepareCache('insert or ignore into session (dc_id, address, port) values (?,?,?)').run(dcId, serverAddress, port)
-    this.prepareCache('update session set address = ?, port = ? WHERE dc_id = ?').run(serverAddress, port, dcId)
   }
 
   private createTables = async () => {
@@ -151,27 +149,34 @@ export class DbSession extends Session {
     this.prepareCache('insert into version values (?)').run(this.version)
   }
 
-  async load() {
+  async init() {
     try {
       await stat(dirname(this.dbPath))
     } catch {
       await mkdir(dirname(this.dbPath))
     }
     this.db = new Database(this.dbPath, {})
-    if (IS_DEV) console.log(`load DB path: ${this.dbPath}`)
+    texts.log(`load DB path: ${this.dbPath}`)
     if (
       !(this.prepareCache(
         'select name from sqlite_master where type = ? and name = ?',
       ).get('table', 'version'))
     ) {
       await this.createTables()
-      return
     }
     const session = await this.prepareCache('select * from session').get()
     if (!session) return
-    this.setDC(session.dc_id, session.address, session.port)
-    this._authKey = new AuthKey()
-    await this._authKey.setKey(session.auth)
+    this._dcId = session.dc_id
+    this._serverAddress = session.address
+    this._port = session.port
+    if (session.auth) this._key = session.auth
+  }
+
+  async load() {
+    if (this._key) {
+      this._authKey = new AuthKey()
+      await this._authKey.setKey(this._key)
+    }
   }
 
   processEntities(tlo: any): any {

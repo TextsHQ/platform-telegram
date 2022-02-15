@@ -17,7 +17,6 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import BigInteger from 'big-integer'
 import type bigInt from 'big-integer'
 import { randomBytes } from 'crypto'
-import { LogLevel } from 'telegram/extensions/Logger'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -92,6 +91,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.dbSession = new DbSession({
       dbPath,
     })
+
+    await this.dbSession.init()
 
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
       connectionRetries: 5,
@@ -168,6 +169,7 @@ export default class TelegramAPI implements PlatformAPI {
         case AuthState.READY:
         {
           if (IS_DEV) console.log('READY')
+          await this.dbSession.save()
           await this.afterLogin()
           return { type: 'success' }
         }
@@ -179,7 +181,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
     } catch (e) {
       texts.log('err', e, JSON.stringify(e, null, 4))
-      texts.Sentry.captureException()
+      texts.Sentry.captureException(e)
       if (e.code === 401) this.authState = AuthState.PASSWORD_INPUT
       else return { type: 'error', errorMessage: mapError(e.errorMessage) }
     }
