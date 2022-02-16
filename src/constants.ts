@@ -25,5 +25,4 @@ export const REACTIONS: Record<string, SupportedReaction> = {
   faceSwearing: { title: 'Face with Symbols on Mouth', render: '🤬' },
   poo: { title: 'Pile of Poo', render: '💩' },
   vomiting: { title: 'Face Vomiting', render: '🤮' },
-
 }

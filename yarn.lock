@@ -5,6 +5,20 @@ __metadata:
   version: 5
   cacheKey: 8
 
+"@airgram/constants@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "@airgram/constants@npm:4.0.0"
+  checksum: d0c1fa1da7e2dc7c495434cd80e0aa1f0be8135f3821e2e0b29834ca8639f6a584d1b140348d4f2c1a4e59a2175a63c0606f062bc9fe497cb6566c81668a7b26
+  languageName: node
+  linkType: hard
+
+"@airgram/core@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "@airgram/core@npm:5.0.0"
+  checksum: c235da530b9c6d855739b09e4441fb6b26fe4026daa5e6e836ec342b400b4b4c9370f8d2736652810a8c876ef61234ec9d940f00601c90b88d39edf3e027b60d
+  languageName: node
+  linkType: hard
+
 "@ampproject/remapping@npm:^2.0.0":
   version: 2.1.1
   resolution: "@ampproject/remapping@npm:2.1.1"
@@ -1621,6 +1635,7 @@ __metadata:
     "@types/node": ^17.0.12
     "@types/react": 17.0.2
     "@types/react-phone-number-input": ^3.0.13
+    airgram: ^5.0.0
     big-integer: ^1.6.51
     bluebird: ^3.7.2
     date-fns: ^2.27.0
@@ -1934,6 +1949,17 @@ __metadata:
     clean-stack: ^2.0.0
     indent-string: ^4.0.0
   checksum: 1101a33f21baa27a2fa8e04b698271e64616b886795fd43c31068c07533c7b3facfcaf4e9e0cab3624bd88f729a592f1c901a1a229c9e490eafce411a8644b79
+  languageName: node
+  linkType: hard
+
+"airgram@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "airgram@npm:5.0.0"
+  dependencies:
+    "@airgram/constants": ^4.0.0
+    "@airgram/core": ^5.0.0
+    ffi-napi: ^3.0.0
+  checksum: ac43757d19d5b16ff62e7a9e5ce2621a0187f1579646c6dbfe2451263434be7ad1654b6a3c92a21c8380333c697162ba6c04c9d47c16061e69f85ec8641429c0
   languageName: node
   linkType: hard
 
@@ -2598,7 +2624,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"debug@npm:^3.2.7":
+"debug@npm:^3.1.0, debug@npm:^3.2.7":
   version: 3.2.7
   resolution: "debug@npm:3.2.7"
   dependencies:
@@ -3291,6 +3317,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ffi-napi@npm:^3.0.0":
+  version: 3.1.0
+  resolution: "ffi-napi@npm:3.1.0"
+  dependencies:
+    debug: ^4.1.1
+    get-uv-event-loop-napi-h: ^1.0.5
+    node-addon-api: ^2.0.0
+    node-gyp: latest
+    node-gyp-build: ^4.2.1
+    ref-napi: ^2.0.1
+    ref-struct-di: ^1.1.0
+  checksum: c256b77400b82c1ef4518fd029c0c077a56eb8f882ea4786f0f23bad0a1ef788e2c70efb5af78dfab9ea19faef38fdae523f86cacd0b2d4a18a6cc4a8bfe13c7
+  languageName: node
+  linkType: hard
+
 "file-entry-cache@npm:^6.0.1":
   version: 6.0.1
   resolution: "file-entry-cache@npm:6.0.1"
@@ -3444,6 +3485,22 @@ __metadata:
     call-bind: ^1.0.2
     get-intrinsic: ^1.1.1
   checksum: 9ceff8fe968f9270a37a1f73bf3f1f7bda69ca80f4f80850670e0e7b9444ff99323f7ac52f96567f8b5f5fbe7ac717a0d81d3407c7313e82810c6199446a5247
+  languageName: node
+  linkType: hard
+
+"get-symbol-from-current-process-h@npm:^1.0.1, get-symbol-from-current-process-h@npm:^1.0.2":
+  version: 1.0.2
+  resolution: "get-symbol-from-current-process-h@npm:1.0.2"
+  checksum: d47cc1b9e0be27469e2af0555b21aaa5ebd114e8aa25bb0e2616c8abaebb7933e7b5bedcc31c6cad06e4df232e0fe280118001fec78da488f5f630b65cc1cae5
+  languageName: node
+  linkType: hard
+
+"get-uv-event-loop-napi-h@npm:^1.0.5":
+  version: 1.0.6
+  resolution: "get-uv-event-loop-napi-h@npm:1.0.6"
+  dependencies:
+    get-symbol-from-current-process-h: ^1.0.1
+  checksum: 3a2a9f9fc18196113d94496c79d5208c7e750cee6f65625fa34df195cab6bf9f122981c923e10cadd81d7f8da1ff92fe4020a7414d3ec16c820dee18e45bb29c
   languageName: node
   linkType: hard
 
@@ -4327,7 +4384,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-gyp-build@npm:^4.3.0":
+"node-addon-api@npm:^2.0.0":
+  version: 2.0.2
+  resolution: "node-addon-api@npm:2.0.2"
+  dependencies:
+    node-gyp: latest
+  checksum: 31fb22d674648204f8dd94167eb5aac896c841b84a9210d614bf5d97c74ef059cc6326389cf0c54d2086e35312938401d4cc82e5fcd679202503eb8ac84814f8
+  languageName: node
+  linkType: hard
+
+"node-gyp-build@npm:^4.2.1, node-gyp-build@npm:^4.3.0":
   version: 4.3.0
   resolution: "node-gyp-build@npm:4.3.0"
   bin:
@@ -4774,6 +4840,29 @@ __metadata:
     string_decoder: ^1.1.1
     util-deprecate: ^1.0.1
   checksum: d4ea81502d3799439bb955a3a5d1d808592cf3133350ed352aeaa499647858b27b1c4013984900238b0873ec8d0d8defce72469fb7a83e61d53f5ad61cb80dc8
+  languageName: node
+  linkType: hard
+
+"ref-napi@npm:^2.0.1":
+  version: 2.1.2
+  resolution: "ref-napi@npm:2.1.2"
+  dependencies:
+    debug: ^4.1.1
+    get-symbol-from-current-process-h: ^1.0.2
+    node-addon-api: ^2.0.0
+    node-gyp: latest
+    node-gyp-build: ^4.2.1
+  checksum: cfc04c5c5a02a1475b4b7713333af26595e3f28b2cb7a3cb3f7b7dcbcb14209c4bffe97b9e9303003de60d1351bb10be178c286411b2f7a3e70075638cc818f0
+  languageName: node
+  linkType: hard
+
+"ref-struct-di@npm:^1.1.0":
+  version: 1.1.1
+  resolution: "ref-struct-di@npm:1.1.1"
+  dependencies:
+    debug: ^3.1.0
+    node-gyp: latest
+  checksum: 787dec1439628260b7928e5b53ff4cb83012e30e4a32b8b2d5198f138925b4bddf72de9da5c7ee6801c9f9c1427946bd911d58a249ce4f4babf2998cc69f0244
   languageName: node
   linkType: hard
 
