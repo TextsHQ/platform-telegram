@@ -150,8 +150,15 @@ export default class TelegramAPI implements PlatformAPI {
     this.accountInfo = accountInfo
     await this.client.connect()
 
-    if (this.airgramConn) await this.doMigration()
-
+    if (this.airgramConn) {
+      await this.doMigration()
+      this.onEvent([{
+        type: ServerEventType.TOAST,
+        toast: {
+          text: 'Your Telegram account login session was migrated and you may see a new login notification.',
+        },
+      }])
+    }
     this.authState = AuthState.PHONE_INPUT
 
     if (session) await this.afterLogin()
@@ -197,9 +204,9 @@ export default class TelegramAPI implements PlatformAPI {
         }
       }
     } catch (e) {
-      throw new Error()
+      throw new ReAuthError()
     }
-    throw new Error()
+    throw new ReAuthError()
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
