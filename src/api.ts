@@ -177,9 +177,22 @@ export default class TelegramAPI implements PlatformAPI {
           }))
           texts.log(JSON.stringify(qrTokenResult, null, 4))
           if (qrTokenResult.className === 'auth.LoginTokenSuccess') {
+            texts.log('token success')
             await this.airgramConn.destroy()
             this.dbSession.save()
             return
+          }
+          if (qrTokenResult.className === 'auth.LoginTokenMigrateTo') {
+            texts.log('migrating DC')
+            await this.client._switchDC(qrTokenResult.dcId)
+            const migratedToken = await this.client.invoke(new Api.auth.ImportLoginToken({
+              token: qrTokenResult.token }))
+            if (migratedToken.className === 'auth.LoginTokenSuccess') {
+              texts.log('token success')
+              await this.airgramConn.destroy()
+              this.dbSession.save()
+              return
+            }
           }
         }
       }
