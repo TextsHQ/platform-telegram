@@ -248,7 +248,7 @@ export default class TelegramMapper {
       img: undefined,
       imgSize: undefined,
     }
-    if (photo instanceof Api.Photo) link.img = this.getStickerUrl(photo.id, messageId)
+    if (photo instanceof Api.Photo) link.img = this.getMediaUrl(photo.id, messageId)
     return link
   }
 
@@ -305,16 +305,14 @@ export default class TelegramMapper {
       const animated = sticker.mimeType === 'application/x-tgsticker' || isWebm
       const mimeType = sticker.mimeType === 'application/x-tgsticker' ? 'image/tgs' : isWebm ? 'video/webm' : undefined
       const sizeAttribute = sticker.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo)
-      const size: Size = {
-        width: 256,
-        height: 256,
-      }
-
+      let size: Size
       if ('w' in sizeAttribute) {
-        size.width = sizeAttribute.w
+        size = {
+          width: sizeAttribute.w,
+          height: sizeAttribute.h,
+        }
         size.height = sizeAttribute.h
       }
-
       mapped.attachments = mapped.attachments || []
       mapped.attachments.push({
         id: sticker.id.toString(),
@@ -334,10 +332,12 @@ export default class TelegramMapper {
       if (msg.media instanceof Api.MessageMediaPhoto) {
         const { photo } = msg
         mapped.attachments = mapped.attachments || []
+        const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) : undefined
         mapped.attachments.push({
           id: String(photo.id),
-          srcURL: this.getStickerUrl(photo.id, msg.id),
+          srcURL: this.getMediaUrl(photo.id, msg.id),
           type: MessageAttachmentType.IMG,
+          size: photoSize && 'w' in photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
         })
       } else if (msg.video) {
         if (msg.video.attributes.find(a => a.className === 'DocumentAttributeSticker')) {
@@ -349,7 +349,7 @@ export default class TelegramMapper {
           mapped.attachments = mapped.attachments || []
           mapped.attachments.push({
             id: String(video.id),
-            srcURL: this.getStickerUrl(video.id, msg.id),
+            srcURL: this.getMediaUrl(video.id, msg.id),
             type: MessageAttachmentType.VIDEO,
             fileName: video.accessHash.toString(),
             mimeType: video.mimeType,
@@ -361,7 +361,7 @@ export default class TelegramMapper {
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(audio.id),
-          srcURL: this.getStickerUrl(audio.id, msg.id),
+          srcURL: this.getMediaUrl(audio.id, msg.id),
           type: MessageAttachmentType.AUDIO,
           fileName: audio.accessHash.toString(),
           mimeType: audio.mimeType,
@@ -372,7 +372,7 @@ export default class TelegramMapper {
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(videoNote.id),
-          srcURL: this.getStickerUrl(videoNote.id, msg.id),
+          srcURL: this.getMediaUrl(videoNote.id, msg.id),
           type: MessageAttachmentType.VIDEO,
         })
       } else if (msg.voice) {
@@ -380,7 +380,7 @@ export default class TelegramMapper {
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(voice.id),
-          srcURL: this.getStickerUrl(voice.id, msg.id),
+          srcURL: this.getMediaUrl(voice.id, msg.id),
           type: MessageAttachmentType.AUDIO,
         })
       } else if (msg.gif) {
@@ -389,7 +389,7 @@ export default class TelegramMapper {
         const sizeAttribute = animation.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo)
         mapped.attachments.push({
           id: String(animation.id),
-          srcURL: this.getStickerUrl(animation.id, msg.id),
+          srcURL: this.getMediaUrl(animation.id, msg.id),
           type: MessageAttachmentType.VIDEO,
           isGif: true,
           fileName: animation.accessHash.toString(),
@@ -415,7 +415,7 @@ export default class TelegramMapper {
         mapped.attachments.push({
           id: String(document.id),
           type: MessageAttachmentType.UNKNOWN,
-          srcURL: this.getStickerUrl(document.id, msg.id),
+          srcURL: this.getMediaUrl(document.id, msg.id),
           fileName: 'fileName' in fileName ? fileName.fileName : undefined,
           size: 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
           mimeType: document.mimeType,
@@ -431,11 +431,11 @@ export default class TelegramMapper {
       } else if (msg.poll) {
         const { poll } = msg
         const pollAnswers = poll.poll.answers.map(a => a.text)
-        mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}Poll\n\n
-          
-    ${poll.results.results.map((result, index) => [pollAnswers[index], result.chosen
-    ? '✔️'
-    : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+        const isQuiz = poll.poll.quiz
+        const mappedResults = poll.results.results ? `${poll.results.results.map((result, index) => [pollAnswers[index], result.chosen
+          ? '✔️' : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+          : 'No results available yet'
+        mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}${isQuiz ? 'Quiz' : 'Poll'}\n\n\n` + mappedResults
       } else if (msg.media instanceof Api.MessageMediaWebPage) {
         mapped.links = [this.mapMessageLink(msg.media.webpage, msg.id)]
       } else {
