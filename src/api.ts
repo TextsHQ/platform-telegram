@@ -116,10 +116,18 @@ export default class TelegramAPI implements PlatformAPI {
           filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
         })
         texts.log('Waiting..')
-        await new Promise(r => { setTimeout(r, 5000) })
+        const authPromise = new Promise<void>((resolve, reject) => {
+          this.airgramConn.on('updateAuthorizationState', ({ update }) => {
+            if (update.authorizationState._ === 'authorizationStateReady') {
+              resolve()
+            } else if (update.authorizationState._ === 'authorizationStateClosed') reject()
+          })
+        })
+        await authPromise
+        texts.log('Done auth')
         this.sessionName = randomBytes(8).toString('hex')
       } catch (err) {
-        throw new ReAuthError()
+        throw new Error()
       }
     } else {
       this.sessionName = session || randomBytes(8).toString('hex')
@@ -176,9 +184,9 @@ export default class TelegramAPI implements PlatformAPI {
         }
       }
     } catch (e) {
-      throw new ReAuthError()
+      throw new Error()
     }
-    throw new ReAuthError()
+    throw new Error()
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
@@ -244,7 +252,7 @@ export default class TelegramAPI implements PlatformAPI {
         case AuthState.READY:
         {
           if (IS_DEV) console.log('READY')
-          await this.dbSession.save()
+          this.dbSession.save()
           await this.afterLogin()
           return { type: 'success' }
         }
