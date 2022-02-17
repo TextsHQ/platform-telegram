@@ -19,6 +19,7 @@ import type bigInt from 'big-integer'
 import { randomBytes } from 'crypto'
 import os from 'os'
 import { Airgram } from 'airgram'
+import dns from 'dns/promises'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT, BINARIES_DIR_PATH } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -143,12 +144,13 @@ export default class TelegramAPI implements PlatformAPI {
     await this.dbSession.init()
 
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
-      connectionRetries: 5,
+      connectionRetries: 3,
       maxConcurrentDownloads: 2,
     })
 
     this.accountInfo = accountInfo
     await this.client.connect()
+    this.connectionWatchDog(30)
 
     if (this.airgramConn) {
       await this.doMigration()
@@ -207,6 +209,25 @@ export default class TelegramAPI implements PlatformAPI {
       throw new ReAuthError()
     }
     throw new ReAuthError()
+  }
+
+  private connectionWatchDog = async (intervalSeconds: number) => {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      await new Promise(resolve => { setTimeout(resolve, intervalSeconds * 1000) })
+      await (async () => {
+        if (!this.client.connected && !this.client._reconnecting) {
+          texts.log('Attempting reconnection')
+          try {
+            await dns.resolve('www.google.com')
+            await this.client.connect()
+            texts.log('Reconnected client.')
+          } catch (e) {
+            texts.log('Couldn\'t reconnect client')
+          }
+        }
+      })()
+    }
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
