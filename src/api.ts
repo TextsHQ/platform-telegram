@@ -146,7 +146,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
       connectionRetries: 3,
-      maxConcurrentDownloads: 2,
+      maxConcurrentDownloads: 4,
     })
 
     this.accountInfo = accountInfo
@@ -351,6 +351,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private mapThread = (dialog: Dialog) => {
     const thread = this.mapper.mapThread(dialog)
+    if (dialog.message) this.storeMessage(dialog.message)
     this.emitParticipants(dialog)
     return thread
   }
