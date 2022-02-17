@@ -59,8 +59,14 @@ const tdlibPath = path.join(BINARIES_DIR_PATH, {
   win32: `${process.platform}-${process.arch}/libtdjson.dll`,
 }[process.platform])
 
+interface LoginInfo {
+  phoneNumber?: string
+  phoneCodeHash?: string
+  phoneCode?: string
+  password?: string
+}
 export default class TelegramAPI implements PlatformAPI {
-  private client?: TelegramClient
+  private client: TelegramClient
 
   private authState: AuthState
 
@@ -68,9 +74,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginEventCallback: LoginEventCallback
 
-  private dbSession?: DbSession
+  private dbSession: DbSession
 
-  private dialogs?: Map<string, Dialog> = new Map<string, Dialog>()
+  private dialogs: Map<string, Dialog> = new Map<string, Dialog>()
 
   private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
 
@@ -86,16 +92,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   private sessionName: string
 
-  private airgramConn?: Airgram
+  private airgramConn: Airgram
 
-  private loginInfo = {
-    phoneNumber: undefined,
-    phoneCodeHash: undefined,
-    phoneCode: undefined,
-    password: undefined,
-  }
+  private loginInfo: LoginInfo = {}
 
-  init = async (session?: string | AirgramSession, accountInfo?: AccountInfo) => {
+  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
     if (isAirgramSession(session)) {
       try {
         this.airgramConn = new Airgram({
@@ -118,7 +119,7 @@ export default class TelegramAPI implements PlatformAPI {
         })
         texts.log('Waiting..')
         const authPromise = new Promise<void>((resolve, reject) => {
-          this.airgramConn.on('updateAuthorizationState', ({ update }) => {
+          this.airgramConn?.on('updateAuthorizationState', ({ update }) => {
             if (update.authorizationState._ === 'authorizationStateReady') {
               resolve()
             } else if (update.authorizationState._ === 'authorizationStateClosed') reject()
@@ -212,11 +213,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private connectionWatchDog = async (intervalSeconds: number) => {
+    const delay = async (ms: number) => new Promise(resolve => { setTimeout(resolve, ms) })
+    await delay(60_000)
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      await new Promise(resolve => { setTimeout(resolve, intervalSeconds * 1000) })
+      await delay(intervalSeconds * 1000)
       await (async () => {
-        if (!this.client.connected && !this.client._reconnecting) {
+        if (!this.client._sender?.isConnected() && !this.client._sender.isConnecting) {
           texts.log('Attempting reconnection')
           try {
             await dns.resolve('www.google.com')
@@ -284,7 +287,7 @@ export default class TelegramAPI implements PlatformAPI {
             apiHash: API_HASH,
             apiId: API_ID,
           }, {
-            password: async () => this.loginInfo.password,
+            password: async () => this.loginInfo.password ?? '',
             onError: async err => { console.log(`Auth error ${err}`); return true },
           })
           this.authState = AuthState.READY
@@ -318,6 +321,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (message.media) {
       this.messageMediaStore.set(message.id, message.media)
     }
+    if (!message.chatId) return
     const thread = this.chatIdMessageId.get(message.chatId)
     if (thread) {
       thread.push(message.id)
@@ -328,12 +332,15 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
+    if (!message.chatId) return
+    if (!message.senderId) return
     const threadID = message.chatId.toString()
     const mappedMessage = this.mapper.mapMessage(message)
     const chatParticipants = this.dialogToParticipantIds.get(message.chatId)
     if (!chatParticipants?.find(m => m === message.senderId)) {
       this.emitParticipantFromMessage(message.chatId, message.senderId)
     }
+    if (!mappedMessage) return
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -402,7 +409,7 @@ export default class TelegramAPI implements PlatformAPI {
       objectName: 'thread',
       entries: [{
         id: getPeerId(update.peer.peer).toString(),
-        mutedUntil: new Date(update.notifySettings.muteUntil),
+        mutedUntil: new Date(update.notifySettings.muteUntil ?? 0),
       }],
     }])
   }
@@ -602,9 +609,12 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private dialogToParticipantIdsUpdate(dialogId: bigInt.BigInteger, participantIds: bigInt.BigInteger[]) {
-    if (this.dialogToParticipantIds.has(dialogId)) this.dialogToParticipantIds.get(dialogId).push(...participantIds)
-    else {
+    const dialog = this.dialogToParticipantIds.get(dialogId)
+    if (!dialog) {
+      texts.log(`No dialog id ${dialogId} with participantIds ${participantIds}`)
       this.dialogToParticipantIds.set(dialogId, participantIds)
+    } else {
+      dialog?.push(...participantIds)
     }
   }
 
@@ -618,10 +628,11 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitParticipants = async (dialog: Dialog) => {
+    if (!dialog.id) return
     const limit = 256
     const members = await (async () => {
       try {
-        return await this.client.getParticipants(dialog.id, { showTotal: true, limit })
+        return await this.client.getParticipants(dialog.id as BigInteger.BigInteger, { showTotal: true, limit })
       } catch (e) {
         if (e.code === 400) {
           // only channel admins can request users
@@ -633,7 +644,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
     })()
 
-    if (!members.length) return
+    if (!members) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
     this.dialogToParticipantIdsUpdate(dialog.id, members.map(m => m.id))
     this.upsertParticipants(String(dialog.id), mappedMembers)
@@ -698,8 +709,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   createThread = async (userIDs: string[], title?: string) => {
-    if (userIDs.length === 0) return
-    if (!title) return
+    if (userIDs.length === 0) return false
+    if (!title) return false
     await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
     return true
   }
@@ -749,9 +760,10 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 20
     let lastDate = 0
     for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
+      if (!dialog.id) continue
       this.dialogs[dialog.id.toString()] = dialog
       this.emitThread(this.mapThread(dialog))
-      lastDate = dialog.message?.date
+      lastDate = dialog.message?.date ?? 0
     }
 
     return {
@@ -764,7 +776,7 @@ export default class TelegramAPI implements PlatformAPI {
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
-    const messages = []
+    const messages: Api.Message[] = []
     for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
       this.storeMessage(msg)
       messages.push(msg)
@@ -781,7 +793,7 @@ export default class TelegramAPI implements PlatformAPI {
     const msgSendParams: SendMessageParams = {
       parseMode: 'md',
       message: text,
-      replyTo: +quotedMessageID || undefined,
+      replyTo: quotedMessageID ? Number(quotedMessageID) : undefined,
       file,
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
@@ -798,6 +810,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[]): Promise<boolean> => {
+    if (!threadIDs) return false
     const resArr = await Promise.all(threadIDs.map(async toThreadID => {
       const res = await this.client.forwardMessages(threadID, { messages: +messageID, fromPeer: toThreadID })
       return res.length
@@ -834,7 +847,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getAsset = async (type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
-    if (type !== 'media' && type !== 'photos') return
+    if (type !== 'media' && type !== 'photos') {
+      texts.log(`Unknown media type ${type}`)
+      return
+    }
     const filePath = await this.getAssetPath(type, assetId)
     if (filePath) {
       return filePath

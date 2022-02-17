@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, texts } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
@@ -49,7 +49,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes {
+  static mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes | undefined {
     if (!entities || entities.length === 0) return
     return {
       entities: TelegramMapper.transformOffset(text, entities.map<TextEntity>(e => {
@@ -106,7 +106,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapCallReason(discardReason: Api.TypePhoneCallDiscardReason) {
+  static mapCallReason(discardReason: Api.TypePhoneCallDiscardReason | undefined) {
     if (discardReason instanceof Api.PhoneCallDiscardReasonMissed) return 'Missed'
     if (discardReason instanceof Api.PhoneCallDiscardReasonBusy) return 'Declined'
     if (discardReason instanceof Api.PhoneCallDiscardReasonDisconnect) return 'Disconnected'
@@ -133,8 +133,8 @@ export default class TelegramMapper {
   static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
     const presence: UserPresence = {
       userID: userId.toString(),
-      lastActive: null,
-      status: null,
+      lastActive: undefined,
+      status: 'offline',
     }
     const oneDay = 24 * 3600 * 1000
     if (status instanceof Api.UserStatusOnline) {
@@ -207,6 +207,7 @@ export default class TelegramMapper {
         activityType: ActivityType.NONE,
       }
     }
+    return customActivity(`Unsupported activity: ${update.action}`)
   }
 
   getMessageButtons(replyMarkup: Api.TypeReplyMarkup, chatID: bigInt.BigInteger, messageID: number) {
@@ -215,7 +216,7 @@ export default class TelegramMapper {
       case 'ReplyInlineMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => ({
           label: row.text,
-          linkURL: TelegramMapper.getButtonLinkURL(row, this.mapperData.accountID, chatID, messageID),
+          linkURL: TelegramMapper.getButtonLinkURL(row, this.mapperData.accountID, chatID, messageID) ?? '',
         })))
       case 'ReplyKeyboardMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
@@ -225,7 +226,7 @@ export default class TelegramMapper {
               linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text), // todo: should actually be sent on clicking instantly
             }
           }
-          return undefined // todo
+          return { label: `Unsupported link button: ${row.className}`, linkURL: '' }
         })).filter(Boolean)
       default:
     }
@@ -243,7 +244,7 @@ export default class TelegramMapper {
     const link: MessageLink = {
       url: displayUrl,
       originalURL,
-      title,
+      title: title ?? '',
       summary: description,
       img: undefined,
       imgSize: undefined,
@@ -259,15 +260,15 @@ export default class TelegramMapper {
       return {
         id: messageID,
         text: newContent.text,
-        textAttributes: TelegramMapper.mapTextAttributes(newContent.text, newContent.entities),
-        links: 'webpage' in newContent.media && newContent.media.webpage instanceof Api.WebPage
+        textAttributes: TelegramMapper.mapTextAttributes(newContent.text, newContent.entities ?? []),
+        links: newContent.media && 'webpage' in newContent.media && newContent.media.webpage instanceof Api.WebPage
           ? [this.mapMessageLink(newContent.media.webpage, Number(messageID))]
           : undefined,
       }
     }
   }
 
-  mapMessage(msg: CustomMessage) {
+  mapMessage(msg: CustomMessage): Message {
     const isThreadMessage = msg.sender?.className === 'Channel'
     const senderID = isThreadMessage ? '$thread' : msg.senderId?.toString() ?? this.mapperData.me.id.toString()
     const mapped: Message = {
@@ -278,8 +279,8 @@ export default class TelegramMapper {
       forwardedCount: msg.forwards,
       senderID,
       isSender: msg.out,
-      linkedMessageID: msg.replyTo ? msg.replyToMsgId.toString() : undefined,
-      buttons: this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id),
+      linkedMessageID: msg.replyTo ? msg.replyToMsgId?.toString() : undefined,
+      buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id) : undefined,
       expiresInSeconds: msg.ttlPeriod,
     }
 
@@ -305,32 +306,33 @@ export default class TelegramMapper {
       const animated = sticker.mimeType === 'application/x-tgsticker' || isWebm
       const mimeType = sticker.mimeType === 'application/x-tgsticker' ? 'image/tgs' : isWebm ? 'video/webm' : undefined
       const sizeAttribute = sticker.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo)
-      let size: Size
-      if ('w' in sizeAttribute) {
+      let size: Size | undefined
+      if (sizeAttribute && 'w' in sizeAttribute) {
         size = {
           width: sizeAttribute.w,
           height: sizeAttribute.h,
         }
         size.height = sizeAttribute.h
+        mapped.attachments = mapped.attachments || []
+        mapped.attachments.push({
+          id: sticker.id.toString(),
+          srcURL: this.getStickerUrl(sticker.id, messageId),
+          mimeType,
+          type: isWebm ? MessageAttachmentType.VIDEO : MessageAttachmentType.IMG,
+          isGif: true,
+          isSticker: true,
+          size,
+          extra: {
+            loop: animated,
+          },
+        })
       }
-      mapped.attachments = mapped.attachments || []
-      mapped.attachments.push({
-        id: sticker.id.toString(),
-        srcURL: this.getStickerUrl(sticker.id, messageId),
-        mimeType,
-        type: isWebm ? MessageAttachmentType.VIDEO : MessageAttachmentType.IMG,
-        isGif: true,
-        isSticker: true,
-        size,
-        extra: {
-          loop: animated,
-        },
-      })
     }
 
     const mapMessageMedia = () => {
       if (msg.media instanceof Api.MessageMediaPhoto) {
         const { photo } = msg
+        if (!photo) return
         mapped.attachments = mapped.attachments || []
         const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) : undefined
         mapped.attachments.push({
@@ -353,7 +355,7 @@ export default class TelegramMapper {
             type: MessageAttachmentType.VIDEO,
             fileName: video.accessHash.toString(),
             mimeType: video.mimeType,
-            size: 'w' in sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined,
+            size: sizeAttribute && 'w' in sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined,
           })
         }
       } else if (msg.audio) {
@@ -394,7 +396,7 @@ export default class TelegramMapper {
           isGif: true,
           fileName: animation.accessHash.toString(),
           mimeType: animation.mimeType,
-          size: 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
+          size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
         })
       } else if (msg.sticker) {
         pushSticker(msg.sticker, msg.id)
@@ -416,8 +418,8 @@ export default class TelegramMapper {
           id: String(document.id),
           type: MessageAttachmentType.UNKNOWN,
           srcURL: this.getMediaUrl(document.id, msg.id),
-          fileName: 'fileName' in fileName ? fileName.fileName : undefined,
-          size: 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
+          fileName: fileName && 'fileName' in fileName ? fileName.fileName : undefined,
+          size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
           mimeType: document.mimeType,
           fileSize: document.size,
         })
@@ -433,11 +435,12 @@ export default class TelegramMapper {
         const pollAnswers = poll.poll.answers.map(a => a.text)
         const isQuiz = poll.poll.quiz
         const mappedResults = poll.results.results ? `${poll.results.results.map((result, index) => [pollAnswers[index], result.chosen
-          ? '✔️' : '', `— ${(result.voters / poll.results.totalVoters) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+          ? '✔️' : '', `— ${(result.voters / (poll.results.totalVoters ?? result.voters)) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
           : 'No results available yet'
         mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}${isQuiz ? 'Quiz' : 'Poll'}\n\n\n` + mappedResults
       } else if (msg.media instanceof Api.MessageMediaWebPage) {
-        mapped.links = [this.mapMessageLink(msg.media.webpage, msg.id)]
+        const msgMediaLink = this.mapMessageLink(msg.media.webpage, msg.id)
+        mapped.links = msgMediaLink ? [msgMediaLink] : undefined
       } else {
         mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
       }
@@ -474,7 +477,7 @@ export default class TelegramMapper {
         mapped.action = {
           type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
           participantIDs: msg.action.users.map(num => String(num)),
-          actorParticipantID: undefined,
+          actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatDeleteUser) {
         mapped.text = `{{${msg.action.userId}}} left the group`
@@ -483,7 +486,7 @@ export default class TelegramMapper {
         mapped.action = {
           type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
           participantIDs: [String(msg.action.userId)],
-          actorParticipantID: undefined,
+          actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
         mapped.text = '{{sender}} joined the group via invite link'
@@ -492,7 +495,7 @@ export default class TelegramMapper {
         mapped.action = {
           type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
           participantIDs: [mapped.senderID],
-          actorParticipantID: undefined,
+          actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.ChannelAdminLogEventActionChangePhoto) {
         mapped.text = '{{sender}} updated the group photo'
@@ -511,7 +514,7 @@ export default class TelegramMapper {
           actorParticipantID: mapped.senderID,
         }
       } else if (msg.action instanceof Api.MessageActionChatCreate || msg.action instanceof Api.MessageActionChannelCreate) {
-        const title = 'title' in msg.chat ? msg.chat.title : ''
+        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
         mapped.text = `{{sender}} created the group "${title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
@@ -521,7 +524,7 @@ export default class TelegramMapper {
           title,
         }
       } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
-        const title = 'title' in msg.chat ? msg.chat.title : ''
+        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
         mapped.text = `{{sender}} migrated the group "${title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
@@ -539,9 +542,10 @@ export default class TelegramMapper {
     }
 
     if (msg.text) {
-      setFormattedText(msg.rawText, msg.entities)
+      setFormattedText(msg.rawText, msg.entities ?? [])
       if (msg.webPreview) {
-        mapped.links = [this.mapMessageLink(msg.webPreview, msg.id)]
+        const msgLink = this.mapMessageLink(msg.webPreview, msg.id)
+        mapped.links = msgLink ? [msgLink] : undefined
       }
     }
     if (msg.reactions) {
@@ -571,12 +575,10 @@ export default class TelegramMapper {
         venue.geo instanceof Api.GeoPoint ? `https://www.google.com/maps?q=${venue.geo.lat},${venue.geo.long}` : '',
       ].join('\n')
     }
-
     return mapped
   }
 
-  mapUser(user: Api.User): User {
-    if (!user) return
+  mapUser = (user: Api.User): User => {
     const imgURL = user.photo instanceof Api.UserProfilePhoto ? this.getProfilePhotoUrl(user.id) : undefined
     return {
       id: user.id.toString(),
@@ -595,10 +597,12 @@ export default class TelegramMapper {
     return addSeconds(new Date(), seconds)
   }
 
-  mapThread(dialog: Dialog): Thread {
+  mapThread = (dialog: Dialog): Thread => {
+    if (!dialog.id) throw new Error(`Dialog had no id ${stringifyCircular(dialog.inputEntity, 2)}`)
+    if (!dialog.id) { texts.log('Dialog had no id') }
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
     const isChannel = dialog.dialog.peer instanceof Api.PeerChannel
-    const photo = 'photo' in dialog.entity ? dialog.entity.photo : undefined
+    const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
     const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
     const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(dialog.id)
     const t: Thread = {
@@ -611,7 +615,7 @@ export default class TelegramMapper {
       isUnread: dialog.unreadCount !== 0,
       isReadOnly: false,
       lastReadMessageID: String(Math.max(dialog.dialog.readInboxMaxId, dialog.dialog.readOutboxMaxId)),
-      mutedUntil: this.mapMuteFor(dialog.dialog.notifySettings.muteUntil),
+      mutedUntil: this.mapMuteFor(dialog.dialog.notifySettings.muteUntil ?? 0),
       imgURL: imgFile,
       title: dialog.title,
       participants: {
@@ -626,6 +630,5 @@ export default class TelegramMapper {
     return t
   }
 
-  mapMessages = (messages: Api.Message[]) =>
-    messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m))
+  mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m))
 }
