@@ -222,7 +222,7 @@ export class DbSession extends Session {
       const name = getDisplayName(e)
       return { id: peerId, hash: hash.toString(), username, phone, name }
     } catch {
-      return
+      return undefined
     }
   }
 
