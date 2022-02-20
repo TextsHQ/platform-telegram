@@ -220,11 +220,18 @@ export default class TelegramMapper {
         })))
       case 'ReplyKeyboardMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
-          if (row.className === 'KeyboardButtonSwitchInline') {
+          if (row.className === 'KeyboardButtonSwitchInline' ) {
+            // these appear to be meant to handle automatically if supported by platform
             return {
               label: row.text,
               linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text), // todo: should actually be sent on clicking instantly
             }
+          }
+          else if (row.className.startsWith('KeyboardButton')) {
+              return {
+                label: row.text,
+                linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text),
+              }
           }
           return { label: `Unsupported link button: ${row.className}`, linkURL: '' }
         })).filter(Boolean)
