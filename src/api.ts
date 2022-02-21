@@ -43,12 +43,8 @@ if (IS_DEV) {
 
 async function getMessageContent(msgContent: MessageContent) {
   const { fileBuffer, fileName, filePath } = msgContent
-  if (filePath) {
-    const buffer = await fs.readFile(filePath)
-    return new CustomFile(fileName, buffer.byteLength, filePath, buffer)
-  } if (fileBuffer) {
-    return new CustomFile(fileName, fileBuffer.length, filePath, fileBuffer)
-  }
+  const buffer = filePath ? await fs.readFile(filePath) : fileBuffer
+  return new CustomFile(fileName, buffer.byteLength, filePath, buffer)
 }
 const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
   !!(session as AirgramSession)?.dbKey
@@ -135,10 +131,8 @@ export default class TelegramAPI implements PlatformAPI {
       this.sessionName = session || randomBytes(8).toString('hex')
     }
 
-    const dbPath = path.join(accountInfo.dataDirPath, this.sessionName) + '.sqlite'
-    this.dbSession = new DbSession({
-      dbPath,
-    })
+    const dbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
+    this.dbSession = new DbSession({ dbPath })
 
     this.accountInfo = accountInfo
 
@@ -195,8 +189,7 @@ export default class TelegramAPI implements PlatformAPI {
           if (qrTokenResult.className === 'auth.LoginTokenMigrateTo') {
             texts.log('migrating DC')
             await this.client._switchDC(qrTokenResult.dcId)
-            const migratedToken = await this.client.invoke(new Api.auth.ImportLoginToken({
-              token: qrTokenResult.token }))
+            const migratedToken = await this.client.invoke(new Api.auth.ImportLoginToken({ token: qrTokenResult.token }))
             if (migratedToken.className === 'auth.LoginTokenSuccess') {
               texts.log('token success')
               await this.airgramConn.destroy()
@@ -206,7 +199,8 @@ export default class TelegramAPI implements PlatformAPI {
           }
         }
       }
-    } catch (e) {
+    } catch (err) {
+      texts.Sentry.captureException(err)
       throw new ReAuthError()
     }
     throw new ReAuthError()
