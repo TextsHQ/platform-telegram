@@ -89,7 +89,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (isAirgramSession(session)) {
         this.airgramMigration = new AirgramMigration()
         this.airgramMigration.connectAirgramSession(session, accountInfo)
-        this.sessionName = randomBytes(8).toString('hex')
+        session = randomBytes(8).toString('hex')
       }
     }
     this.sessionName = session as string || randomBytes(8).toString('hex')
