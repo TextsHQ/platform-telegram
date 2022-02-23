@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
 import { randomBytes } from 'crypto'
 import path from 'path'
-import dns from 'dns/promises'
 import fs from 'fs/promises'
 import url from 'url'
 // eslint-disable-next-line
@@ -17,7 +16,6 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { SendMessageParams } from 'telegram/client/messages'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
-import { LogLevel } from 'telegram/extensions/Logger'
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -45,7 +43,6 @@ async function getMessageContent(msgContent: MessageContent) {
   const buffer = filePath ? await fs.readFile(filePath) : fileBuffer
   return buffer && new CustomFile(fileName, buffer.byteLength, filePath, buffer)
 }
-const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
 interface LoginInfo {
   phoneNumber?: string
   phoneCodeHash?: string
@@ -100,12 +97,13 @@ export default class TelegramAPI implements PlatformAPI {
     await this.dbSession.init()
 
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
-      connectionRetries: 3,
+      retryDelay: 5000,
+      autoReconnect: true,
+      connectionRetries: Infinity,
       maxConcurrentDownloads: 4,
     })
 
     await this.client.connect()
-    this.connectionWatchDog(30)
 
     if (this.airgramMigration) {
       await this.airgramMigration.migrateAirgramSession(this.client, this.dbSession)
@@ -120,27 +118,6 @@ export default class TelegramAPI implements PlatformAPI {
     this.authState = AuthState.PHONE_INPUT
 
     if (session) await this.afterLogin()
-  }
-
-  private connectionWatchDog = async (intervalSeconds: number) => {
-    const delay = async (ms: number) => new Promise(resolve => { setTimeout(resolve, ms) })
-    await delay(60_000)
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      await delay(intervalSeconds * 1000)
-      await (async () => {
-        if (!this.client._sender?.isConnected() && !this.client._sender.isConnecting) {
-          texts.log('Attempting reconnection')
-          try {
-            await dns.resolve('www.google.com')
-            await this.client.connect()
-            texts.log('Reconnected client.')
-          } catch (e) {
-            texts.log('Couldn\'t reconnect client')
-          }
-        }
-      })()
-    }
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
@@ -445,7 +422,7 @@ export default class TelegramAPI implements PlatformAPI {
       else if (update instanceof Api.UpdateUserStatus) this.onUpdateUserStatus(update)
       else if (update instanceof Api.UpdateEditMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
-      else if (IS_DEV) console.log(stringifyCircular(update.className))
+      else if (IS_DEV) console.log('Update', stringifyCircular(update))
     })
   }
 
@@ -670,17 +647,20 @@ export default class TelegramAPI implements PlatformAPI {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     let lastDate = 0
-    for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
-      if (!dialog.id) continue
-      this.dialogs[dialog.id.toString()] = dialog
-      this.emitThread(this.mapThread(dialog))
-      lastDate = dialog.message?.date ?? 0
+
+    if (this.client.connected) {
+      for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
+        if (!dialog.id) continue
+        this.dialogs[dialog.id.toString()] = dialog
+        this.emitThread(this.mapThread(dialog))
+        lastDate = dialog.message?.date ?? 0
+      }
     }
 
     return {
       items: [],
-      oldestCursor: lastDate.toString() ?? '*',
-      hasMore: lastDate !== 0,
+      oldestCursor: this.client.connected ? (lastDate.toString() ?? '*') : cursor,
+      hasMore: lastDate !== 0 && this.client.connected,
     }
   }
 
@@ -688,14 +668,16 @@ export default class TelegramAPI implements PlatformAPI {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     const messages: Api.Message[] = []
-    for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
-      this.storeMessage(msg)
-      messages.push(msg)
+    if (this.client.connected) {
+      for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
+        this.storeMessage(msg)
+        messages.push(msg)
+      }
     }
     messages.forEach(m => this.emitParticipantFromMessage(m.chatId, m.senderId))
     return {
       items: this.mapper.mapMessages(messages),
-      hasMore: messages.length !== 0,
+      hasMore: messages.length !== 0 && this.client.connected,
     }
   }
 
