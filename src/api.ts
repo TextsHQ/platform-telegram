@@ -1,25 +1,24 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
+import { randomBytes } from 'crypto'
+import path from 'path'
+import dns from 'dns/promises'
+import fs from 'fs/promises'
+import url from 'url'
+import os from 'os'
 // eslint-disable-next-line
-
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
+import BigInteger from 'big-integer'
+import { Airgram } from 'airgram'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
+import { CustomFile } from 'telegram/client/uploads'
+import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { SendMessageParams } from 'telegram/client/messages'
-import { CustomFile } from 'telegram/client/uploads'
-import path from 'path'
-import fs from 'fs/promises'
-import url from 'url'
-import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
-import BigInteger from 'big-integer'
-import type bigInt from 'big-integer'
-import { randomBytes } from 'crypto'
-import os from 'os'
-import { Airgram } from 'airgram'
-import dns from 'dns/promises'
+
 import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT, BINARIES_DIR_PATH } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -76,9 +75,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
 
-  private chatIdMessageId = new Map<bigInt.BigInteger, number[]>()
+  private chatIdMessageId = new Map<BigInteger.BigInteger, number[]>()
 
-  private dialogToParticipantIds = new Map<bigInt.BigInteger, Set<bigInt.BigInteger>>()
+  private dialogToParticipantIds = new Map<BigInteger.BigInteger, Set<BigInteger.BigInteger>>()
 
   private me: Api.User
 
@@ -92,75 +91,44 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginInfo: LoginInfo = {}
 
-  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
-    this.accountInfo = accountInfo
-
-    if (isAirgramSession(session)) {
-      try {
-        this.airgramConn = new Airgram({
-          databaseEncryptionKey: session.dbKey,
-          apiId: API_ID,
-          apiHash: API_HASH,
-          command: tdlibPath,
-          // deviceModel: undefined,
-          applicationVersion: texts.constants.APP_VERSION,
-          systemVersion: `${os.platform()} ${os.release()}`,
-          logVerbosityLevel: texts.IS_DEV ? 2 : 0,
-          useFileDatabase: true,
-          useChatInfoDatabase: true,
-          useMessageDatabase: true,
-          useSecretChats: true,
-          enableStorageOptimizer: true,
-          ignoreFileNames: false,
-          databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
-          filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
+  private connectAirgramSession = async (session: AirgramSession, accountInfo: AccountInfo) => {
+    try {
+      this.airgramConn = new Airgram({
+        databaseEncryptionKey: session.dbKey,
+        apiId: API_ID,
+        apiHash: API_HASH,
+        command: tdlibPath,
+        // deviceModel: undefined,
+        applicationVersion: texts.constants.APP_VERSION,
+        systemVersion: `${os.platform()} ${os.release()}`,
+        logVerbosityLevel: texts.IS_DEV ? 2 : 0,
+        useFileDatabase: true,
+        useChatInfoDatabase: true,
+        useMessageDatabase: true,
+        useSecretChats: true,
+        enableStorageOptimizer: true,
+        ignoreFileNames: false,
+        databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
+        filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
+      })
+      texts.log('Waiting for auth...')
+      const authPromise = new Promise<void>((resolve, reject) => {
+        this.airgramConn?.on('updateAuthorizationState', ({ update }) => {
+          if (update.authorizationState._ === 'authorizationStateReady') {
+            resolve()
+          } else if (update.authorizationState._ === 'authorizationStateClosed') reject()
         })
-        texts.log('Waiting..')
-        const authPromise = new Promise<void>((resolve, reject) => {
-          this.airgramConn?.on('updateAuthorizationState', ({ update }) => {
-            if (update.authorizationState._ === 'authorizationStateReady') {
-              resolve()
-            } else if (update.authorizationState._ === 'authorizationStateClosed') reject()
-          })
-        })
-        await authPromise
-        texts.log('Done auth')
-        this.sessionName = randomBytes(8).toString('hex')
-      } catch (err) {
-        throw new Error()
-      }
-    } else {
-      this.sessionName = session || randomBytes(8).toString('hex')
+      })
+      await authPromise
+      texts.log('Done auth')
+    } catch (err) {
+      texts.Sentry.captureException(err)
+      throw new ReAuthError(err)
     }
-
-    const dbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
-    this.dbSession = new DbSession({ dbPath })
-
-    await this.dbSession.init()
-
-    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
-      connectionRetries: 3,
-      maxConcurrentDownloads: 4,
-    })
-
-    await this.client.connect()
-    this.connectionWatchDog(30)
-
-    if (this.airgramConn) {
-      await this.doMigration()
-      this.onEvent([{
-        type: ServerEventType.TOAST,
-        toast: {
-          text: 'Your Telegram account login session was migrated and you may see a new login notification.',
-        },
-      }])
-    }
-    this.authState = AuthState.PHONE_INPUT
-
-    if (session) await this.afterLogin()
+    throw new ReAuthError()
   }
 
-  private doMigration = async () => {
+  private migrateAirgramSession = async () => {
     try {
       const qrToken = await this.client.invoke(new Api.auth.ExportLoginToken({
         apiId: API_ID,
@@ -200,9 +168,46 @@ export default class TelegramAPI implements PlatformAPI {
       }
     } catch (err) {
       texts.Sentry.captureException(err)
-      throw new ReAuthError()
+      throw new ReAuthError(err)
     }
     throw new ReAuthError()
+  }
+
+  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
+    this.accountInfo = accountInfo
+
+    if (isAirgramSession(session)) {
+      await this.connectAirgramSession(session, accountInfo)
+      this.sessionName = randomBytes(8).toString('hex')
+    } else {
+      this.sessionName = session || randomBytes(8).toString('hex')
+    }
+
+    const dbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
+    this.dbSession = new DbSession({ dbPath })
+
+    await this.dbSession.init()
+
+    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
+      connectionRetries: 3,
+      maxConcurrentDownloads: 4,
+    })
+
+    await this.client.connect()
+    this.connectionWatchDog(30)
+
+    if (this.airgramConn) {
+      await this.migrateAirgramSession()
+      this.onEvent([{
+        type: ServerEventType.TOAST,
+        toast: {
+          text: 'Your Telegram account login session was migrated and you may see a new login notification.',
+        },
+      }])
+    }
+    this.authState = AuthState.PHONE_INPUT
+
+    if (session) await this.afterLogin()
   }
 
   private connectionWatchDog = async (intervalSeconds: number) => {
@@ -589,7 +594,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private upsertParticipants(threadID: bigInt.BigNumber, entries: Participant[]) {
+  private upsertParticipants(threadID: BigInteger.BigNumber, entries: Participant[]) {
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -601,7 +606,7 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private dialogToParticipantIdsUpdate = async (dialogId: bigInt.BigInteger, participantIds: bigInt.BigInteger[]) => {
+  private dialogToParticipantIdsUpdate = async (dialogId: BigInteger.BigInteger, participantIds: BigInteger.BigInteger[]) => {
     const dialog = this.dialogToParticipantIds.get(dialogId)
     if (dialog) {
       participantIds.forEach(id => dialog.add(id))
@@ -610,7 +615,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private emitParticipantFromMessage = async (dialogId: bigInt.BigInteger, userId: bigInt.BigInteger) => {
+  private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
     const participantsOnDialog = this.dialogToParticipantIds.get(dialogId)
     if (participantsOnDialog?.has(userId)) return
     const user = await this.client.getEntity(userId)
