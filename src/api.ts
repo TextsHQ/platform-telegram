@@ -4,12 +4,10 @@ import path from 'path'
 import dns from 'dns/promises'
 import fs from 'fs/promises'
 import url from 'url'
-import os from 'os'
 // eslint-disable-next-line
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
-import { Airgram } from 'airgram'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
@@ -19,15 +17,17 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { SendMessageParams } from 'telegram/client/messages'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
-import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT, BINARIES_DIR_PATH } from './constants'
+import { LogLevel } from 'telegram/extensions/Logger'
+import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
+import { AirgramMigration, type AirgramSession, isAirgramSession } from './airgramMigration'
 
 type LoginEventCallback = (authState: any) => void
-type AirgramSession = { dbKey: string }
 
 const { IS_DEV } = texts
+
 export enum AuthState {
   PHONE_INPUT,
   CODE_INPUT,
@@ -46,14 +46,6 @@ async function getMessageContent(msgContent: MessageContent) {
   return buffer && new CustomFile(fileName, buffer.byteLength, filePath, buffer)
 }
 const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
-  !!(session as AirgramSession)?.dbKey
-
-const tdlibPath = path.join(BINARIES_DIR_PATH, {
-  darwin: `${process.platform}-${process.arch}/libtdjson.dylib`,
-  linux: `${process.platform}-${process.arch}/libtdjson.so`,
-  win32: `${process.platform}-${process.arch}/libtdjson.dll`,
-}[process.platform])
-
 interface LoginInfo {
   phoneNumber?: string
   phoneCodeHash?: string
@@ -87,97 +79,16 @@ export default class TelegramAPI implements PlatformAPI {
 
   private sessionName: string
 
-  private airgramConn: Airgram
+  private airgramMigration: AirgramMigration
 
   private loginInfo: LoginInfo = {}
-
-  private connectAirgramSession = async (session: AirgramSession, accountInfo: AccountInfo) => {
-    try {
-      this.airgramConn = new Airgram({
-        databaseEncryptionKey: session.dbKey,
-        apiId: API_ID,
-        apiHash: API_HASH,
-        command: tdlibPath,
-        // deviceModel: undefined,
-        applicationVersion: texts.constants.APP_VERSION,
-        systemVersion: `${os.platform()} ${os.release()}`,
-        logVerbosityLevel: texts.IS_DEV ? 2 : 0,
-        useFileDatabase: true,
-        useChatInfoDatabase: true,
-        useMessageDatabase: true,
-        useSecretChats: true,
-        enableStorageOptimizer: true,
-        ignoreFileNames: false,
-        databaseDirectory: path.join(accountInfo.dataDirPath, 'db'),
-        filesDirectory: path.join(accountInfo.dataDirPath, 'files'),
-      })
-      texts.log('Waiting for auth...')
-      const authPromise = new Promise<void>((resolve, reject) => {
-        this.airgramConn?.on('updateAuthorizationState', ({ update }) => {
-          if (update.authorizationState._ === 'authorizationStateReady') {
-            resolve()
-          } else if (update.authorizationState._ === 'authorizationStateClosed') reject()
-        })
-      })
-      await authPromise
-      texts.log('Done auth')
-    } catch (err) {
-      texts.Sentry.captureException(err)
-      throw new ReAuthError(err)
-    }
-    throw new ReAuthError()
-  }
-
-  private migrateAirgramSession = async () => {
-    try {
-      const qrToken = await this.client.invoke(new Api.auth.ExportLoginToken({
-        apiId: API_ID,
-        apiHash: API_HASH,
-        exceptIds: [],
-      }))
-      if (qrToken) {
-        texts.log(JSON.stringify(qrToken, null, 4))
-        if (qrToken.className === 'auth.LoginToken') {
-          const token = `tg://login?token=${qrToken.token.toString('base64url')}`
-          const confirmResult = await this.airgramConn.api.confirmQrCodeAuthentication({ link: token })
-          texts.log(JSON.stringify(confirmResult, null, 4))
-          const qrTokenResult = await this.client.invoke(new Api.auth.ExportLoginToken({
-            apiId: API_ID,
-            apiHash: API_HASH,
-            exceptIds: [],
-          }))
-          texts.log(JSON.stringify(qrTokenResult, null, 4))
-          if (qrTokenResult.className === 'auth.LoginTokenSuccess') {
-            texts.log('token success')
-            await this.airgramConn.destroy()
-            this.dbSession.save()
-            return
-          }
-          if (qrTokenResult.className === 'auth.LoginTokenMigrateTo') {
-            texts.log('migrating DC')
-            await this.client._switchDC(qrTokenResult.dcId)
-            const migratedToken = await this.client.invoke(new Api.auth.ImportLoginToken({ token: qrTokenResult.token }))
-            if (migratedToken.className === 'auth.LoginTokenSuccess') {
-              texts.log('token success')
-              await this.airgramConn.destroy()
-              this.dbSession.save()
-              return
-            }
-          }
-        }
-      }
-    } catch (err) {
-      texts.Sentry.captureException(err)
-      throw new ReAuthError(err)
-    }
-    throw new ReAuthError()
-  }
 
   init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
 
     if (isAirgramSession(session)) {
-      await this.connectAirgramSession(session, accountInfo)
+      this.airgramMigration = new AirgramMigration()
+      this.airgramMigration.connectAirgramSession(session, accountInfo)
       this.sessionName = randomBytes(8).toString('hex')
     } else {
       this.sessionName = session || randomBytes(8).toString('hex')
@@ -196,8 +107,8 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.connect()
     this.connectionWatchDog(30)
 
-    if (this.airgramConn) {
-      await this.migrateAirgramSession()
+    if (this.airgramMigration) {
+      await this.airgramMigration.migrateAirgramSession(this.client, this.dbSession)
       this.onEvent([{
         type: ServerEventType.TOAST,
         toast: {
@@ -205,6 +116,7 @@ export default class TelegramAPI implements PlatformAPI {
         },
       }])
     }
+
     this.authState = AuthState.PHONE_INPUT
 
     if (session) await this.afterLogin()

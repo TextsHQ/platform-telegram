@@ -26,3 +26,9 @@ export const REACTIONS: Record<string, SupportedReaction> = {
   poo: { title: 'Pile of Poo', render: '💩' },
   vomiting: { title: 'Face Vomiting', render: '🤮' },
 }
+
+export const tdlibPath = path.join(BINARIES_DIR_PATH, {
+  darwin: `${process.platform}-${process.arch}/libtdjson.dylib`,
+  linux: `${process.platform}-${process.arch}/libtdjson.so`,
+  win32: `${process.platform}-${process.arch}/libtdjson.dll`,
+}[process.platform])
