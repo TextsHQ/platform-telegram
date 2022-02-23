@@ -93,6 +93,8 @@ export default class TelegramAPI implements PlatformAPI {
   private loginInfo: LoginInfo = {}
 
   init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
+    this.accountInfo = accountInfo
+
     if (isAirgramSession(session)) {
       try {
         this.airgramConn = new Airgram({
@@ -134,8 +136,6 @@ export default class TelegramAPI implements PlatformAPI {
     const dbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
     this.dbSession = new DbSession({ dbPath })
 
-    this.accountInfo = accountInfo
-
     await this.dbSession.init()
 
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
@@ -143,7 +143,6 @@ export default class TelegramAPI implements PlatformAPI {
       maxConcurrentDownloads: 4,
     })
 
-    this.accountInfo = accountInfo
     await this.client.connect()
     this.connectionWatchDog(30)
 
