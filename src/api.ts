@@ -16,11 +16,11 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { SendMessageParams } from 'telegram/client/messages'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
-import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT } from './constants'
+import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
-import { AirgramMigration, type AirgramSession, isAirgramSession } from './airgramMigration'
+import type { AirgramMigration, AirgramSession } from './airgramMigration'
 
 type LoginEventCallback = (authState: any) => void
 
@@ -49,6 +49,7 @@ interface LoginInfo {
   phoneCode?: string
   password?: string
 }
+
 export default class TelegramAPI implements PlatformAPI {
   private client: TelegramClient
 
@@ -83,13 +84,15 @@ export default class TelegramAPI implements PlatformAPI {
   init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
 
-    if (isAirgramSession(session)) {
-      this.airgramMigration = new AirgramMigration()
-      this.airgramMigration.connectAirgramSession(session, accountInfo)
-      this.sessionName = randomBytes(8).toString('hex')
-    } else {
-      this.sessionName = session || randomBytes(8).toString('hex')
+    if (await fileExists(tdlibPath)) {
+      const { isAirgramSession, AirgramMigration } = await import('./airgramMigration')
+      if (isAirgramSession(session)) {
+        this.airgramMigration = new AirgramMigration()
+        this.airgramMigration.connectAirgramSession(session, accountInfo)
+        this.sessionName = randomBytes(8).toString('hex')
+      }
     }
+    this.sessionName = session as string || randomBytes(8).toString('hex')
 
     const dbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
     this.dbSession = new DbSession({ dbPath })
