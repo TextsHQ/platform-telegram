@@ -43,7 +43,7 @@ if (IS_DEV) {
 async function getMessageContent(msgContent: MessageContent) {
   const { fileBuffer, fileName, filePath } = msgContent
   const buffer = filePath ? await fs.readFile(filePath) : fileBuffer
-  return new CustomFile(fileName, buffer.byteLength, filePath, buffer)
+  return buffer && new CustomFile(fileName, buffer.byteLength, filePath, buffer)
 }
 const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
   !!(session as AirgramSession)?.dbKey
