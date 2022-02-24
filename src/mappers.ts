@@ -199,6 +199,7 @@ export default class TelegramMapper {
     if (update.action instanceof Api.SendMessageUploadPhotoAction) return customActivity('uploading a photo' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
     if (update.action instanceof Api.SendMessageUploadVideoAction) return customActivity('uploading a video' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
     if (update.action instanceof Api.SendMessageUploadAudioAction) return customActivity('uploading a voice note' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
+    if (update.action instanceof Api.SendMessageChooseStickerAction) return customActivity('choosing a sticker')
     if (update.action instanceof Api.SendMessageCancelAction) {
       return {
         type: ServerEventType.USER_ACTIVITY,
