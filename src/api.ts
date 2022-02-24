@@ -84,7 +84,7 @@ export default class TelegramAPI implements PlatformAPI {
   init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
 
-    if (await fileExists(tdlibPath)) {
+    if (tdlibPath && await fileExists(tdlibPath)) {
       const { isAirgramSession, AirgramMigration } = await import('./airgramMigration')
       if (isAirgramSession(session)) {
         this.airgramMigration = new AirgramMigration()

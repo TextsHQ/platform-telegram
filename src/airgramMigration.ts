@@ -4,14 +4,8 @@ import { Airgram } from 'airgram'
 import path from 'path'
 import { Api, TelegramClient } from 'telegram'
 import os from 'os'
-import { API_ID, API_HASH, BINARIES_DIR_PATH } from './constants'
+import { API_ID, API_HASH, BINARIES_DIR_PATH, tdlibPath } from './constants'
 import type { DbSession } from './dbSession'
-
-const tdlibPath = path.join(BINARIES_DIR_PATH, {
-  darwin: `${process.platform}-${process.arch}/libtdjson.dylib`,
-  linux: `${process.platform}-${process.arch}/libtdjson.so`,
-  win32: `${process.platform}-${process.arch}/libtdjson.dll`,
-}[process.platform])
 
 export type AirgramSession = { dbKey: string }
 
