@@ -4,7 +4,7 @@ import { Airgram } from 'airgram'
 import path from 'path'
 import { Api, TelegramClient } from 'telegram'
 import os from 'os'
-import { API_ID, API_HASH, BINARIES_DIR_PATH, tdlibPath } from './constants'
+import { API_ID, API_HASH, tdlibPath } from './constants'
 import type { DbSession } from './dbSession'
 
 export type AirgramSession = { dbKey: string }

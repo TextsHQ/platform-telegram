@@ -220,18 +220,18 @@ export default class TelegramMapper {
         })))
       case 'ReplyKeyboardMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
-          if (row.className === 'KeyboardButtonSwitchInline' ) {
+          if (row.className === 'KeyboardButtonSwitchInline') {
             // these appear to be meant to handle automatically if supported by platform
             return {
               label: row.text,
               linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text), // todo: should actually be sent on clicking instantly
             }
           }
-          else if (row.className.startsWith('KeyboardButton')) {
-              return {
-                label: row.text,
-                linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text),
-              }
+          if (row.className.startsWith('KeyboardButton')) {
+            return {
+              label: row.text,
+              linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text),
+            }
           }
           return { label: `Unsupported link button: ${row.className}`, linkURL: '' }
         })).filter(Boolean)
@@ -286,7 +286,7 @@ export default class TelegramMapper {
       forwardedCount: msg.forwards,
       senderID,
       isSender: msg.out,
-      linkedMessageID: msg.replyTo ? msg.replyToMsgId?.toString() : undefined,
+      linkedMessageID: msg.replyToMsgId?.toString(),
       buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id) : undefined,
       expiresInSeconds: msg.ttlPeriod,
     }
@@ -631,7 +631,7 @@ export default class TelegramMapper {
       },
       messages: {
         hasMore: true,
-        items: dialog.message ? [this.mapMessage(dialog.message)] : [],
+        items: [],
       },
     }
     return t

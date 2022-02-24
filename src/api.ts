@@ -13,7 +13,6 @@ import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
-import type { SendMessageParams } from 'telegram/client/messages'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
@@ -22,6 +21,7 @@ import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './airgramMigration'
+import type { SendMessageParams } from 'telegram/client/messages'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -59,9 +59,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
 
-  private chatIdMessageId = new Map<BigInteger.BigInteger, number[]>()
+  private chatIdMessageId = new Map<string, Set<number>>()
 
-  private dialogToParticipantIds = new Map<BigInteger.BigInteger, Set<BigInteger.BigInteger>>()
+  private dialogIdToParticipantIds = new Map<string, Set<string>>()
 
   private me: Api.User
 
@@ -206,18 +206,16 @@ export default class TelegramAPI implements PlatformAPI {
       this.messageMediaStore.set(message.id, message.media)
     }
     if (!message.chatId) return
-    const thread = this.chatIdMessageId.get(message.chatId)
+    const threadID = message.chatId.toString()
+    const thread = this.chatIdMessageId.get(threadID)
     if (thread) {
-      thread.push(message.id)
+      thread.add(message.id)
     } else {
-      this.chatIdMessageId.set(message.chatId, [message.id])
+      this.chatIdMessageId.set(threadID, new Set([message.id]))
     }
   }
 
-  private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
-    const { message } = newMessageEvent
-    if (!message.chatId) return
-    if (!message.senderId) return
+  private emitMessage = (message: Api.Message) => {
     const threadID = message.chatId.toString()
     const mappedMessage = this.mapper.mapMessage(message)
     this.emitParticipantFromMessage(message.chatId, message.senderId)
@@ -233,9 +231,15 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
+  private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
+    const { message } = newMessageEvent
+    if (!message.chatId) return
+    if (!message.senderId) return
+    this.emitMessage(message)
+  }
+
   private mapThread = (dialog: Dialog) => {
     const thread = this.mapper.mapThread(dialog)
-    if (dialog.message) this.storeMessage(dialog.message)
     this.emitParticipants(dialog)
     return thread
   }
@@ -255,7 +259,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChat = async (update: Api.UpdateChat) => {
     const chat = await this.client._getInputDialog(update.chatId)
-    const thread = await this.mapThread(chat)
+    const thread = this.mapThread(chat)
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -300,7 +304,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages) {
     if (!update.messages?.length) return
-    const threadID = Array.from(this.chatIdMessageId.entries()).find(thread => thread[1].find(message => message === update.messages[0]))
+    const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))
     if (!threadID) return
     this.onEvent([
       {
@@ -480,36 +484,41 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private upsertParticipants(threadID: BigInteger.BigNumber, entries: Participant[]) {
+  private upsertParticipants(dialogId: BigInteger.BigInteger, entries: Participant[]) {
+    const threadID = dialogId.toString()
+    const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
+    const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
+    if (!filteredEntries.length) return
+    this.dialogToParticipantIdsUpdate(threadID, filteredEntries.map(m => m.id))
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'participant',
       objectIDs: {
-        threadID: threadID.toString(),
+        threadID,
       },
-      entries,
+      entries: filteredEntries,
     }])
   }
 
-  private dialogToParticipantIdsUpdate = async (dialogId: BigInteger.BigInteger, participantIds: BigInteger.BigInteger[]) => {
-    const dialog = this.dialogToParticipantIds.get(dialogId)
+  private dialogToParticipantIdsUpdate = (dialogId: BigInteger.BigInteger | string, participantIds: string[]) => {
+    const threadID = dialogId.toString()
+    const dialog = this.dialogIdToParticipantIds.get(threadID)
     if (dialog) {
       participantIds.forEach(id => dialog.add(id))
     } else {
-      this.dialogToParticipantIds.set(dialogId, new Set(participantIds))
+      this.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
     }
   }
 
   private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
-    const participantsOnDialog = this.dialogToParticipantIds.get(dialogId)
-    if (participantsOnDialog?.has(userId)) return
-    const user = await this.client.getEntity(userId)
-    if (user instanceof Api.User) {
-      const mappedUser = this.mapper.mapUser(user)
-      this.dialogToParticipantIdsUpdate(dialogId, [userId])
-      this.upsertParticipants(dialogId, [mappedUser])
-    }
+    await (async () => {
+      const user = await this.client.getEntity(userId)
+      if (user instanceof Api.User) {
+        const mappedUser = this.mapper.mapUser(user)
+        this.upsertParticipants(dialogId, [mappedUser])
+      }
+    })()
   }
 
   private emitParticipants = async (dialog: Dialog) => {
@@ -519,6 +528,7 @@ export default class TelegramAPI implements PlatformAPI {
       try {
         return await this.client.getParticipants(dialog.id as BigInteger.BigInteger, { showTotal: true, limit })
       } catch (e) {
+        // texts.log('Error emitParticipants', e)
         if (e.code === 400) {
           // only channel admins can request users
           // if (IS_DEV) console.log(`Admin required for this channel: ${dialog.name}`)
@@ -531,8 +541,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (!members) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
-    this.dialogToParticipantIdsUpdate(dialog.id, members.map(m => m.id))
-    this.upsertParticipants(String(dialog.id), mappedMembers)
+    this.upsertParticipants(dialog.id, mappedMembers)
   }
 
   private saveAsset = async (buffer: Buffer, assetType: 'media' | 'photos', filename: string) => {
@@ -636,6 +645,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getThread = async (threadID: string) => {
     const dialogThread = this.dialogs[threadID]
+    if (!dialogThread) return
     return this.mapThread(dialogThread)
   }
 
@@ -650,6 +660,11 @@ export default class TelegramAPI implements PlatformAPI {
         if (!dialog.id) continue
         this.dialogs[dialog.id.toString()] = dialog
         this.emitThread(this.mapThread(dialog))
+        if (dialog.message) {
+          const toEmitMessages = await this.loadMessageReplies(dialog.id, [dialog.message])
+          toEmitMessages.push(dialog.message)
+          toEmitMessages.forEach(this.emitMessage)
+        }
         lastDate = dialog.message?.date ?? 0
       }
     }
@@ -661,6 +676,18 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
+  private loadMessageReplies = async (dialogId: BigInteger.BigInteger, messages: Api.Message[]) => {
+    const replyToMessages: Api.Message[] = []
+    const currentIds = messages.map(msg => msg.id)
+    const unloadedReplies = messages.filter(m => m.replyToMsgId && !currentIds.includes(m.replyToMsgId)).map(m => m.replyToMsgId)
+    for await (const msg of this.client.iterMessages(dialogId, { ids: unloadedReplies })) {
+      this.storeMessage(msg)
+      replyToMessages.push(msg)
+      this.emitParticipantFromMessage(dialogId, msg.senderId)
+    }
+    return replyToMessages
+  }
+
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
@@ -670,8 +697,12 @@ export default class TelegramAPI implements PlatformAPI {
         this.storeMessage(msg)
         messages.push(msg)
       }
+
+      messages.push(...await this.loadMessageReplies(BigInteger(threadID), messages))
+
+      messages.forEach(async m => this.emitParticipantFromMessage(m.chatId, m.senderId))
     }
-    messages.forEach(m => this.emitParticipantFromMessage(m.chatId, m.senderId))
+
     return {
       items: this.mapper.mapMessages(messages),
       hasMore: messages.length !== 0 && this.client.connected,
@@ -688,8 +719,10 @@ export default class TelegramAPI implements PlatformAPI {
       file,
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
-    this.storeMessage(res)
-    return [this.mapper.mapMessage(res)]
+    const fullMessage = await this.client.getMessages(threadID, { ids: res.id })
+    const sentMessage = fullMessage.length ? fullMessage[0] : res
+    this.storeMessage(sentMessage)
+    return [this.mapper.mapMessage(sentMessage)]
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
