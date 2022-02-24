@@ -624,7 +624,7 @@ export default class TelegramMapper {
       timestamp: new Date(dialog.date * 1000),
       isUnread: dialog.unreadCount !== 0,
       isReadOnly,
-      lastReadMessageID: String(Math.max(dialog.dialog.readInboxMaxId, dialog.dialog.readOutboxMaxId)),
+      lastReadMessageID: (dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId).toString(),
       mutedUntil: this.mapMuteFor(dialog.dialog.notifySettings.muteUntil ?? 0),
       imgURL: imgFile,
       title: dialog.title,
