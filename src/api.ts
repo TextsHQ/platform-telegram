@@ -16,22 +16,15 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { SendMessageParams } from 'telegram/client/messages'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
-import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
+import { API_ID, API_HASH, REACTIONS, MUTED_FOREVER_CONSTANT, tdlibPath, AuthState } from './constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './airgramMigration'
 
-type LoginEventCallback = (authState: any) => void
+type LoginEventCallback = (authState: AuthState) => void
 
 const { IS_DEV } = texts
-
-export enum AuthState {
-  PHONE_INPUT,
-  CODE_INPUT,
-  PASSWORD_INPUT,
-  READY,
-}
 
 if (IS_DEV) {
   // eslint-disable-next-line import/no-extraneous-dependencies, global-require

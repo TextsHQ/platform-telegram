@@ -34,3 +34,10 @@ const dylibPath = {
 }[process.platform]
 
 export const tdlibPath = dylibPath ? path.join(BINARIES_DIR_PATH, dylibPath) : undefined
+
+export enum AuthState {
+  PHONE_INPUT,
+  CODE_INPUT,
+  PASSWORD_INPUT,
+  READY,
+}

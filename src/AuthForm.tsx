@@ -2,7 +2,8 @@ import React, { FormEvent } from 'react'
 import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
 import type { PlatformAPI, LoginCreds, LoginResult } from '@textshq/platform-sdk'
-import { AuthState } from './api'
+
+import { AuthState } from './constants'
 
 const TelegramAuth: React.FC<{
   api: PlatformAPI
@@ -20,7 +21,7 @@ const TelegramAuth: React.FC<{
     setLoading(false)
   }
   React.useEffect(() => {
-    api.onLoginEvent(state => {
+    api.onLoginEvent((state: AuthState) => {
       setAuthState(state)
       if (state === AuthState.READY) onSubmit()
     })
