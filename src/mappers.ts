@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, texts } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, texts, Participant } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
@@ -613,6 +613,8 @@ export default class TelegramMapper {
     const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
     const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
     const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(dialog.id)
+    const { entity } = dialog
+    const isReadOnly = ('adminRights' in entity && entity.adminRights?.postMessages) || ('bannedRights' in entity && !entity.bannedRights?.sendMessages)
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
       id: String(getPeerId(dialog.id)),
@@ -621,7 +623,7 @@ export default class TelegramMapper {
       isArchived: dialog.archived,
       timestamp: new Date(dialog.date * 1000),
       isUnread: dialog.unreadCount !== 0,
-      isReadOnly: false,
+      isReadOnly,
       lastReadMessageID: String(Math.max(dialog.dialog.readInboxMaxId, dialog.dialog.readOutboxMaxId)),
       mutedUntil: this.mapMuteFor(dialog.dialog.notifySettings.muteUntil ?? 0),
       imgURL: imgFile,
