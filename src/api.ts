@@ -201,7 +201,7 @@ export default class TelegramAPI implements PlatformAPI {
     return { type: 'wait' }
   }
 
-  private storeMessage(message: CustomMessage) {
+  private storeMessage = (message: CustomMessage) => {
     if (message.media) {
       this.messageMediaStore.set(message.id, message.media)
     }
@@ -678,14 +678,12 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private loadMessageReplies = async (dialogId: BigInteger.BigInteger, messages: Api.Message[]) => {
+  private getMessageReplies = async (dialogId: BigInteger.BigInteger, messages: Api.Message[]) => {
     const replyToMessages: Api.Message[] = []
     const currentIds = messages.map(msg => msg.id)
     const unloadedReplies = messages.filter(m => m.replyToMsgId && !currentIds.includes(m.replyToMsgId)).map(m => m.replyToMsgId)
     for await (const msg of this.client.iterMessages(dialogId, { ids: unloadedReplies })) {
-      this.storeMessage(msg)
       replyToMessages.push(msg)
-      this.emitParticipantFromMessage(dialogId, msg.senderId)
     }
     return replyToMessages
   }
@@ -699,9 +697,9 @@ export default class TelegramAPI implements PlatformAPI {
         this.storeMessage(msg)
         messages.push(msg)
       }
-
-      messages.push(...await this.loadMessageReplies(BigInteger(threadID), messages))
-
+      const replies = await this.getMessageReplies(BigInteger(threadID), messages)
+      replies.forEach(this.storeMessage)
+      messages.push(...replies)
       messages.forEach(async m => this.emitParticipantFromMessage(m.chatId, m.senderId))
     }
 
