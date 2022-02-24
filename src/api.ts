@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
 import { randomBytes } from 'crypto'
 import path from 'path'
-import fs from 'fs/promises'
+import { promises as fsp } from 'fs'
 import url from 'url'
 // eslint-disable-next-line
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
@@ -40,7 +40,7 @@ if (IS_DEV) {
 
 async function getMessageContent(msgContent: MessageContent) {
   const { fileBuffer, fileName, filePath } = msgContent
-  const buffer = filePath ? await fs.readFile(filePath) : fileBuffer
+  const buffer = filePath ? await fsp.readFile(filePath) : fileBuffer
   return buffer && new CustomFile(fileName, buffer.byteLength, filePath, buffer)
 }
 interface LoginInfo {
@@ -447,8 +447,8 @@ export default class TelegramAPI implements PlatformAPI {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
     const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
     try {
-      await fs.rm(mediaDir, { recursive: true })
-      await fs.rm(photosDir, { recursive: true })
+      await fsp.rm(mediaDir, { recursive: true })
+      await fsp.rm(photosDir, { recursive: true })
     // eslint-disable-next-line no-empty
     } catch {}
   }
@@ -543,7 +543,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private saveAsset = async (buffer: Buffer, assetType: 'media' | 'photos', filename: string) => {
     const filePath = path.join(this.accountInfo.dataDirPath, assetType, filename)
-    await fs.writeFile(filePath, buffer)
+    await fsp.writeFile(filePath, buffer)
     return url.pathToFileURL(filePath).href
   }
 
@@ -557,13 +557,13 @@ export default class TelegramAPI implements PlatformAPI {
     const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
 
     // doing it this way so there isn't a lot of try/catch
-    fs.access(this.accountInfo.dataDirPath).catch(() => (fs.mkdir(this.accountInfo.dataDirPath)).catch())
-    fs.access(mediaDir).catch(() => (fs.mkdir(mediaDir)).catch())
-    fs.access(photosDir).catch(() => (fs.mkdir(photosDir)).catch())
+    fsp.access(this.accountInfo.dataDirPath).catch(() => (fsp.mkdir(this.accountInfo.dataDirPath)).catch())
+    fsp.access(mediaDir).catch(() => (fsp.mkdir(mediaDir)).catch())
+    fsp.access(photosDir).catch(() => (fsp.mkdir(photosDir)).catch())
   }
 
   private deleteAssetsDir = async () => {
-    await fs.rm(this.accountInfo.dataDirPath, { recursive: true })
+    await fsp.rm(this.accountInfo.dataDirPath, { recursive: true })
   }
 
   logout = async () => {

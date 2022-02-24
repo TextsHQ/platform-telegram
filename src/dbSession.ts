@@ -2,16 +2,16 @@ import bigInt from 'big-integer'
 import { isArrayLike } from 'lodash'
 import { utils } from 'telegram'
 import { Api } from 'telegram/tl'
-import type { EntityLike } from 'telegram/define'
 import { returnBigInt } from 'telegram/Helpers'
 import { Session } from 'telegram/sessions'
 import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { texts } from '@textshq/platform-sdk'
-import { mkdir, stat } from 'fs/promises'
+import { promises as fsp } from 'fs'
 import { dirname } from 'path'
 // eslint-disable-next-line import/no-extraneous-dependencies
 import Database, { Statement } from 'better-sqlite3'
 import { AuthKey } from 'telegram/crypto/AuthKey'
+import type { EntityLike } from 'telegram/define'
 
 interface EntityObject {
   id: string
@@ -31,7 +31,7 @@ export class DbSession extends Session {
         port integer,
         auth blob
     );
-    
+
     CREATE TABLE entity (
         id text not null primary key,
         hash text,
@@ -151,9 +151,9 @@ export class DbSession extends Session {
 
   async init() {
     try {
-      await stat(dirname(this.dbPath))
+      await fsp.stat(dirname(this.dbPath))
     } catch {
-      await mkdir(dirname(this.dbPath))
+      await fsp.mkdir(dirname(this.dbPath))
     }
     this.db = new Database(this.dbPath, {})
     texts.log(`load DB path: ${this.dbPath}`)
