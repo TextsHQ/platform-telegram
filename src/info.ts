@@ -1,5 +1,5 @@
 import { MessageDeletionMode, PlatformInfo, Attribute, texts } from '@textshq/platform-sdk'
-import { REACTIONS } from './constants'
+import { REACTIONS } from './common-constants'
 
 const info: PlatformInfo = {
   name: 'telegram',

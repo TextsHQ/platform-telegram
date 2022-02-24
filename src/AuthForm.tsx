@@ -3,7 +3,7 @@ import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
 import type { PlatformAPI, LoginCreds, LoginResult } from '@textshq/platform-sdk'
 
-import { AuthState } from './constants'
+import { AuthState } from './common-constants'
 
 const TelegramAuth: React.FC<{
   api: PlatformAPI
