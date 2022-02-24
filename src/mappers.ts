@@ -605,7 +605,7 @@ export default class TelegramMapper {
     return addSeconds(new Date(), seconds)
   }
 
-  mapThread = (dialog: Dialog): Thread => {
+  mapThread = (dialog: Dialog, participants: Participant[]): Thread => {
     if (!dialog.id) throw new Error(`Dialog had no id ${stringifyCircular(dialog.inputEntity, 2)}`)
     if (!dialog.id) { texts.log('Dialog had no id') }
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
@@ -630,11 +630,11 @@ export default class TelegramMapper {
       title: dialog.title,
       participants: {
         hasMore: false,
-        items: [],
+        items: participants,
       },
       messages: {
         hasMore: true,
-        items: [],
+        items: dialog.message ? [this.mapMessage(dialog.message)] : [],
       },
     }
     return t

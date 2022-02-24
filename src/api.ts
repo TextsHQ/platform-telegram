@@ -15,13 +15,13 @@ import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
+import type { SendMessageParams } from 'telegram/client/messages'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './airgramMigration'
-import type { SendMessageParams } from 'telegram/client/messages'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -238,9 +238,13 @@ export default class TelegramAPI implements PlatformAPI {
     this.emitMessage(message)
   }
 
-  private mapThread = (dialog: Dialog) => {
-    const thread = this.mapper.mapThread(dialog)
-    this.emitParticipants(dialog)
+  private mapThread = async (dialog: Dialog) => {
+    let participants: User[] = []
+    if (dialog.isUser) {
+      participants = (await this.client.getParticipants(dialog.id, {})).map(this.mapper.mapUser)
+    }
+    const thread = this.mapper.mapThread(dialog, participants)
+    if (!participants.length) this.emitParticipants(dialog)
     return thread
   }
 
@@ -259,7 +263,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChat = async (update: Api.UpdateChat) => {
     const chat = await this.client._getInputDialog(update.chatId)
-    const thread = this.mapThread(chat)
+    const thread = await this.mapThread(chat)
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -513,6 +517,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
     await (async () => {
+      const inputEntity = await this.client.getInputEntity(dialogId)
+      // prevent error trying to fetch user info for channel user
+      if (inputEntity.className === 'InputPeerChannel') return
       const user = await this.client.getEntity(userId)
       if (user instanceof Api.User) {
         const mappedUser = this.mapper.mapUser(user)
@@ -659,12 +666,7 @@ export default class TelegramAPI implements PlatformAPI {
       for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
         if (!dialog.id) continue
         this.dialogs[dialog.id.toString()] = dialog
-        this.emitThread(this.mapThread(dialog))
-        if (dialog.message) {
-          const toEmitMessages = await this.loadMessageReplies(dialog.id, [dialog.message])
-          toEmitMessages.push(dialog.message)
-          toEmitMessages.forEach(this.emitMessage)
-        }
+        this.emitThread(await this.mapThread(dialog))
         lastDate = dialog.message?.date ?? 0
       }
     }
