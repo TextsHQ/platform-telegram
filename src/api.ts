@@ -664,6 +664,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (this.client.connected) {
       for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
+        if (!dialog) continue
         if (!dialog.id) continue
         this.dialogs[dialog.id.toString()] = dialog
         this.emitThread(await this.mapThread(dialog))
@@ -683,7 +684,7 @@ export default class TelegramAPI implements PlatformAPI {
     const currentIds = messages.map(msg => msg.id)
     const unloadedReplies = messages.filter(m => m.replyToMsgId && !currentIds.includes(m.replyToMsgId)).map(m => m.replyToMsgId)
     for await (const msg of this.client.iterMessages(dialogId, { ids: unloadedReplies })) {
-      replyToMessages.push(msg)
+      if (msg) replyToMessages.push(msg)
     }
     return replyToMessages
   }
@@ -694,6 +695,7 @@ export default class TelegramAPI implements PlatformAPI {
     const messages: Api.Message[] = []
     if (this.client.connected) {
       for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
+        if (!msg) continue
         this.storeMessage(msg)
         messages.push(msg)
       }

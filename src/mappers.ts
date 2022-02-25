@@ -302,7 +302,6 @@ export default class TelegramMapper {
             emoji: true,
             reactionKey: r.reaction.replace('❤', '❤️'),
           })) ?? []
-        if (reactions.results) console.log(reactions.results.map(r => r.count))
         const mappedReactionResults: MessageReaction[] = reactions.results?.flatMap(r => _.range(r.count).map(c =>
           // we don't really have access to id here
           ({
