@@ -5,6 +5,7 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import { getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
+import _ from 'lodash'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
@@ -293,15 +294,25 @@ export default class TelegramMapper {
     }
 
     const setReactions = (reactions: Api.MessageReactions) => {
-      if (reactions && reactions.recentReactions) {
-        const mappedReactions: MessageReaction[] = reactions.recentReactions.map(r => (
+      if (reactions.recentReactions || reactions.results) {
+        const mappedReactions: MessageReaction[] = reactions.recentReactions?.map(r => (
           {
             id: r.peerId.toString(),
             participantID: r.peerId.toString(),
             emoji: true,
             reactionKey: r.reaction.replace('❤', '❤️'),
-          }))
-        mapped.reactions = mappedReactions
+          })) ?? []
+        if (reactions.results) console.log(reactions.results.map(r => r.count))
+        const mappedReactionResults: MessageReaction[] = reactions.results?.flatMap(r => _.range(r.count).map(c =>
+          // we don't really have access to id here
+          ({
+            id: `${c}${r.reaction}`,
+            participantID: `${c}`,
+            emoji: true,
+            reactionKey: r.reaction.replace('❤', '❤️'),
+          }))) ?? []
+
+        mapped.reactions = mappedReactions.concat(mappedReactionResults)
       }
     }
 
