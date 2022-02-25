@@ -4,7 +4,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 // eslint-disable-next-line
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User, Awaitable } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { TelegramClient } from 'telegram'
@@ -120,6 +120,16 @@ export default class TelegramAPI implements PlatformAPI {
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
     this.loginEventCallback(this.authState)
+  }
+
+  getUser = async (ids: { userID?: string } | { username?: string } | { phoneNumber?: string } | { email?: string }) => {
+    const user = await (async () => {
+      if ('userID' in ids) { return this.client.getEntity(ids.userID) }
+      if ('username' in ids) { return this.client.getEntity(ids.username) }
+      if ('phoneNumber' in ids) { return this.client.getEntity(ids.phoneNumber) }
+      if ('email' in ids) { return this.client.getEntity(ids.email) }
+    })()
+    if (user instanceof Api.User) return this.mapper.mapUser(user)
   }
 
   login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
