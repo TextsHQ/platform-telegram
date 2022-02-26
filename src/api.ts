@@ -249,10 +249,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    let participants: User[] = []
-    if (dialog.isUser) {
-      participants = (await this.client.getParticipants(dialog.id, {})).map(this.mapper.mapUser)
-    }
+    const participants = dialog.isUser
+      // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
+      ? [...await this.client.getParticipants(dialog.id, {})].map(this.mapper.mapUser)
+      : []
     const thread = this.mapper.mapThread(dialog, participants)
     if (!participants.length) this.emitParticipants(dialog)
     return thread
