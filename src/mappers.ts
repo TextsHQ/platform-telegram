@@ -597,16 +597,16 @@ export default class TelegramMapper {
   }
 
   mapUser = (user: Api.User): User => {
-    const imgURL = user.photo instanceof Api.UserProfilePhoto ? this.getProfilePhotoUrl(user.id) : undefined
-    return {
+    const mapped: User = {
       id: user.id.toString(),
       username: user.username,
-      phoneNumber: user.phone ? '+' + user.phone : undefined,
-      isVerified: user.verified,
-      isSelf: user.id === this.mapperData.me.id,
       fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
-      imgURL,
     }
+    if (user.photo instanceof Api.UserProfilePhoto) mapped.imgURL = this.getProfilePhotoUrl(user.id)
+    if (user.phone) mapped.phoneNumber = '+' + user.phone
+    if (user.verified) mapped.isVerified = true
+    if (user.id === this.mapperData.me.id) mapped.isSelf = true
+    return mapped
   }
 
   mapMuteFor = (seconds: number) => {

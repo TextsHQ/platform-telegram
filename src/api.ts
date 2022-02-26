@@ -258,14 +258,12 @@ export default class TelegramAPI implements PlatformAPI {
     return thread
   }
 
-  private emitThread = async (thread: Thread) => {
+  private emitThread = (thread: Thread) => {
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'thread',
-      objectIDs: {
-        threadID: thread.id,
-      },
+      objectIDs: {},
       entries: [thread],
     }
     this.onEvent([event])
@@ -278,9 +276,7 @@ export default class TelegramAPI implements PlatformAPI {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
       objectName: 'thread',
-      objectIDs: {
-        threadID: thread.id,
-      },
+      objectIDs: {},
       entries: [thread],
     }
     this.onEvent([event])
@@ -346,7 +342,7 @@ export default class TelegramAPI implements PlatformAPI {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
       objectName: 'thread',
-      objectIDs: { threadID },
+      objectIDs: {},
       entries: [
         {
           id: threadID,
@@ -362,7 +358,7 @@ export default class TelegramAPI implements PlatformAPI {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
       objectName: 'thread',
-      objectIDs: { threadID },
+      objectIDs: {},
       entries: [
         {
           id: threadID,
@@ -446,9 +442,7 @@ export default class TelegramAPI implements PlatformAPI {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'delete',
       objectName: 'thread',
-      objectIDs: {
-        threadID,
-      },
+      objectIDs: {},
       entries: [threadID],
     }
     this.onEvent([event])
