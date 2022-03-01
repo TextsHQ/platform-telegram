@@ -666,18 +666,20 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 20
     let lastDate = 0
 
+    const threads: Thread[] = []
+
     if (this.client.connected) {
       for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
         if (!dialog) continue
         if (!dialog.id) continue
         this.dialogs[dialog.id.toString()] = dialog
-        this.emitThread(await this.mapThread(dialog))
+        threads.push(await this.mapThread(dialog))
         lastDate = dialog.message?.date ?? 0
       }
     }
 
     return {
-      items: [],
+      items: threads,
       oldestCursor: this.client.connected ? (lastDate.toString() ?? '*') : cursor,
       hasMore: lastDate !== 0 && this.client.connected,
     }
