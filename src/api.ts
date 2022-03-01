@@ -713,8 +713,6 @@ export default class TelegramAPI implements PlatformAPI {
       for (const m of messages) {
         if (m.action && 'users' in m.action) {
           m.action.users.forEach(u => this.emitParticipantFromMessage(m.chatId, u))
-        } else {
-          this.emitParticipantFromMessage(m.chatId, m.senderId)
         }
       }
     }
