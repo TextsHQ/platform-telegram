@@ -496,6 +496,7 @@ export default class TelegramAPI implements PlatformAPI {
     const threadID = dialogId.toString()
     const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
+    texts.log(`Filtering participants already upserted for ${threadID}\nAll:\n${JSON.stringify(entries, null, 2)}\nFiltered:\n${JSON.stringify(filteredEntries, null, 2)}`)
     if (!filteredEntries.length) return
     this.dialogToParticipantIdsUpdate(threadID, filteredEntries.map(m => m.id))
     this.onEvent([{
@@ -513,8 +514,10 @@ export default class TelegramAPI implements PlatformAPI {
     const threadID = dialogId.toString()
     const dialog = this.dialogIdToParticipantIds.get(threadID)
     if (dialog) {
+      texts.log(`Dialog already in participants list: ${threadID}`)
       participantIds.forEach(id => dialog.add(id))
     } else {
+      texts.log(`Including dialog for the first time in participants list: ${threadID}`)
       this.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
     }
   }
