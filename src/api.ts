@@ -521,9 +521,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
     await (async () => {
-      const inputEntity = await this.client.getInputEntity(dialogId)
-      // prevent error trying to fetch user info for channel user
-      if (inputEntity.className === 'InputPeerChannel') return
+      const inputEntity = await this.client.getInputEntity(userId)
+      if (inputEntity.className !== 'InputPeerUser') return
       const user = await this.client.getEntity(userId)
       if (user instanceof Api.User) {
         const mappedUser = this.mapper.mapUser(user)
@@ -708,7 +707,13 @@ export default class TelegramAPI implements PlatformAPI {
       const replies = await this.getMessageReplies(BigInteger(threadID), messages)
       replies.forEach(this.storeMessage)
       messages.push(...replies)
-      messages.forEach(async m => this.emitParticipantFromMessage(m.chatId, m.senderId))
+      for (const m of messages) {
+        if (m.action && 'users' in m.action) {
+          m.action.users.forEach(u => this.emitParticipantFromMessage(m.chatId, u))
+        } else {
+          this.emitParticipantFromMessage(m.chatId, m.senderId)
+        }
+      }
     }
 
     return {
