@@ -555,8 +555,7 @@ export default class TelegramMapper {
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
-        mapped.isAction = true
-        mapped.isHidden = true
+        return undefined
       } else {
         mapped.textHeading = `Unsupported Telegram message ${msg.media?.className} ${msg.action?.className}`
       }
@@ -647,11 +646,11 @@ export default class TelegramMapper {
       },
       messages: {
         hasMore: true,
-        items: dialog.message ? [this.mapMessage(dialog.message)] : [],
+        items: dialog.message ? [this.mapMessage(dialog.message)].filter(Boolean) : [],
       },
     }
     return t
   }
 
-  mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m))
+  mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).filter(Boolean).map(m => this.mapMessage(m))
 }
