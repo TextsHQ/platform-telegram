@@ -554,6 +554,8 @@ export default class TelegramMapper {
         mapped.text = `You have successfully transfered ${msg.action.currency} ${msg.action.totalAmount}`
         mapped.isAction = true
         mapped.parseTemplate = true
+      } else if (msg.action instanceof Api.MessageActionHistoryClear) {
+        return null
       } else {
         mapped.textHeading = `Unsupported Telegram message ${msg.media?.className} ${msg.action?.className}`
       }
