@@ -1636,6 +1636,7 @@ __metadata:
     "@types/react": 17.0.2
     "@types/react-phone-number-input": ^3.0.13
     airgram: ^5.0.0
+    async-mutex: ^0.3.2
     big-integer: ^1.6.51
     bluebird: ^3.7.2
     date-fns: ^2.27.0
@@ -2111,7 +2112,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"async-mutex@npm:^0.3.0":
+"async-mutex@npm:^0.3.0, async-mutex@npm:^0.3.2":
   version: 0.3.2
   resolution: "async-mutex@npm:0.3.2"
   dependencies:

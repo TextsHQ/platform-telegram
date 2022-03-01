@@ -5,7 +5,7 @@ import { promises as fsp } from 'fs'
 import url from 'url'
 // eslint-disable-next-line
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User, Awaitable } from '@textshq/platform-sdk'
-import { debounce } from 'lodash'
+import { debounce, uniq } from 'lodash'
 import BigInteger from 'big-integer'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
@@ -16,6 +16,7 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
 import type { SendMessageParams } from 'telegram/client/messages'
+import { Mutex } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
@@ -228,7 +229,7 @@ export default class TelegramAPI implements PlatformAPI {
   private emitMessage = (message: Api.Message) => {
     const threadID = message.chatId.toString()
     const mappedMessage = this.mapper.mapMessage(message)
-    this.emitParticipantFromMessage(message.chatId, message.senderId)
+    this.emitParticipantsFromMessages(message.chatId, [message.senderId])
     if (!mappedMessage) return
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
@@ -287,7 +288,7 @@ export default class TelegramAPI implements PlatformAPI {
       const chatId = update.chatId.toString()
       this.emitDeleteThread(chatId)
     }
-    if (update.newParticipant) this.emitParticipantFromMessage(update.chatId, update.userId)
+    if (update.newParticipant) this.emitParticipantsFromMessages(update.chatId, [update.userId])
   }
 
   private onUpdateChannelParticipant(update: Api.UpdateChannelParticipant) {
@@ -295,7 +296,7 @@ export default class TelegramAPI implements PlatformAPI {
       const chatId = update.channelId.toString()
       this.emitDeleteThread(chatId)
     }
-    if (update.newParticipant) this.emitParticipantFromMessage(update.channelId, update.userId)
+    if (update.newParticipant) this.emitParticipantsFromMessages(update.channelId, [update.userId])
   }
 
   private onUpdateNotifySettings(update: Api.UpdateNotifySettings) {
@@ -496,7 +497,7 @@ export default class TelegramAPI implements PlatformAPI {
     const threadID = dialogId.toString()
     const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
-    texts.log(`Filtering participants already upserted for ${threadID}\nAll:\n${JSON.stringify(entries, null, 2)}\nFiltered:\n${JSON.stringify(filteredEntries, null, 2)}`)
+    //    texts.log(`Filtering participants already upserted for ${threadID}\nAll:\n${JSON.stringify(entries, null, 2)}\nFiltered:\n${JSON.stringify(filteredEntries, null, 2)}`)
     if (!filteredEntries.length) return
     this.dialogToParticipantIdsUpdate(threadID, filteredEntries.map(m => m.id))
     this.onEvent([{
@@ -522,15 +523,24 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
+  private participantsMutex = new Mutex()
+
+  private emitParticipantsFromMessages = async (dialogId: BigInteger.BigInteger, userIds: BigInteger.BigInteger[]) => {
     await (async () => {
-      const inputEntity = await this.client.getInputEntity(userId)
-      if (inputEntity.className !== 'InputPeerUser') return
-      const user = await this.client.getEntity(userId)
-      if (user instanceof Api.User) {
-        const mappedUser = this.mapper.mapUser(user)
-        this.upsertParticipants(dialogId, [mappedUser])
+      const mappedUsers: User[] = []
+      for (const userId of uniq(userIds)) {
+        try {
+          const inputEntity = await this.client.getInputEntity(userId)
+          if (inputEntity.className !== 'InputPeerUser') continue
+          const user = await this.client.getEntity(userId)
+          if (user instanceof Api.User) {
+            mappedUsers.push(this.mapper.mapUser(user))
+          }
+        } catch (e) {
+          texts.log(e)
+        }
       }
+      await this.participantsMutex.runExclusive(() => this.upsertParticipants(dialogId, mappedUsers))
     })()
   }
 
@@ -710,13 +720,15 @@ export default class TelegramAPI implements PlatformAPI {
       const replies = await this.getMessageReplies(BigInteger(threadID), messages)
       replies.forEach(this.storeMessage)
       messages.push(...replies)
+      const participantIdsToEmit = []
       for (const m of messages) {
         if (m.action && 'users' in m.action) {
-          m.action.users.forEach(u => this.emitParticipantFromMessage(m.chatId, u))
+          participantIdsToEmit.push(...m.action.users)
         } else {
-          this.emitParticipantFromMessage(m.chatId, m.senderId)
+          participantIdsToEmit.push(m.senderId)
         }
       }
+      this.emitParticipantsFromMessages(BigInteger(threadID), participantIdsToEmit)
     }
 
     return {
