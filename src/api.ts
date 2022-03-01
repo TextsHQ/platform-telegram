@@ -336,8 +336,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateDialogUnreadMark(update: Api.UpdateDialogUnreadMark) {
     if (!(update.peer instanceof Api.DialogPeer)) return
-    if (!('chatId' in update.peer.peer)) return
-    const threadID = update.peer.peer.chatId.toString()
+    const threadID = getPeerId(update.peer.peer)
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
@@ -394,6 +393,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (update.message instanceof Api.MessageEmpty) return
     const threadID = getPeerId(update.message.peerId).toString()
     const updatedMessage = this.mapper.mapMessage(update.message)
+    if (!updatedMessage) return
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
