@@ -496,7 +496,6 @@ export default class TelegramAPI implements PlatformAPI {
     const threadID = dialogId.toString()
     const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
-    texts.log(`Filtering participants already upserted for ${threadID}\nAll:\n${JSON.stringify(entries, null, 2)}\nFiltered:\n${JSON.stringify(filteredEntries, null, 2)}`)
     if (!filteredEntries.length) return
     this.dialogToParticipantIdsUpdate(threadID, filteredEntries.map(m => m.id))
     this.onEvent([{
