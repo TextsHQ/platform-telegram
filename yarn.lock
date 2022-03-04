@@ -1645,8 +1645,9 @@ __metadata:
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: ^3.1.16
     source-map-support: ^0.5.21
-    telegram: ^2.5.0
+    telegram: ^2.5.2
     typescript: ^4.5.2
+    vcard-creator: ^0.4.2
   languageName: unknown
   linkType: soft
 
@@ -2279,13 +2280,6 @@ __metadata:
   dependencies:
     fill-range: ^7.0.1
   checksum: e2a8e769a863f3d4ee887b5fe21f63193a891c68b612ddb4b68d82d1b5f3ff9073af066c343e9867a393fe4c2555dcb33e89b937195feb9c1613d259edfcd459
-  languageName: node
-  linkType: hard
-
-"browser-or-node@npm:^1.3.0":
-  version: 1.3.0
-  resolution: "browser-or-node@npm:1.3.0"
-  checksum: 14a7e3f7bd2dfeac0d1e8fed378a22c7e3c943c30e84ce09ba0636c82f79f78d321536fd2846dd505b6d7ee6fb0fdb8d7f084afe40f2378eee5533cb8e7cd456
   languageName: node
   linkType: hard
 
@@ -5384,14 +5378,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.5.0":
-  version: 2.5.0
-  resolution: "telegram@npm:2.5.0"
+"telegram@npm:^2.5.2":
+  version: 2.5.2
+  resolution: "telegram@npm:2.5.2"
   dependencies:
     "@cryptography/aes": ^0.1.1
     async-mutex: ^0.3.0
     big-integer: ^1.6.48
-    browser-or-node: ^1.3.0
     buffer: ^6.0.3
     bufferutil: ^4.0.3
     htmlparser2: ^6.1.0
@@ -5412,7 +5405,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 2cab5dda362332efe4a85ee2ba4914e2cc87a30acc369ddff91213b1216367dbad47759543998a90e29065f5985069bd0e1751d9870bc0ac24f5eaea3c5f87d8
+  checksum: 622a8eb0e92b0f44fec83344a9910f18c910bd7d02bbb957272b44d9c4a3dc83f29f3fff9fbabca4a13398040d80f18576bd547cb6293cfec9931d9fdca9cabd
   languageName: node
   linkType: hard
 
@@ -5647,6 +5640,13 @@ __metadata:
   version: 2.3.0
   resolution: "v8-compile-cache@npm:2.3.0"
   checksum: adb0a271eaa2297f2f4c536acbfee872d0dd26ec2d76f66921aa7fc437319132773483344207bdbeee169225f4739016d8d2dbf0553913a52bb34da6d0334f8e
+  languageName: node
+  linkType: hard
+
+"vcard-creator@npm:^0.4.2":
+  version: 0.4.2
+  resolution: "vcard-creator@npm:0.4.2"
+  checksum: 29ce458277f80c0b5860dad146d44a1d09874b1e07b7ce4980e6a575e7c794ecbebaca1a612a5bab87640ff761fd6f0511051ff1a9ee8832fca9ec79d11bf077
   languageName: node
   linkType: hard
 

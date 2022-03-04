@@ -6,6 +6,7 @@ import { getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import _ from 'lodash'
+import VCard from 'vcard-creator'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
@@ -420,11 +421,12 @@ export default class TelegramMapper {
         pushSticker(msg.sticker, msg.id)
       } else if (msg.contact) {
         const { contact } = msg
+        const vcard = contact.vcard ? contact.vcard : new VCard().addName(contact.lastName, contact.firstName).addPhoneNumber(contact.phoneNumber).buildVCard()
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
           id: String(contact.userId),
           type: MessageAttachmentType.UNKNOWN,
-          data: Buffer.from(contact.vcard, 'utf-8'),
+          data: Buffer.from(vcard, 'utf-8'),
           fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
         })
       } else if (msg.document) {
