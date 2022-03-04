@@ -839,7 +839,7 @@ export default class TelegramAPI implements PlatformAPI {
    * The frontend will request twice for each fileId, the first time for the
    * wave form, the second time for the <audio> element.
    */
-  getAsset = async (type: string, fileIdStr: string) => {
+  getAsset = async (_, type: string, fileIdStr: string) => {
     texts.log('get asset', type, fileIdStr)
     if (type !== 'file') throw new Error('unknown asset type')
     const fileId = +fileIdStr
