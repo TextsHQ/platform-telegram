@@ -783,7 +783,7 @@ export default class TelegramAPI implements PlatformAPI {
     // await this.client.invoke(Api.{ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } })
   }
 
-  getAsset = async (type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
+  getAsset = async (_, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
     if (type !== 'media' && type !== 'photos') {
       texts.log(`Unknown media type ${type}`)
       return
