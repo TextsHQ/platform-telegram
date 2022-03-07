@@ -17,7 +17,7 @@
     "ref-napi": "^3.0.3"
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#1fecb954d2530c482aad8c40b4ef5d4be6b2ae23",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#b30b07bc968302f6c1f8f8b8e6d5cd7369fd539d",
     "airgram": "^5.0.0",
     "bluebird": "^3.7.2",
     "date-fns": "^2.27.0",

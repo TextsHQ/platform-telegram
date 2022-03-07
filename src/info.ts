@@ -34,6 +34,7 @@ const info: PlatformInfo = {
     Attribute.SUPPORTS_LIVE_TYPING,
     Attribute.SUPPORTS_MARK_AS_UNREAD,
     Attribute.SUPPORTS_QUOTED_MESSAGES,
+    Attribute.GROUP_THREAD_CREATION_REQUIRES_TITLE,
   ]),
   attachments: {
     supportsCaption: true,
