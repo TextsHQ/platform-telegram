@@ -1613,12 +1613,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#1fecb954d2530c482aad8c40b4ef5d4be6b2ae23":
+"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#b30b07bc968302f6c1f8f8b8e6d5cd7369fd539d":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=1fecb954d2530c482aad8c40b4ef5d4be6b2ae23"
+  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=b30b07bc968302f6c1f8f8b8e6d5cd7369fd539d"
   dependencies:
     form-data: ^4.0.0
-  checksum: af400f2813b085010608fb2b09f89e642d7f97094a6cdde4c9ae4554c9b65ac31b839a0b6fc54215fe4e90b0037089e9e4d163a0b424e95b5ffcbb0a82ce60e2
+  checksum: 62875c5dfc08adc652fe8edc44fd4c02cd3355013c181c57dcfbf7e73e5475c45c084416321e3a1e5c96550f6d128aae80994258d217a8ae75292bb02ae49f6b
   languageName: node
   linkType: hard
 
@@ -1627,7 +1627,7 @@ __metadata:
   resolution: "@textshq/platform-telegram@workspace:."
   dependencies:
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#1fecb954d2530c482aad8c40b4ef5d4be6b2ae23"
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#b30b07bc968302f6c1f8f8b8e6d5cd7369fd539d"
     "@types/better-sqlite3": ^7.4.2
     "@types/bluebird": ^3.5.33
     "@types/eslint": ^7.2.6
