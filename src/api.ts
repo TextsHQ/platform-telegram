@@ -513,10 +513,8 @@ export default class TelegramAPI implements PlatformAPI {
     const threadID = dialogId.toString()
     const dialog = this.dialogIdToParticipantIds.get(threadID)
     if (dialog) {
-      texts.log(`Dialog already in participants list: ${threadID}`)
       participantIds.forEach(id => dialog.add(id))
     } else {
-      texts.log(`Including dialog for the first time in participants list: ${threadID}`)
       this.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
     }
   }
