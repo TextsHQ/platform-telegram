@@ -621,9 +621,10 @@ export default class TelegramAPI implements PlatformAPI {
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
     if ('mutedUntil' in updates) {
+      const inputPeer = await this.client.getInputEntity(threadID)
       await this.client.invoke(new Api.account.UpdateNotifySettings({
         peer: new Api.InputNotifyPeer({
-          peer: this.dialogs[threadID].eqr,
+          peer: inputPeer,
         }),
         settings: new Api.InputPeerNotifySettings({
           muteUntil: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0,
