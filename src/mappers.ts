@@ -621,14 +621,13 @@ export default class TelegramMapper {
 
   mapThread = (dialog: Dialog, participants: Participant[]): Thread => {
     if (!dialog.id) throw new Error(`Dialog had no id ${stringifyCircular(dialog.inputEntity, 2)}`)
-    if (!dialog.id) { texts.log('Dialog had no id') }
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
     const isChannel = dialog.dialog.peer instanceof Api.PeerChannel
     const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
     const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
     const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(dialog.id)
     const { entity } = dialog
-    const isReadOnly = ('adminRights' in entity && entity.adminRights?.postMessages) || ('bannedRights' in entity && !entity.bannedRights?.sendMessages)
+    const isReadOnly = ('adminRights' in entity && entity.adminRights?.postMessages === false) || ('bannedRights' in entity && entity.bannedRights?.sendMessages === false)
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
       id: String(getPeerId(dialog.id)),
