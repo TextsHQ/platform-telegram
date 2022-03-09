@@ -357,7 +357,7 @@ export default class TelegramAPI implements PlatformAPI {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
       objectName: 'thread',
-      objectIDs: { threadID },
+      objectIDs: {},
       entries: [
         {
           id: threadID,
