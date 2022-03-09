@@ -250,10 +250,9 @@ export default class TelegramMapper {
 
   mapMessageLink(webPage: Api.TypeWebPage, messageId: number) {
     if (!(webPage instanceof Api.WebPage)) return
-    const { url: originalURL, displayUrl, title, description, photo } = webPage
+    const { url, title, description, photo } = webPage
     const link: MessageLink = {
-      url: displayUrl,
-      originalURL,
+      url,
       title: title ?? '',
       summary: description,
       img: undefined,
