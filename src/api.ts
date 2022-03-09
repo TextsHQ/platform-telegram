@@ -253,20 +253,14 @@ export default class TelegramAPI implements PlatformAPI {
       // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
       ? [...await this.client.getParticipants(dialog.id, {})].map(this.mapper.mapUser)
       : []
-    const thread = this.mapper.mapThread(dialog, participants)
-    if (!participants.length) this.emitParticipants(dialog)
-    return thread
-  }
 
-  private emitThread = (thread: Thread) => {
-    const event: ServerEvent = {
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'upsert',
-      objectName: 'thread',
-      objectIDs: {},
-      entries: [thread],
-    }
-    this.onEvent([event])
+    const thread = this.mapper.mapThread(dialog, participants)
+
+    // has to run once thread is included
+    // not best way but simplest place to put this for now
+    if (participants.length === 0) setTimeout(() => this.emitParticipants(dialog), 5_000)
+
+    return thread
   }
 
   private onUpdateChat = async (update: Api.UpdateChat) => {
@@ -496,8 +490,9 @@ export default class TelegramAPI implements PlatformAPI {
     const threadID = dialogId.toString()
     const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
-    if (!filteredEntries.length) return
-    this.dialogToParticipantIdsUpdate(threadID, filteredEntries.map(m => m.id))
+
+    if (filteredEntries.length === 0) return
+    this.dialogToParticipantIdsUpdate(threadID, entries.map(m => m.id))
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -520,15 +515,19 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
-    await (async () => {
-      const inputEntity = await this.client.getInputEntity(userId)
-      if (inputEntity.className !== 'InputPeerUser') return
-      const user = await this.client.getEntity(userId)
-      if (user instanceof Api.User) {
-        const mappedUser = this.mapper.mapUser(user)
-        this.upsertParticipants(dialogId, [mappedUser])
-      }
-    })()
+    const inputEntity = await this.client.getInputEntity(userId)
+    if (inputEntity.className === 'InputPeerEmpty') return
+    const user = await this.client.getEntity(userId)
+    if (user instanceof Api.User) {
+      const mappedUser = this.mapper.mapUser(user)
+      this.upsertParticipants(dialogId, [mappedUser])
+    }
+  }
+
+  private emitParticipantsFromMessageAction = async (messages: CustomMessage[]) => {
+    const withUserId = messages.filter(msg => 'userId' in msg.fromId || 'users' in msg.action)
+    // @ts-expect-error
+    withUserId.forEach(({ chatId, fromId }) => this.emitParticipantFromMessage(chatId, fromId.userId))
   }
 
   private emitParticipants = async (dialog: Dialog) => {
@@ -674,7 +673,7 @@ export default class TelegramAPI implements PlatformAPI {
         if (!dialog.id) continue
         this.dialogs[dialog.id.toString()] = dialog
         threads.push(await this.mapThread(dialog))
-        lastDate = dialog.message?.date ?? 0
+        lastDate = dialog.message?.date ?? lastDate
       }
     }
 
@@ -697,7 +696,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     const { cursor } = pagination || { cursor: null, direction: null }
-    const limit = 20
+    const limit = 100
     const messages: Api.Message[] = []
     if (this.client.connected) {
       for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
@@ -708,12 +707,9 @@ export default class TelegramAPI implements PlatformAPI {
       const replies = await this.getMessageReplies(BigInteger(threadID), messages)
       replies.forEach(this.storeMessage)
       messages.push(...replies)
-      for (const m of messages) {
-        if (m.action && 'users' in m.action) {
-          m.action.users.forEach(u => this.emitParticipantFromMessage(m.chatId, u))
-        }
-      }
     }
+
+    setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 1_000)
 
     return {
       items: this.mapper.mapMessages(messages),

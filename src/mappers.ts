@@ -278,7 +278,7 @@ export default class TelegramMapper {
   }
 
   mapMessage(msg: CustomMessage): Message {
-    const isThreadMessage = msg.sender?.className === 'Channel'
+    const isThreadMessage = msg instanceof Api.MessageService
     const senderID = isThreadMessage ? '$thread' : msg.senderId?.toString() ?? this.mapperData.me.id.toString()
     const mapped: Message = {
       _original: stringifyCircular(msg),
@@ -287,7 +287,7 @@ export default class TelegramMapper {
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactions?.length ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards,
       senderID,
-      isSender: msg.out,
+      isSender: msg.out && !isThreadMessage,
       linkedMessageID: msg.replyToMsgId?.toString(),
       buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id) : undefined,
       expiresInSeconds: msg.ttlPeriod,
@@ -508,12 +508,13 @@ export default class TelegramMapper {
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
-        mapped.text = '{{sender}} joined the group via invite link'
+        if (!('userId' in msg.fromId)) return undefined
+        mapped.text = `{{${msg.fromId.userId}}} joined the group via invite link`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
           type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: [mapped.senderID],
+          participantIDs: [msg.fromId.userId.toString()],
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.ChannelAdminLogEventActionChangePhoto) {
