@@ -383,7 +383,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([TelegramMapper.mapUserPresence(update.userId, update.status)])
   }
 
-  private async onUpdateEditMessage(update: Api.UpdateEditMessage) {
+  private async onUpdateEditMessage(update: Api.UpdateEditMessage | Api.UpdateEditChannelMessage) {
     if (update.message instanceof Api.MessageEmpty) return
     const threadID = getPeerId(update.message.peerId).toString()
     const updatedMessage = this.mapper.mapMessage(update.message)
@@ -425,9 +425,10 @@ export default class TelegramAPI implements PlatformAPI {
       else if (update instanceof Api.UpdateReadHistoryInbox) this.onUpdateReadHistoryInbox(update)
       else if (update instanceof Api.UpdateReadHistoryOutbox) this.onUpdateReadHistoryOutbox(update)
       else if (update instanceof Api.UpdateUserStatus) this.onUpdateUserStatus(update)
-      else if (update instanceof Api.UpdateEditMessage) await this.onUpdateEditMessage(update)
+      else if (update instanceof Api.UpdateEditMessage
+        || update instanceof Api.UpdateEditChannelMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
-      else if (IS_DEV) console.log('Update', stringifyCircular(update))
+      else texts.log('Update', update.className, stringifyCircular(update))
     })
   }
 
@@ -449,8 +450,8 @@ export default class TelegramAPI implements PlatformAPI {
     try {
       await fsp.rm(mediaDir, { recursive: true })
       await fsp.rm(photosDir, { recursive: true })
-    // eslint-disable-next-line no-empty
-    } catch {}
+      // eslint-disable-next-line no-empty
+    } catch { }
   }
 
   private afterLogin = async () => {

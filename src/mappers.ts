@@ -2,7 +2,7 @@ import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntit
 import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
-import { getPeerId } from 'telegram/Utils'
+import { getPeer, getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import _ from 'lodash'
@@ -297,21 +297,25 @@ export default class TelegramMapper {
       if (reactions.recentReactions || reactions.results) {
         const mappedReactions: MessageReaction[] = reactions.recentReactions?.map(r => (
           {
-            id: r.peerId.toString(),
-            participantID: r.peerId.toString(),
+            id: getPeerId(r.peerId),
+            participantID: getPeerId(r.peerId),
             emoji: true,
             reactionKey: r.reaction.replace('❤', '❤️'),
           })) ?? []
-        const mappedReactionResults: MessageReaction[] = reactions.results?.flatMap(r => _.range(r.count).map(c =>
+        const mappedReactionResults: MessageReaction[] = reactions.results?.flatMap(r => {
+          const reactionResult = _.range(r.count).map(c =>
           // we don't really have access to id here
-          ({
-            id: `${c}${r.reaction}`,
-            participantID: `${c}`,
-            emoji: true,
-            reactionKey: r.reaction.replace('❤', '❤️'),
-          }))) ?? []
+            ({
+              id: `${c}${r.reaction}`,
+              participantID: `${c}`,
+              emoji: true,
+              reactionKey: r.reaction.replace('❤', '❤️'),
+            }))
+          if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = this.mapperData.me.id.toString() }
+          return reactionResult
+        }) ?? []
 
-        mapped.reactions = mappedReactions.concat(mappedReactionResults)
+        mapped.reactions = mappedReactionResults.length ? mappedReactionResults : mappedReactions
       }
     }
 
