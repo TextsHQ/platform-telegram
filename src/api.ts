@@ -525,7 +525,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitParticipantsFromMessageAction = async (messages: CustomMessage[]) => {
-    const withUserId = messages.filter(msg => 'userId' in msg.fromId || 'users' in msg.action)
+    const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
+      || (msg.action && 'users' in msg.action))
     // @ts-expect-error
     withUserId.forEach(({ chatId, fromId }) => this.emitParticipantFromMessage(chatId, fromId.userId))
   }
