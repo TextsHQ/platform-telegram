@@ -21,7 +21,7 @@ import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
-import type { AirgramMigration, AirgramSession } from './airgramMigration'
+import type { AirgramMigration, AirgramSession } from './AirgramMigration'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -79,7 +79,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.accountInfo = accountInfo
 
     if (tdlibPath && await fileExists(tdlibPath)) {
-      const { isAirgramSession, AirgramMigration } = await import('./airgramMigration')
+      const { isAirgramSession, AirgramMigration } = await import('./AirgramMigration')
       if (isAirgramSession(session)) {
         this.airgramMigration = new AirgramMigration()
         this.airgramMigration.connectAirgramSession(session, accountInfo)

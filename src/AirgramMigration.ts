@@ -53,41 +53,40 @@ export class AirgramMigration {
   }
 
   migrateAirgramSession = async (newClient: TelegramClient, dbSession: DbSession) => {
+    const done = async () => {
+      texts.log('[airgram migration] success')
+      dbSession.save()
+      await this.airgramConn.api.logOut()
+      await this.airgramConn.api.close()
+      await this.airgramConn.destroy()
+    }
     try {
       const qrToken = await newClient.invoke(new Api.auth.ExportLoginToken({
         apiId: API_ID,
         apiHash: API_HASH,
         exceptIds: [],
       }))
-      if (qrToken) {
-        texts.log(JSON.stringify(qrToken, null, 4))
-        if (qrToken.className === 'auth.LoginToken') {
-          const token = `tg://login?token=${qrToken.token.toString('base64url')}`
-          const confirmResult = await this.airgramConn.api.confirmQrCodeAuthentication({ link: token })
-          texts.log(JSON.stringify(confirmResult, null, 4))
-          const qrTokenResult = await newClient.invoke(new Api.auth.ExportLoginToken({
-            apiId: API_ID,
-            apiHash: API_HASH,
-            exceptIds: [],
-          }))
-          texts.log(JSON.stringify(qrTokenResult, null, 4))
-          if (qrTokenResult.className === 'auth.LoginTokenSuccess') {
-            texts.log('token success')
-            await this.airgramConn.destroy()
-            dbSession.save()
-            return
-          }
-          if (qrTokenResult.className === 'auth.LoginTokenMigrateTo') {
-            texts.log('migrating DC')
-            await newClient._switchDC(qrTokenResult.dcId)
-            const migratedToken = await newClient.invoke(new Api.auth.ImportLoginToken({ token: qrTokenResult.token }))
-            if (migratedToken.className === 'auth.LoginTokenSuccess') {
-              texts.log('token success')
-              await this.airgramConn.destroy()
-              dbSession.save()
-              return
-            }
-          }
+      if (!qrToken) return
+      texts.log('[airgram migration]', qrToken)
+      if (qrToken.className !== 'auth.LoginToken') return
+      const token = `tg://login?token=${qrToken.token.toString('base64url')}`
+      const confirmResult = await this.airgramConn.api.confirmQrCodeAuthentication({ link: token })
+      texts.log('[airgram migration]', confirmResult)
+      const qrTokenResult = await newClient.invoke(new Api.auth.ExportLoginToken({
+        apiId: API_ID,
+        apiHash: API_HASH,
+        exceptIds: [],
+      }))
+      texts.log('[airgram migration]', qrTokenResult)
+      if (qrTokenResult.className === 'auth.LoginTokenSuccess') {
+        return await done()
+      }
+      if (qrTokenResult.className === 'auth.LoginTokenMigrateTo') {
+        texts.log('[airgram migration]', 'migrating DC')
+        await newClient._switchDC(qrTokenResult.dcId)
+        const migratedToken = await newClient.invoke(new Api.auth.ImportLoginToken({ token: qrTokenResult.token }))
+        if (migratedToken.className === 'auth.LoginTokenSuccess') {
+          return await done()
         }
       }
     } catch (err) {
