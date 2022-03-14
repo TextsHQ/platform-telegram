@@ -776,8 +776,13 @@ export default class TelegramAPI implements PlatformAPI {
     this.client.invoke(new Api.messages.MarkDialogUnread({ unread: true }))
   }
 
-  archiveThread = async () => {
-    // await this.client.invoke(Api.{ chatId: +threadID, chatList: { _: archived ? 'chatListArchive' : 'chatListMain' } })
+  archiveThread = async (threadID: string, archived: boolean) => {
+    await this.client.invoke(new Api.folders.EditPeerFolders({
+      folderPeers: [new Api.InputFolderPeer({
+        folderId: Number(archived), // 1 is archived folder, 0 is non archived
+        peer: await this.client.getInputEntity(threadID),
+      })],
+    }))
   }
 
   getAsset = async (_, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
