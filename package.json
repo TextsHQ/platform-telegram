@@ -16,6 +16,10 @@
       "pre-commit": "true || yarn lint --fix"
     }
   },
+  "nativeDeps": {
+    "ffi-napi": "^4.0.3",
+    "ref-napi": "^3.0.3"
+  },
   "dependencies": {
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#2208efa52f48e9ef78c4ae2bc600ea82204bf98a",
     "airgram": "^5.0.0",
