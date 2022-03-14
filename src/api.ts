@@ -104,12 +104,17 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (this.airgramMigration) {
       await this.airgramMigration.migrateAirgramSession(this.client, this.dbSession)
-      this.onEvent([{
-        type: ServerEventType.TOAST,
-        toast: {
-          text: 'Your Telegram account login session was migrated and you may see a new login notification.',
+      this.onEvent([
+        {
+          type: ServerEventType.SESSION_UPDATED,
         },
-      }])
+        {
+          type: ServerEventType.TOAST,
+          toast: {
+            text: "Telegram integration has been rebuilt for speed. Your login session was auto-migrated and you'll see a new login notification.",
+          },
+        },
+      ])
     }
 
     this.authState = AuthState.PHONE_INPUT
