@@ -788,7 +788,14 @@ export default class TelegramAPI implements PlatformAPI {
         peer: await this.client.getInputEntity(threadID),
       })],
     }))
-    if (!('chats' in res && res.chats.length)) throw new Error('Can\'t archive this thread.')
+    if ('updates' in res && res.updates.length === 0) {
+      this.onEvent([{
+        type: ServerEventType.TOAST,
+        toast: {
+          text: 'Can\'t archive this thread.',
+        },
+      }])
+    }
   }
 
   getAsset = async (_, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
