@@ -782,12 +782,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   archiveThread = async (threadID: string, archived: boolean) => {
-    await this.client.invoke(new Api.folders.EditPeerFolders({
+    const res = await this.client.invoke(new Api.folders.EditPeerFolders({
       folderPeers: [new Api.InputFolderPeer({
         folderId: Number(archived), // 1 is archived folder, 0 is non archived
         peer: await this.client.getInputEntity(threadID),
       })],
     }))
+    if (!('chats' in res && res.chats.length)) throw new Error('Can\'t archive this thread.')
   }
 
   getAsset = async (_, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
