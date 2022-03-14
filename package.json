@@ -17,7 +17,7 @@
     }
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#b30b07bc968302f6c1f8f8b8e6d5cd7369fd539d",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#42d29b3d024a61e4f9e9d43628ff11b8b9990cb4",
     "airgram": "^5.0.0",
     "big-integer": "^1.6.51",
     "bluebird": "^3.7.2",

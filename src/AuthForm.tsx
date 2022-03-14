@@ -1,17 +1,14 @@
 import React, { FormEvent } from 'react'
 import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
-import type { PlatformAPI, LoginCreds, LoginResult } from '@textshq/platform-sdk'
+import type { AuthProps } from '@textshq/platform-sdk'
 
 import { AuthState } from './common-constants'
 
-const TelegramAuth: React.FC<{
-  api: PlatformAPI
-  login: (creds?: LoginCreds) => Promise<LoginResult>
-}> = ({ api, login }) => {
+const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
   const [loading, setLoading] = React.useState(false)
   const [authState, setAuthState] = React.useState(AuthState.PHONE_INPUT)
-  const [phoneNumber, setPhoneNumber] = React.useState('+')
+  const [phoneNumber, setPhoneNumber] = React.useState(meContact?.phoneNumbers?.[0] || '+')
   const [code, setCode] = React.useState('')
   const [password, setPassword] = React.useState('')
   const onSubmit = async (ev?: FormEvent<HTMLFormElement>) => {
