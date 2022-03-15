@@ -210,7 +210,7 @@ export default class TelegramMapper {
         activityType: ActivityType.NONE,
       }
     }
-    return customActivity(`Unsupported activity: ${update.action}`)
+    return customActivity(`(unsupported activity ${update.action.className} ${JSON.stringify(update.action)})`)
   }
 
   getMessageButtons(replyMarkup: Api.TypeReplyMarkup, chatID: bigInt.BigInteger, messageID: number) {
