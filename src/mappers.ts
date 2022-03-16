@@ -2,11 +2,12 @@ import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntit
 import { addSeconds } from 'date-fns'
 import { Api } from 'telegram/tl'
 import type { CustomMessage } from 'telegram/tl/custom/message'
-import { getPeer, getPeerId } from 'telegram/Utils'
+import { getPeerId } from 'telegram/Utils'
 import type bigInt from 'big-integer'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import _ from 'lodash'
 import VCard from 'vcard-creator'
+import type { Entity } from 'telegram/define'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
@@ -633,6 +634,14 @@ export default class TelegramMapper {
     return addSeconds(new Date(), seconds)
   }
 
+  private hasWritePermissions = (entity: Entity) => {
+    const channelWrite = ('adminRights' in entity && entity.adminRights?.postMessages)
+    && ('bannedRights' in entity && !entity.bannedRights?.sendMessages)
+    && ('defaultBannedRights' in entity && !entity.defaultBannedRights?.sendMessages)
+    const userWrite = entity instanceof Api.User || entity instanceof Api.Chat
+    return channelWrite || userWrite
+  }
+
   mapThread = (dialog: Dialog, participants: Participant[]): Thread => {
     if (!dialog.id) throw new Error(`Dialog had no id ${stringifyCircular(dialog.inputEntity, 2)}`)
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
@@ -640,8 +649,7 @@ export default class TelegramMapper {
     const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
     const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
     const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(dialog.id)
-    const { entity } = dialog
-    const isReadOnly = ('adminRights' in entity && entity.adminRights?.postMessages === false) || ('bannedRights' in entity && entity.bannedRights?.sendMessages === false)
+    const isReadOnly = !this.hasWritePermissions(dialog.entity)
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
       id: String(getPeerId(dialog.id)),

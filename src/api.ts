@@ -761,14 +761,15 @@ export default class TelegramAPI implements PlatformAPI {
 
   sendActivityIndicator = async (type: ActivityType, threadID: string) => {
     const action = {
-      [ActivityType.NONE]: new Api.SendMessageCancelAction(),
       [ActivityType.TYPING]: new Api.SendMessageTypingAction(),
       [ActivityType.NONE]: new Api.SendMessageCancelAction(),
       [ActivityType.RECORDING_VOICE]: new Api.SendMessageRecordAudioAction(),
       [ActivityType.RECORDING_VIDEO]: new Api.SendMessageRecordVideoAction(),
     }[type]
     if (!action) return
-    this.client.invoke(new Api.messages.SetTyping({ peer: threadID, topMsgId: +threadID, action }))
+    const peer = await this.client.getInputEntity(threadID)
+    if (!peer || this.dialogs.get(threadID)?.isChannel) return
+    this.client.invoke(new Api.messages.SetTyping({ peer, action }))
   }
 
   deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
