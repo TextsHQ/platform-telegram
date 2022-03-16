@@ -433,7 +433,9 @@ export default class TelegramAPI implements PlatformAPI {
       else if (update instanceof Api.UpdateEditMessage
         || update instanceof Api.UpdateEditChannelMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
-      else texts.log('Update', update.className, stringifyCircular(update))
+      else if (update instanceof Api.UpdateNewMessage) {
+        // already handled
+      } else texts.log('Update', update.className, stringifyCircular(update))
     })
   }
 

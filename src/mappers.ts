@@ -108,12 +108,16 @@ export default class TelegramMapper {
     }
   }
 
-  static mapCallReason(discardReason: Api.TypePhoneCallDiscardReason | undefined) {
-    if (discardReason instanceof Api.PhoneCallDiscardReasonMissed) return 'Missed'
-    if (discardReason instanceof Api.PhoneCallDiscardReasonBusy) return 'Declined'
-    if (discardReason instanceof Api.PhoneCallDiscardReasonDisconnect) return 'Disconnected'
-    if (discardReason instanceof Api.PhoneCallDiscardReasonHangup) return 'Hung up'
-    return ''
+  static mapCallReason(reason: Api.TypePhoneCall | Api.TypePhoneCallDiscardReason) {
+    if (reason instanceof Api.PhoneCallAccepted) return 'Accepted'
+    if (reason instanceof Api.PhoneCallWaiting) return 'Waiting'
+    if (reason instanceof Api.PhoneCallRequested) return 'Requested'
+    if (reason instanceof Api.PhoneCallAccepted) return 'Accepted'
+    if (reason instanceof Api.PhoneCallDiscardReasonMissed) return 'Missed'
+    if (reason instanceof Api.PhoneCallDiscardReasonBusy) return 'Declined'
+    if (reason instanceof Api.PhoneCallDiscardReasonDisconnect) return 'Disconnected'
+    if (reason instanceof Api.PhoneCallDiscardReasonHangup) return 'Hung up'
+    return `Call reason unmapped ${reason}`
   }
 
   static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, chatID: bigInt.BigInteger, messageID: number) {
@@ -472,10 +476,15 @@ export default class TelegramMapper {
 
     const mapMessageService = () => {
       if (msg.action instanceof Api.MessageActionPhoneCall) {
+        const isShortDuration = Number(msg.action.duration) < 3600
+        const startIndexDuration = isShortDuration ? 11 + 4 : 11
+        const endIndexDuration = isShortDuration ? startIndexDuration + 4 : startIndexDuration + 8
         mapped.textHeading = [
           `${msg.action.video ? '🎥 Video ' : '📞 '}Call`,
-          msg.action.duration ? msg.action.duration.toString() : '',
-          TelegramMapper.mapCallReason(msg.action.reason),
+          msg.action.duration ? new Date(msg.action.duration * 1000)
+            .toISOString()
+            .substring(startIndexDuration, endIndexDuration) : '',
+          msg.action.reason ? TelegramMapper.mapCallReason(msg.action.reason) : '',
         ].filter(Boolean).join('\n')
       } else if (msg.action instanceof Api.MessageActionPinMessage) {
         mapped.text = '{{sender}} pinned a message'
