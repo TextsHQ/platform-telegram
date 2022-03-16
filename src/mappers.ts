@@ -159,13 +159,14 @@ export default class TelegramMapper {
   static mapUserAction(update: Api.UpdateUserTyping): UserActivityEvent {
     const threadID = update.userId.toString()
     const participantID = update.userId.toString()
+    const durationMs = 5_000
     const customActivity = (customLabel: string): UserActivityEvent => ({
       type: ServerEventType.USER_ACTIVITY,
       threadID,
       participantID,
       activityType: ActivityType.CUSTOM,
       customLabel,
-      durationMs: 10 * 60_000, // 10 mins
+      durationMs,
     })
     if (update.action instanceof Api.SendMessageTypingAction) {
       return {
@@ -173,7 +174,7 @@ export default class TelegramMapper {
         threadID,
         participantID,
         activityType: ActivityType.TYPING,
-        durationMs: 3 * 60_000, // 3 mins
+        durationMs,
       }
     }
     if (update.action instanceof Api.SendMessageRecordAudioAction) {
@@ -182,7 +183,7 @@ export default class TelegramMapper {
         threadID,
         participantID,
         activityType: ActivityType.RECORDING_VOICE,
-        durationMs: 5 * 60_000, // 5 mins
+        durationMs,
       }
     }
     if (update.action instanceof Api.SendMessageRecordVideoAction) {
@@ -191,7 +192,7 @@ export default class TelegramMapper {
         threadID,
         participantID,
         activityType: ActivityType.RECORDING_VIDEO,
-        durationMs: 10 * 60_000, // 10 mins
+        durationMs,
       }
     }
     if (update.action instanceof Api.SendMessageChooseContactAction) { return customActivity('choosing contact') }
