@@ -628,7 +628,7 @@ export default class TelegramMapper {
     return mapped
   }
 
-  mapMuteFor = (seconds: number) => {
+  mapMuteUntil = (seconds: number) => {
     if (seconds >= MUTED_FOREVER_CONSTANT) return 'forever'
     if (seconds === 0) return
     return addSeconds(new Date(), seconds)
@@ -660,7 +660,7 @@ export default class TelegramMapper {
       isUnread: dialog.unreadCount !== 0,
       isReadOnly,
       lastReadMessageID: (dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId).toString(),
-      mutedUntil: this.mapMuteFor(dialog.dialog.notifySettings.muteUntil ?? 0),
+      mutedUntil: this.mapMuteUntil(dialog.dialog.notifySettings.muteUntil ?? 0),
       imgURL: imgFile,
       title: dialog.title,
       participants: {

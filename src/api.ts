@@ -298,7 +298,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateNotifySettings(update: Api.UpdateNotifySettings) {
-    if (!('peer' in update.peer)) return
+    if (!('peer' in update.peer)) return texts.log('Unknown updateNotifySettings', stringifyCircular(update, 2))
+    const mutedForever = update.notifySettings.silent ? 'forever' : 0
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       objectIDs: {},
@@ -306,9 +307,22 @@ export default class TelegramAPI implements PlatformAPI {
       objectName: 'thread',
       entries: [{
         id: getPeerId(update.peer.peer).toString(),
-        mutedUntil: new Date(update.notifySettings.muteUntil ?? 0),
+        mutedUntil: mutedForever || this.mapper.mapMuteUntil(update.notifySettings.muteUntil),
       }],
     }])
+  }
+
+  private onUpdateFolderPeer(update: Api.UpdateFolderPeers) {
+    this.onEvent(update.folderPeers.map(f => ({
+      type: ServerEventType.STATE_SYNC,
+      objectIDs: {},
+      mutationType: 'update',
+      objectName: 'thread',
+      entries: [{
+        id: getPeerId(f.peer).toString(),
+        isArchived: f.folderId === 1,
+      }],
+    })))
   }
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages) {
@@ -433,6 +447,7 @@ export default class TelegramAPI implements PlatformAPI {
       else if (update instanceof Api.UpdateEditMessage
         || update instanceof Api.UpdateEditChannelMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
+      else if (update instanceof Api.UpdateFolderPeers) await this.onUpdateFolderPeer(update)
       else if (update instanceof Api.UpdateNewMessage) {
         // already handled
       } else texts.log('Update', update.className, stringifyCircular(update))
