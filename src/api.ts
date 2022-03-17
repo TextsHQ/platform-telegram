@@ -248,8 +248,6 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
-    if (!message.chatId) return
-    if (!message.senderId) return
     this.emitMessage(message)
   }
 
@@ -260,6 +258,7 @@ export default class TelegramAPI implements PlatformAPI {
       : []
 
     const thread = this.mapper.mapThread(dialog, participants)
+    this.dialogs.set(thread.id, dialog)
 
     // has to run once thread is included
     // not best way but simplest place to put this for now
@@ -268,33 +267,32 @@ export default class TelegramAPI implements PlatformAPI {
     return thread
   }
 
-  private onUpdateChat = async (update: Api.UpdateChat) => {
-    const chat = await this.client._getInputDialog(update.chatId)
-    const thread = await this.mapThread(chat)
-    const event: ServerEvent = {
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'upsert',
-      objectName: 'thread',
-      objectIDs: {},
-      entries: [thread],
+  private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
+    const id = (update instanceof Api.UpdateChat ? update.chatId
+      : update instanceof Api.UpdateChannel ? update.channelId
+        : update.participants.chatId).toString()
+    for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
+      if (dialog.entity.id.toString() === id) {
+        const thread = await this.mapThread(dialog)
+        const event: ServerEvent = {
+          type: ServerEventType.STATE_SYNC,
+          mutationType: 'upsert',
+          objectName: 'thread',
+          objectIDs: {},
+          entries: [thread],
+        }
+        this.onEvent([event])
+      }
     }
-    this.onEvent([event])
+    return false
   }
 
-  private onUpdateChatParticipant(update: Api.UpdateChatParticipant) {
+  private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
+    const id = update instanceof Api.UpdateChatParticipant ? update.chatId : update.channelId
     if (update.prevParticipant) {
-      const chatId = update.chatId.toString()
-      this.emitDeleteThread(chatId)
+      this.emitDeleteThread(id.toString())
     }
-    if (update.newParticipant) this.emitParticipantFromMessage(update.chatId, update.userId)
-  }
-
-  private onUpdateChannelParticipant(update: Api.UpdateChannelParticipant) {
-    if (update.prevParticipant) {
-      const chatId = update.channelId.toString()
-      this.emitDeleteThread(chatId)
-    }
-    if (update.newParticipant) this.emitParticipantFromMessage(update.channelId, update.userId)
+    if (update.newParticipant) this.emitParticipantFromMessage(id, update.userId)
   }
 
   private onUpdateNotifySettings(update: Api.UpdateNotifySettings) {
@@ -325,7 +323,7 @@ export default class TelegramAPI implements PlatformAPI {
     })))
   }
 
-  private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages) {
+  private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages | Api.UpdateDeleteChannelMessages | Api.UpdateDeleteScheduledMessages) {
     if (!update.messages?.length) return
     const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))
     if (!threadID) return
@@ -342,7 +340,7 @@ export default class TelegramAPI implements PlatformAPI {
     ])
   }
 
-  private onUpdateUserTyping(update: Api.UpdateUserTyping) {
+  private onUpdateUserTyping(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping) {
     const event = TelegramMapper.mapUserAction(update)
     if (event) this.onEvent([event])
   }
@@ -416,7 +414,7 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents) => {
+  private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents | Api.UpdateChannelReadMessagesContents) => {
     const messageID = String(update.messages[0])
     const res = await this.client.getMessages(undefined, { ids: update.messages })
     const entries = this.mapper.mapMessages(res)
@@ -434,21 +432,27 @@ export default class TelegramAPI implements PlatformAPI {
   private registerUpdateListeners() {
     this.client.addEventHandler(this.onUpdateNewMessage, new NewMessage({}))
     this.client.addEventHandler(async (update: Api.TypeUpdate) => {
-      if (update instanceof Api.UpdateChat) await this.onUpdateChat(update)
-      else if (update instanceof Api.ChatParticipant) this.onUpdateChatParticipant(update)
-      else if (update instanceof Api.ChannelParticipant) this.onUpdateChannelParticipant(update)
+      if (update instanceof Api.UpdateChat
+        || update instanceof Api.UpdateChannel
+        || update instanceof Api.UpdateChatParticipants) await this.onUpdateChatChannel(update)
+      else if (update instanceof Api.ChatParticipant || update instanceof Api.UpdateChannelParticipant) this.onUpdateChatChannelParticipant(update)
       else if (update instanceof Api.UpdateNotifySettings) this.onUpdateNotifySettings(update)
-      else if (update instanceof Api.UpdateDeleteMessages) this.onUpdateDeleteMessages(update)
-      else if (update instanceof Api.UpdateUserTyping) this.onUpdateUserTyping(update)
+      else if (update instanceof Api.UpdateDeleteMessages
+        || update instanceof Api.UpdateDeleteChannelMessages
+        || update instanceof Api.UpdateDeleteScheduledMessages) this.onUpdateDeleteMessages(update)
+      else if (update instanceof Api.UpdateUserTyping
+        || update instanceof Api.UpdateChatUserTyping
+        || update instanceof Api.UpdateChannelUserTyping) this.onUpdateUserTyping(update)
       else if (update instanceof Api.UpdateDialogUnreadMark) this.onUpdateDialogUnreadMark(update)
       else if (update instanceof Api.UpdateReadHistoryInbox) this.onUpdateReadHistoryInbox(update)
       else if (update instanceof Api.UpdateReadHistoryOutbox) this.onUpdateReadHistoryOutbox(update)
       else if (update instanceof Api.UpdateUserStatus) this.onUpdateUserStatus(update)
       else if (update instanceof Api.UpdateEditMessage
         || update instanceof Api.UpdateEditChannelMessage) await this.onUpdateEditMessage(update)
-      else if (update instanceof Api.UpdateReadMessagesContents) await this.onUpdateReadMessagesContents(update)
-      else if (update instanceof Api.UpdateFolderPeers) await this.onUpdateFolderPeer(update)
-      else if (update instanceof Api.UpdateNewMessage) {
+      else if (update instanceof Api.UpdateReadMessagesContents
+        || update instanceof Api.UpdateChannelReadMessagesContents) await this.onUpdateReadMessagesContents(update)
+      else if (update instanceof Api.UpdateFolderPeers) this.onUpdateFolderPeer(update)
+      else if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
         // already handled
       } else texts.log('Update', update.className, stringifyCircular(update))
     })
@@ -678,7 +682,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getThread = async (threadID: string) => {
-    const dialogThread = this.dialogs[threadID]
+    const dialogThread = this.dialogs.get(threadID)
     if (!dialogThread) return
     return this.mapThread(dialogThread)
   }
@@ -695,7 +699,6 @@ export default class TelegramAPI implements PlatformAPI {
       for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
         if (!dialog) continue
         if (!dialog.id) continue
-        this.dialogs[dialog.id.toString()] = dialog
         threads.push(await this.mapThread(dialog))
         lastDate = dialog.message?.date ?? lastDate
       }

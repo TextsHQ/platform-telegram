@@ -161,10 +161,12 @@ export default class TelegramMapper {
     }
   }
 
-  static mapUserAction(update: Api.UpdateUserTyping): UserActivityEvent {
-    const threadID = update.userId.toString()
-    const participantID = update.userId.toString()
-    const durationMs = 5_000
+  static mapUserAction(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping): UserActivityEvent {
+    const [threadID, participantID] = (update instanceof Api.UpdateUserTyping
+      ? [update.userId, update.userId] : update instanceof Api.UpdateChatUserTyping
+        ? [update.chatId, update.fromId] : [update.channelId, update.fromId]).map(toString)
+
+    const durationMs = 10_000
     const customActivity = (customLabel: string): UserActivityEvent => ({
       type: ServerEventType.USER_ACTIVITY,
       threadID,
