@@ -233,6 +233,7 @@ export default class TelegramAPI implements PlatformAPI {
   private emitMessage = (message: Api.Message) => {
     const threadID = message.chatId.toString()
     const mappedMessage = this.mapper.mapMessage(message)
+    if (!mappedMessage) return
     this.emitParticipantFromMessage(message.chatId, message.senderId)
     if (!mappedMessage) return
     const event: ServerEvent = {

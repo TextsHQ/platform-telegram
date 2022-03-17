@@ -478,6 +478,7 @@ export default class TelegramMapper {
     }
 
     const mapMessageService = () => {
+      const sender = mapped.senderID === '$thread' && msg.fromId && 'userId' in msg.fromId ? `{{${msg.fromId.userId}}}` : '{{sender}}'
       if (msg.action instanceof Api.MessageActionPhoneCall) {
         const isShortDuration = Number(msg.action.duration) < 3600
         const startIndexDuration = isShortDuration ? 11 + 4 : 11
@@ -490,15 +491,15 @@ export default class TelegramMapper {
           msg.action.reason ? TelegramMapper.mapCallReason(msg.action.reason) : '',
         ].filter(Boolean).join('\n')
       } else if (msg.action instanceof Api.MessageActionPinMessage) {
-        mapped.text = '{{sender}} pinned a message'
+        mapped.text = `${sender} pinned a message`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionContactSignUp) {
-        mapped.text = '{{sender}} joined Telegram'
+        mapped.text = `${sender} joined Telegram`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionChatEditTitle) {
-        mapped.text = `{{sender}} changed the thread title to "${msg.action.title}"`
+        mapped.text = `${sender} changed the thread title to "${msg.action.title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -516,7 +517,7 @@ export default class TelegramMapper {
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatDeleteUser) {
-        mapped.text = `{{${msg.action.userId}}} left the group`
+        mapped.text = `${sender} left the group`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -525,25 +526,24 @@ export default class TelegramMapper {
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
-        if (!('userId' in msg.fromId)) return undefined
-        mapped.text = `{{${msg.fromId.userId}}} joined the group via invite link`
+        mapped.text = `${sender} joined the group via invite link`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
           type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: [msg.fromId.userId.toString()],
+          participantIDs: [sender],
           actorParticipantID: '',
         }
-      } else if (msg.action instanceof Api.ChannelAdminLogEventActionChangePhoto) {
-        mapped.text = '{{sender}} updated the group photo'
+      } else if (msg.action instanceof Api.MessageActionChatEditPhoto) {
+        mapped.text = `${sender} updated the group photo`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
           type: MessageActionType.THREAD_IMG_CHANGED,
-          actorParticipantID: mapped.senderID,
+          actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatDeletePhoto) {
-        mapped.text = '{{sender}} deleted the group photo'
+        mapped.text = `${sender}} deleted the group photo`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -552,7 +552,7 @@ export default class TelegramMapper {
         }
       } else if (msg.action instanceof Api.MessageActionChatCreate || msg.action instanceof Api.MessageActionChannelCreate) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `{{sender}} created the group "${title}"`
+        mapped.text = `${sender} created the group "${title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -562,7 +562,7 @@ export default class TelegramMapper {
         }
       } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `{{sender}} migrated the group "${title}"`
+        mapped.text = `${sender} migrated the group "${title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionCustomAction) {
@@ -578,6 +578,7 @@ export default class TelegramMapper {
       } else {
         mapped.textHeading = `Unsupported Telegram message ${msg.media?.className} ${msg.action?.className}`
       }
+      return true
     }
 
     if (msg.text) {
@@ -595,7 +596,7 @@ export default class TelegramMapper {
     }
 
     if (msg instanceof Api.MessageService) {
-      mapMessageService()
+      if (!mapMessageService()) return undefined
     }
 
     if (msg.geo instanceof Api.GeoPoint) {
@@ -677,5 +678,5 @@ export default class TelegramMapper {
     return t
   }
 
-  mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).filter(Boolean).map(m => this.mapMessage(m))
+  mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m)).filter(Boolean)
 }
