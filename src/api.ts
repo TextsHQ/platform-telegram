@@ -762,7 +762,7 @@ export default class TelegramAPI implements PlatformAPI {
   forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[]): Promise<boolean> => {
     if (!threadIDs) return false
     const resArr = await Promise.all(threadIDs.map(async toThreadID => {
-      const res = await this.client.forwardMessages(threadID, { messages: +messageID, fromPeer: toThreadID })
+      const res = await this.client.forwardMessages(toThreadID, { messages: +messageID, fromPeer: threadID })
       return res.length
     }))
     return resArr.every(Boolean)
