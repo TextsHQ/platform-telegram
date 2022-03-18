@@ -257,6 +257,7 @@ export default class TelegramAPI implements PlatformAPI {
       : []
 
     const thread = this.mapper.mapThread(dialog, participants)
+    if (dialog.message) this.storeMessage(dialog.message)
     this.dialogs.set(thread.id, dialog)
 
     // has to run once thread is included
