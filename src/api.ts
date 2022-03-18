@@ -698,7 +698,7 @@ export default class TelegramAPI implements PlatformAPI {
     return {
       items: threads,
       oldestCursor: this.client.connected ? (lastDate.toString() ?? '*') : cursor,
-      hasMore: lastDate !== 0 && this.client.connected,
+      hasMore: lastDate !== 0 || !this.client.connected,
     }
   }
 
@@ -731,7 +731,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     return {
       items: this.mapper.mapMessages(messages),
-      hasMore: messages.length !== 0 && this.client.connected,
+      hasMore: messages.length !== 0 || !this.client.connected,
     }
   }
 
