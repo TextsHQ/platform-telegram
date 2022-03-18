@@ -3,8 +3,7 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-// eslint-disable-next-line
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User, Awaitable } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { TelegramClient } from 'telegram'
@@ -477,8 +476,9 @@ export default class TelegramAPI implements PlatformAPI {
     try {
       await fsp.rm(mediaDir, { recursive: true })
       await fsp.rm(photosDir, { recursive: true })
-      // eslint-disable-next-line no-empty
-    } catch { }
+    } catch {
+      // ignore
+    }
   }
 
   private afterLogin = async () => {
@@ -861,7 +861,7 @@ export default class TelegramAPI implements PlatformAPI {
     }))
   }
 
-  removeReaction = async (threadID: string, messageID: string, reactionKey: string) => {
+  removeReaction = async (threadID: string, messageID: string) => {
     await this.client.invoke(new Api.messages.SendReaction({
       msgId: Number(messageID),
       peer: threadID,

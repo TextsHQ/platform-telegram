@@ -1,13 +1,15 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, texts, Participant } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, Participant } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
-import { Api } from 'telegram/tl'
-import type { CustomMessage } from 'telegram/tl/custom/message'
-import { getPeerId } from 'telegram/Utils'
-import type bigInt from 'big-integer'
-import type { Dialog } from 'telegram/tl/custom/dialog'
-import _ from 'lodash'
+import { range } from 'lodash'
 import VCard from 'vcard-creator'
+import { getPeerId } from 'telegram/Utils'
+import { Api } from 'telegram/tl'
+
+import type bigInt from 'big-integer'
+import type { CustomMessage } from 'telegram/tl/custom/message'
+import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { Entity } from 'telegram/define'
+
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
@@ -311,7 +313,7 @@ export default class TelegramMapper {
             reactionKey: r.reaction.replace('❤', '❤️'),
           })) ?? []
         const mappedReactionResults: MessageReaction[] = reactions.results?.flatMap(r => {
-          const reactionResult = _.range(r.count).map(c =>
+          const reactionResult = range(r.count).map(c =>
           // we don't really have access to id here
             ({
               id: `${c}${r.reaction}`,

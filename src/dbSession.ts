@@ -8,7 +8,6 @@ import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { texts } from '@textshq/platform-sdk'
 import { promises as fsp } from 'fs'
 import { dirname } from 'path'
-// eslint-disable-next-line import/no-extraneous-dependencies
 import Database, { Statement } from 'better-sqlite3'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
