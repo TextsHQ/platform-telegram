@@ -483,7 +483,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private afterLogin = async () => {
     // await this.emptyAssets()
-    this.createAssetsDir()
+    await this.createAssetsDir()
     this.me = this.me || await this.client.getMe() as Api.User
     this.mapper = new TelegramMapper(this.accountInfo, this.me)
     this.meMapped = this.mapper.mapUser(this.me)
@@ -582,25 +582,15 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(dialog.id, mappedMembers)
   }
 
-  private saveAsset = async (buffer: Buffer, assetType: 'media' | 'photos', filename: string) => {
-    const filePath = path.join(this.accountInfo.dataDirPath, assetType, filename)
-    await fsp.writeFile(filePath, buffer)
-    return url.pathToFileURL(filePath).href
-  }
+  private getAssetPath = (assetType: 'media' | 'photos', id: string | number) =>
+    path.join(this.accountInfo.dataDirPath, assetType, id.toString())
 
-  private getAssetPath = async (assetType: 'media' | 'photos', id: string | number) => {
-    const filePath = path.join(this.accountInfo.dataDirPath, assetType, id.toString())
-    return await fileExists(filePath) ? url.pathToFileURL(filePath).href : undefined
-  }
-
-  private createAssetsDir = () => {
+  private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
     const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
 
-    // doing it this way so there isn't a lot of try/catch
-    fsp.access(this.accountInfo.dataDirPath).catch(() => (fsp.mkdir(this.accountInfo.dataDirPath)).catch())
-    fsp.access(mediaDir).catch(() => (fsp.mkdir(mediaDir)).catch())
-    fsp.access(photosDir).catch(() => (fsp.mkdir(photosDir)).catch())
+    await fsp.mkdir(mediaDir, { recursive: true })
+    await fsp.mkdir(photosDir, { recursive: true })
   }
 
   private deleteAssetsDir = async () => {
@@ -821,39 +811,29 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getAsset = async (_, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
-    if (type !== 'media' && type !== 'photos') {
-      texts.log(`Unknown media type ${type}`)
-      return
+    if (!['media', 'photos'].includes(type)) {
+      throw new Error(`Unknown media type ${type}`)
     }
-    const filePath = await this.getAssetPath(type, assetId)
-    if (filePath) {
-      return filePath
-    }
-
-    let buffer: Buffer
-    try {
+    const filePath = this.getAssetPath(type, assetId)
+    if (!await fileExists(filePath)) {
+      let buffer: Buffer
       if (type === 'media') {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
-          this.messageMediaStore.delete(+messageId)
           buffer = await this.client.downloadMedia(media, { workers: 4 })
+          this.messageMediaStore.delete(+messageId)
+        } else {
+          throw Error('message media not found')
         }
       } else if (type === 'photos') {
         buffer = await this.client.downloadProfilePhoto(assetId, {})
-      } else {
-        if (IS_DEV) console.log(`Not a valid media type: ${type}`)
-        return
       }
-      if (buffer) {
-        return await this.saveAsset(buffer, type, assetId)
-      }
-    } catch (e) {
-      texts.log('err', e, JSON.stringify(e, null, 4))
-      texts.Sentry.captureException(e)
+      // tgs stickers only appear to work on thread refresh
+      // only happens first time
+      if (buffer) await fsp.writeFile(filePath, buffer)
+      else throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${messageId}/${extra}`)
     }
-    // tgs stickers only appear to work on thread refresh
-    // only happens first time
-    texts.log(`No buffer or path for media ${type}/${assetId}/${messageId}/${extra}`)
+    return url.pathToFileURL(filePath).href
   }
 
   handleDeepLink = async (link: string) => {
