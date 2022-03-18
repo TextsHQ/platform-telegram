@@ -4,6 +4,7 @@ import { Airgram } from 'airgram'
 import path from 'path'
 import { Api, TelegramClient } from 'telegram'
 import os from 'os'
+import fs from 'fs/promises'
 import { API_ID, API_HASH, tdlibPath } from './constants'
 import type { DbSession } from './dbSession'
 
@@ -52,13 +53,15 @@ export class AirgramMigration {
     throw new ReAuthError()
   }
 
-  migrateAirgramSession = async (newClient: TelegramClient, dbSession: DbSession) => {
+  migrateAirgramSession = async (dataDirPath: string, newClient: TelegramClient, dbSession: DbSession) => {
     const done = async () => {
       texts.log('[airgram migration] success')
       dbSession.save()
       await this.airgramConn.api.logOut()
       await this.airgramConn.api.close()
       await this.airgramConn.destroy()
+      await fs.rm(path.join(dataDirPath, 'db'), { recursive: true }).catch()
+      await fs.rm(path.join(dataDirPath, 'files'), { recursive: true }).catch()
     }
     try {
       const qrToken = await newClient.invoke(new Api.auth.ExportLoginToken({

@@ -103,7 +103,7 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.connect()
 
     if (this.airgramMigration) {
-      await this.airgramMigration.migrateAirgramSession(this.client, this.dbSession)
+      await this.airgramMigration.migrateAirgramSession(this.accountInfo.dataDirPath, this.client, this.dbSession)
       this.onEvent([
         {
           type: ServerEventType.SESSION_UPDATED,
