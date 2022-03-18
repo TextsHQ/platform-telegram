@@ -880,4 +880,12 @@ export default class TelegramAPI implements PlatformAPI {
       reaction: REACTIONS[reactionKey].render,
     }))
   }
+
+  removeReaction = async (threadID: string, messageID: string, reactionKey: string) => {
+    await this.client.invoke(new Api.messages.SendReaction({
+      msgId: Number(messageID),
+      peer: threadID,
+      reaction: '',
+    }))
+  }
 }
