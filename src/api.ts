@@ -96,7 +96,6 @@ export default class TelegramAPI implements PlatformAPI {
       retryDelay: 5000,
       autoReconnect: true,
       connectionRetries: Infinity,
-      maxConcurrentDownloads: 4,
     })
 
     await this.client.connect()
@@ -820,7 +819,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (type === 'media') {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
-          buffer = await this.client.downloadMedia(media, { workers: 4 })
+          buffer = await this.client.downloadMedia(media, { workers: 16 })
           this.messageMediaStore.delete(+messageId)
         } else {
           throw Error('message media not found')
