@@ -622,9 +622,15 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   createThread = async (userIDs: string[], title?: string) => {
-    if (userIDs.length === 0) return false
-    if (!title) return false
-    await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
+    if (userIDs.length === 0) throw Error('userIDs empty')
+    if (userIDs.length === 1) {
+      // const entity = await this.client.getEntity(+userIDs[0])
+      // TODO
+      throw Error('not implemented')
+    } else {
+      if (!title) throw Error('title required')
+      await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
+    }
     return true
   }
 
