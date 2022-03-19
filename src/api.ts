@@ -506,14 +506,6 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  private getUserById = async (userId: number | string) => {
-    if (!userId) return
-    const user = this.client.getInputEntity(userId)
-    if (user instanceof Api.User) {
-      return this.mapper.mapUser(user)
-    }
-  }
-
   private upsertParticipants(dialogId: BigInteger.BigInteger, entries: Participant[]) {
     const threadID = dialogId.toString()
     const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
@@ -622,12 +614,11 @@ export default class TelegramAPI implements PlatformAPI {
   serializeSession = () => this.sessionName
 
   searchUsers = async (query: string) => {
-    const res = await this.client.invoke(new Api.contacts.Search({
-      q: query,
-    }))
-    const userIds = res.users.map(user => user.id.toString())
-    return Promise.all(userIds.map(async userId =>
-      this.getUserById(userId)))
+    const res = await this.client.invoke(new Api.contacts.Search({ q: query }))
+    const users = res.users
+      .map(user => user instanceof Api.User && this.mapper.mapUser(user))
+      .filter(Boolean)
+    return users
   }
 
   createThread = async (userIDs: string[], title?: string) => {
