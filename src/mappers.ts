@@ -209,6 +209,9 @@ export default class TelegramMapper {
     if (update.action instanceof Api.SendMessageChooseContactAction) { return customActivity('choosing contact') }
     if (update.action instanceof Api.SendMessageGeoLocationAction) { return customActivity('choosing location') }
     if (update.action instanceof Api.SendMessageGamePlayAction) return customActivity('playing a game')
+    if (update.action instanceof Api.SendMessageRecordRoundAction) return customActivity('recording a round video')
+    if (update.action instanceof Api.SendMessageUploadRoundAction) return customActivity('uploading a round video')
+    if (update.action instanceof Api.SendMessageHistoryImportAction) return customActivity('importing chat history')
     if (update.action instanceof Api.SendMessageUploadDocumentAction) return customActivity('uploading a document' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
     if (update.action instanceof Api.SendMessageUploadPhotoAction) return customActivity('uploading a photo' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
     if (update.action instanceof Api.SendMessageUploadVideoAction) return customActivity('uploading a video' + (update.action.progress ? ` (${update.action.progress}%)` : ''))
@@ -226,7 +229,7 @@ export default class TelegramMapper {
         activityType: ActivityType.NONE,
       }
     }
-    return customActivity(`(unsupported activity ${update.action.className} ${JSON.stringify(update.action)})`)
+    console.log('unsupported activity', update.action.className, update.action)
   }
 
   getMessageButtons(replyMarkup: Api.TypeReplyMarkup, chatID: bigInt.BigInteger, messageID: number) {
