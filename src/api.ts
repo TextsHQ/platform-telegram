@@ -295,34 +295,6 @@ export default class TelegramAPI implements PlatformAPI {
     if (update.newParticipant) this.emitParticipantFromMessage(id, update.userId)
   }
 
-  private onUpdateNotifySettings(update: Api.UpdateNotifySettings) {
-    if (!('peer' in update.peer)) return texts.log('Unknown updateNotifySettings', stringifyCircular(update, 2))
-    const mutedForever = update.notifySettings.silent ? 'forever' : 0
-    this.onEvent([{
-      type: ServerEventType.STATE_SYNC,
-      objectIDs: {},
-      mutationType: 'update',
-      objectName: 'thread',
-      entries: [{
-        id: getPeerId(update.peer.peer).toString(),
-        mutedUntil: mutedForever || this.mapper.mapMuteUntil(update.notifySettings.muteUntil),
-      }],
-    }])
-  }
-
-  private onUpdateFolderPeer(update: Api.UpdateFolderPeers) {
-    this.onEvent(update.folderPeers.map(f => ({
-      type: ServerEventType.STATE_SYNC,
-      objectIDs: {},
-      mutationType: 'update',
-      objectName: 'thread',
-      entries: [{
-        id: getPeerId(f.peer).toString(),
-        isArchived: f.folderId === 1,
-      }],
-    })))
-  }
-
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages | Api.UpdateDeleteChannelMessages | Api.UpdateDeleteScheduledMessages) {
     if (!update.messages?.length) return
     const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))
@@ -338,80 +310,6 @@ export default class TelegramAPI implements PlatformAPI {
         entries: update.messages.map(id => id.toString()),
       },
     ])
-  }
-
-  private onUpdateUserTyping(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping) {
-    const event = TelegramMapper.mapUserAction(update)
-    if (event) this.onEvent([event])
-  }
-
-  private onUpdateDialogUnreadMark(update: Api.UpdateDialogUnreadMark) {
-    if (!(update.peer instanceof Api.DialogPeer)) return
-    const threadID = getPeerId(update.peer.peer)
-    this.onEvent([{
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'update',
-      objectName: 'thread',
-      objectIDs: {},
-      entries: [
-        {
-          id: threadID,
-          isUnread: update.unread,
-        },
-      ],
-    }])
-  }
-
-  private onUpdateReadHistoryInbox(update: Api.UpdateReadHistoryInbox) {
-    const threadID = getPeerId(update.peer)
-    this.onEvent([{
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'update',
-      objectName: 'thread',
-      objectIDs: {},
-      entries: [
-        {
-          id: threadID,
-          isUnread: update.stillUnreadCount > 0,
-        },
-      ],
-    }])
-  }
-
-  private onUpdateReadHistoryOutbox(update: Api.UpdateReadHistoryOutbox) {
-    const threadID = getPeerId(update.peer)
-    const messageID = update.maxId.toString()
-    const event: StateSyncEvent = {
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'update',
-      objectName: 'message',
-      objectIDs: { threadID, messageID },
-      entries: [
-        {
-          id: messageID,
-          seen: true,
-        },
-      ],
-    }
-    this.onEvent([event])
-  }
-
-  private onUpdateUserStatus(update: Api.UpdateUserStatus) {
-    this.onEvent([TelegramMapper.mapUserPresence(update.userId, update.status)])
-  }
-
-  private async onUpdateEditMessage(update: Api.UpdateEditMessage | Api.UpdateEditChannelMessage) {
-    if (update.message instanceof Api.MessageEmpty) return
-    const threadID = getPeerId(update.message.peerId).toString()
-    const updatedMessage = this.mapper.mapMessage(update.message)
-    if (!updatedMessage) return
-    this.onEvent([{
-      type: ServerEventType.STATE_SYNC,
-      mutationType: 'update',
-      objectName: 'message',
-      objectIDs: { threadID, messageID: update.message.id.toString() },
-      entries: [updatedMessage],
-    }])
   }
 
   private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents | Api.UpdateChannelReadMessagesContents) => {
@@ -436,25 +334,13 @@ export default class TelegramAPI implements PlatformAPI {
         || update instanceof Api.UpdateChannel
         || update instanceof Api.UpdateChatParticipants) await this.onUpdateChatChannel(update)
       else if (update instanceof Api.ChatParticipant || update instanceof Api.UpdateChannelParticipant) this.onUpdateChatChannelParticipant(update)
-      else if (update instanceof Api.UpdateNotifySettings) this.onUpdateNotifySettings(update)
       else if (update instanceof Api.UpdateDeleteMessages
         || update instanceof Api.UpdateDeleteChannelMessages
         || update instanceof Api.UpdateDeleteScheduledMessages) this.onUpdateDeleteMessages(update)
-      else if (update instanceof Api.UpdateUserTyping
-        || update instanceof Api.UpdateChatUserTyping
-        || update instanceof Api.UpdateChannelUserTyping) this.onUpdateUserTyping(update)
-      else if (update instanceof Api.UpdateDialogUnreadMark) this.onUpdateDialogUnreadMark(update)
-      else if (update instanceof Api.UpdateReadHistoryInbox) this.onUpdateReadHistoryInbox(update)
-      else if (update instanceof Api.UpdateReadHistoryOutbox) this.onUpdateReadHistoryOutbox(update)
-      else if (update instanceof Api.UpdateUserStatus) this.onUpdateUserStatus(update)
-      else if (update instanceof Api.UpdateEditMessage
-        || update instanceof Api.UpdateEditChannelMessage) await this.onUpdateEditMessage(update)
       else if (update instanceof Api.UpdateReadMessagesContents
         || update instanceof Api.UpdateChannelReadMessagesContents) await this.onUpdateReadMessagesContents(update)
-      else if (update instanceof Api.UpdateFolderPeers) this.onUpdateFolderPeer(update)
-      else if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
-        // already handled
-      } else texts.log('Update', update.className, stringifyCircular(update))
+      const events = this.mapper.mapUpdate(update)
+      if (events.length) this.onEvent(events)
     })
   }
 

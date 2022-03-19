@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, Participant } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, Participant, ServerEvent, texts } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -683,4 +683,108 @@ export default class TelegramMapper {
   }
 
   mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m)).filter(Boolean)
+
+  mapUpdate = (update: Api.TypeUpdate): ServerEvent[] => {
+    if (update instanceof Api.UpdateNotifySettings) {
+      if (!('peer' in update.peer)) {
+        texts.log('Unknown updateNotifySettings', stringifyCircular(update, 2))
+        return []
+      }
+      const mutedForever = update.notifySettings.silent ? 'forever' : 0
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        objectIDs: {},
+        mutationType: 'update',
+        objectName: 'thread',
+        entries: [{
+          id: getPeerId(update.peer.peer).toString(),
+          mutedUntil: mutedForever || this.mapMuteUntil(update.notifySettings.muteUntil),
+        }],
+      }]
+    }
+    if (update instanceof Api.UpdateFolderPeers) {
+      return update.folderPeers.map<ServerEvent>(f => ({
+        type: ServerEventType.STATE_SYNC,
+        objectIDs: {},
+        mutationType: 'update',
+        objectName: 'thread',
+        entries: [{
+          id: getPeerId(f.peer).toString(),
+          isArchived: f.folderId === 1,
+        }],
+      }))
+    }
+    if (update instanceof Api.UpdateDialogUnreadMark) {
+      if (!(update.peer instanceof Api.DialogPeer)) return []
+      const threadID = getPeerId(update.peer.peer)
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'thread',
+        objectIDs: {},
+        entries: [
+          {
+            id: threadID,
+            isUnread: update.unread,
+          },
+        ],
+      }]
+    }
+    if (update instanceof Api.UpdateReadHistoryInbox) {
+      const threadID = getPeerId(update.peer)
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'thread',
+        objectIDs: {},
+        entries: [
+          {
+            id: threadID,
+            isUnread: update.stillUnreadCount > 0,
+          },
+        ],
+      }]
+    }
+    if (update instanceof Api.UpdateReadHistoryOutbox) {
+      const threadID = getPeerId(update.peer)
+      const messageID = update.maxId.toString()
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID, messageID },
+        entries: [
+          {
+            id: messageID,
+            seen: true,
+          },
+        ],
+      }]
+    }
+    if (update instanceof Api.UpdateUserTyping || update instanceof Api.UpdateChatUserTyping || update instanceof Api.UpdateChannelUserTyping) {
+      return [TelegramMapper.mapUserAction(update)]
+    }
+    if (update instanceof Api.UpdateUserStatus) {
+      return [TelegramMapper.mapUserPresence(update.userId, update.status)]
+    }
+    if (update instanceof Api.UpdateEditMessage || update instanceof Api.UpdateEditChannelMessage) {
+      if (update.message instanceof Api.MessageEmpty) return []
+      const threadID = getPeerId(update.message.peerId).toString()
+      const updatedMessage = this.mapMessage(update.message)
+      if (!updatedMessage) return
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID, messageID: update.message.id.toString() },
+        entries: [updatedMessage],
+      }]
+    }
+    if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
+      // already handled
+    } else {
+      texts.log('Unmapped update', update.className, stringifyCircular(update))
+    }
+    return []
+  }
 }
