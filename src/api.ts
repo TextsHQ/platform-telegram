@@ -329,7 +329,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private registerUpdateListeners() {
     this.client.addEventHandler(this.onUpdateNewMessage, new NewMessage({}))
-    this.client.addEventHandler(async (update: Api.TypeUpdate) => {
+    this.client.addEventHandler(async (update: Api.TypeUpdate | Api.TypeUpdates) => {
       if (update instanceof Api.UpdateChat
         || update instanceof Api.UpdateChannel
         || update instanceof Api.UpdateChatParticipants) await this.onUpdateChatChannel(update)

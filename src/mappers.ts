@@ -684,7 +684,7 @@ export default class TelegramMapper {
 
   mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m)).filter(Boolean)
 
-  mapUpdate = (update: Api.TypeUpdate): ServerEvent[] => {
+  mapUpdate = (update: Api.TypeUpdate | Api.TypeUpdates): ServerEvent[] => {
     if (update instanceof Api.UpdateNotifySettings) {
       if (!('peer' in update.peer)) {
         texts.log('Unknown updateNotifySettings', stringifyCircular(update, 2))
@@ -752,13 +752,11 @@ export default class TelegramMapper {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
         objectName: 'message',
-        objectIDs: { threadID, messageID },
-        entries: [
-          {
-            id: messageID,
-            seen: true,
-          },
-        ],
+        objectIDs: { threadID },
+        entries: [{
+          id: messageID,
+          seen: true,
+        }],
       }]
     }
     if (update instanceof Api.UpdateUserTyping || update instanceof Api.UpdateChatUserTyping || update instanceof Api.UpdateChannelUserTyping) {
@@ -776,8 +774,22 @@ export default class TelegramMapper {
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
         objectName: 'message',
-        objectIDs: { threadID, messageID: update.message.id.toString() },
+        objectIDs: { threadID },
         entries: [updatedMessage],
+      }]
+    }
+    if (update instanceof Api.UpdateShortMessage || update instanceof Api.UpdateShortChatMessage) {
+      const threadID = getPeerId('userId' in update ? update.userId : update.chatId).toString()
+      // TODO: review if all props are present
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID },
+        entries: [{
+          id: update.id.toString(),
+          text: update.message,
+        }],
       }]
     }
     if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
