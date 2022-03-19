@@ -6,11 +6,11 @@ import url from 'url'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
+import bluebird from 'bluebird'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
-import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 
@@ -18,7 +18,7 @@ import type { SendMessageParams } from 'telegram/client/messages'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
-import { fileExists, stringifyCircular } from './util'
+import { fileExists } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './AirgramMigration'
 
@@ -475,6 +475,12 @@ export default class TelegramAPI implements PlatformAPI {
     await fsp.rm(this.accountInfo.dataDirPath, { recursive: true })
   }
 
+  private waitForClientConnected = async () => {
+    while (!this.client.connected) {
+      await bluebird.delay(50)
+    }
+  }
+
   logout = async () => {
     await this.deleteAssetsDir()
   }
@@ -563,25 +569,24 @@ export default class TelegramAPI implements PlatformAPI {
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
+    await this.waitForClientConnected()
+
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     let lastDate = 0
 
     const threads: Thread[] = []
 
-    if (this.client.connected) {
-      for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
-        if (!dialog) continue
-        if (!dialog.id) continue
-        threads.push(await this.mapThread(dialog))
-        lastDate = dialog.message?.date ?? lastDate
-      }
+    for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
+      if (!dialog?.id) continue
+      threads.push(await this.mapThread(dialog))
+      lastDate = dialog.message?.date ?? lastDate
     }
 
     return {
       items: threads,
-      oldestCursor: this.client.connected ? (lastDate.toString() ?? '*') : cursor,
-      hasMore: lastDate !== 0 || !this.client.connected,
+      oldestCursor: lastDate.toString() ?? '*',
+      hasMore: lastDate !== 0,
     }
   }
 
@@ -596,25 +601,24 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
+    await this.waitForClientConnected()
     const { cursor } = pagination || { cursor: null, direction: null }
-    const limit = 100
+    const limit = 50
     const messages: Api.Message[] = []
-    if (this.client.connected) {
-      for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
-        if (!msg) continue
-        this.storeMessage(msg)
-        messages.push(msg)
-      }
-      const replies = await this.getMessageReplies(BigInteger(threadID), messages)
-      replies.forEach(this.storeMessage)
-      messages.push(...replies)
+    for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
+      if (!msg) continue
+      this.storeMessage(msg)
+      messages.push(msg)
     }
+    const replies = await this.getMessageReplies(BigInteger(threadID), messages)
+    replies.forEach(this.storeMessage)
+    messages.push(...replies)
 
     setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 1_000)
 
     return {
       items: this.mapper.mapMessages(messages),
-      hasMore: messages.length !== 0 || !this.client.connected,
+      hasMore: messages.length !== 0,
     }
   }
 
