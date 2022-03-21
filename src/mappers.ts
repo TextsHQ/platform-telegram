@@ -304,7 +304,7 @@ export default class TelegramMapper {
       id: msg.id.toString(),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactions?.length ? new Date(msg.editDate * 1000) : undefined,
-      forwardedCount: msg.forwards,
+      forwardedCount: msg.forwards || (msg.forward ? 1 : 0),
       senderID,
       isSender: msg.out && !isThreadMessage,
       linkedMessageID: msg.replyToMsgId?.toString(),
