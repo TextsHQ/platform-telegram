@@ -13,8 +13,8 @@ import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
-
 import type { SendMessageParams } from 'telegram/client/messages'
+
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
@@ -42,6 +42,9 @@ interface LoginInfo {
   phoneCode?: string
   password?: string
 }
+
+const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
+  !!(session as AirgramSession)?.dbKey
 
 export default class TelegramAPI implements PlatformAPI {
   private client: TelegramClient
@@ -77,13 +80,11 @@ export default class TelegramAPI implements PlatformAPI {
   init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
 
-    if (tdlibPath && await fileExists(tdlibPath)) {
-      const { isAirgramSession, AirgramMigration } = await import('./AirgramMigration')
-      if (isAirgramSession(session)) {
-        this.airgramMigration = new AirgramMigration()
-        this.airgramMigration.connectAirgramSession(session, accountInfo)
-        session = randomBytes(8).toString('hex')
-      }
+    if (isAirgramSession(session) && tdlibPath && await fileExists(tdlibPath)) {
+      const { AirgramMigration } = await import('./AirgramMigration')
+      this.airgramMigration = new AirgramMigration()
+      this.airgramMigration.connectAirgramSession(session, accountInfo)
+      session = randomBytes(8).toString('hex')
     }
     this.sessionName = session as string || randomBytes(8).toString('hex')
 

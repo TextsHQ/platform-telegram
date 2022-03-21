@@ -10,9 +10,6 @@ import type { DbSession } from './dbSession'
 
 export type AirgramSession = { dbKey: string }
 
-export const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
-  !!(session as AirgramSession)?.dbKey
-
 export class AirgramMigration {
   private airgramConn: Airgram
 
