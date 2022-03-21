@@ -77,6 +77,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginInfo: LoginInfo = {}
 
+  private resumeWatchdog?: NodeJS.Timer
+
   init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
 
@@ -755,5 +757,15 @@ export default class TelegramAPI implements PlatformAPI {
       peer: threadID,
       reaction: '',
     }))
+  }
+
+  private reconnect = async () => {
+    texts.log('this.reconnect()')
+    if (this.client?.connected && this.resumeWatchdog) clearInterval(this.resumeWatchdog)
+    await this.client.connect()
+  }
+
+  onResumeFromSleep = async () => {
+    this.resumeWatchdog = setInterval(async () => { await this.reconnect() }, 5_000)
   }
 }
