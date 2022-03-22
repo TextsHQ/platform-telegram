@@ -757,23 +757,35 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   registerForPushNotifications = async (deviceToken: string) => {
-    return this.client.invoke(new Api.account.RegisterDevice({
+    const result = this.client.invoke(new Api.account.RegisterDevice({
       token: deviceToken,
       tokenType: this.getTokenType(),
-      appSandbox: false,
+      appSandbox: IS_DEV,
       noMuted: true,
+      secret: Buffer.from(''),
+      otherUids: [],
     }))
+
+    return result
   }
 
   unregisterForPushNotifications = async (deviceToken: string) => {
-    return this.client.invoke(new Api.account.UnregisterDevice({
+    const result = this.client.invoke(new Api.account.UnregisterDevice({
       token: deviceToken,
       tokenType: this.getTokenType(),
     }))
+
+    return result
   }
 
   private getTokenType = () => {
-    return 1; //APNS
+    switch (process.platform) {
+      // @ts-expect-error
+      case 'ios':
+        return 1 // APNS
+      default:
+        return 0
+    }
   }
 
   private reconnect = async () => {
