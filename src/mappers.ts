@@ -668,7 +668,7 @@ export default class TelegramMapper {
       _original: stringifyCircular(dialog.dialog),
       id: String(getPeerId(dialog.id)),
       type: isSingle ? 'single' : isChannel ? 'channel' : 'group',
-      isPinned: dialog.pinned,
+      // isPinned: dialog.pinned,
       isArchived: dialog.archived,
       timestamp: new Date(dialog.date * 1000),
       isUnread: dialog.unreadCount !== 0,
