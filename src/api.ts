@@ -15,10 +15,11 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
+import { fromBuffer } from 'file-type'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
-import { fileExists } from './util'
+import { fileExists, fileFromWithoutExtension } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './AirgramMigration'
 
@@ -701,7 +702,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
-    const filePath = this.getAssetPath(type, assetId)
+    let filePath = fileFromWithoutExtension(this.getAssetPath(type, assetId))
     if (!await fileExists(filePath)) {
       let buffer: Buffer
       if (type === 'media') {
@@ -717,6 +718,8 @@ export default class TelegramAPI implements PlatformAPI {
       }
       // tgs stickers only appear to work on thread refresh
       // only happens first time
+      const ext = (await fromBuffer(buffer))?.ext?.replace('gz', 'tgs')
+      filePath = `${filePath}.${ext}`
       if (buffer) await fsp.writeFile(filePath, buffer)
       else throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${messageId}/${extra}`)
     }
