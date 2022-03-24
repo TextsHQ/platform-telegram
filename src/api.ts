@@ -463,6 +463,9 @@ export default class TelegramAPI implements PlatformAPI {
   private getAssetPath = (assetType: 'media' | 'photos', id: string | number, extension: string) =>
     path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}.${extension}`)
 
+  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', id: string | number) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}`)
+
   private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
     const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
@@ -701,8 +704,11 @@ export default class TelegramAPI implements PlatformAPI {
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
+    const filePathWithoutExt = this.getAssetPathWithoutExt(type, assetId)
     const filePath = this.getAssetPath(type, assetId, extension)
-
+    if (await fileExists(filePathWithoutExt)) { // for backwards compatiblity, remove later
+      await fsp.rename(filePathWithoutExt, filePath).catch(console.error)
+    }
     if (!await fileExists(filePath)) {
       let buffer: Buffer
       if (type === 'media') {

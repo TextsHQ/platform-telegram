@@ -4,6 +4,7 @@ import { range } from 'lodash'
 import VCard from 'vcard-creator'
 import { getPeerId } from 'telegram/Utils'
 import { Api } from 'telegram/tl'
+import mime from 'mime-types'
 
 import type bigInt from 'big-integer'
 import type { CustomMessage } from 'telegram/tl/custom/message'
@@ -261,16 +262,11 @@ export default class TelegramMapper {
     }
   }
 
-  private mimeTypeToExtension = (mimeType: string) => {
-    if (mimeType === 'application/x-tgsticker') return 'tgs'
-    if (mimeType.includes('/')) return mimeType.split('/')[1]
-    texts.log(`Unknown mimeTypeToExtension ${mimeType}`)
-    return mimeType
-  }
+  getMediaUrl = (id: bigInt.BigInteger, messageId: number, mimeType: string) =>
+    `asset://${this.mapperData.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${messageId}`
 
-  getMediaUrl = (id: bigInt.BigInteger, messageId: number, mimeType: string) => `asset://${this.mapperData.accountID}/media/${id}/${this.mimeTypeToExtension(mimeType)}/${messageId}`
-
-  getProfilePhotoUrl = (id: bigInt.BigInteger, mimeType: string) => `asset://${this.mapperData.accountID}/photos/${id}/${this.mimeTypeToExtension(mimeType)}`
+  getProfilePhotoUrl = (id: bigInt.BigInteger, mimeType: string) =>
+    `asset://${this.mapperData.accountID}/photos/${id}/${mime.extension(mimeType) || 'bin'}`
 
   mapMessageLink(webPage: Api.TypeWebPage, messageId: number) {
     if (!(webPage instanceof Api.WebPage)) return
