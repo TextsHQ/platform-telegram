@@ -421,12 +421,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitParticipantFromMessage = async (dialogId: string, userId: BigInteger.BigInteger) => {
+    const dialogIdUnmarked = getPeerIdUnmarked(dialogId)
     const inputEntity = await this.client.getInputEntity(userId)
     if (inputEntity.className === 'InputPeerEmpty') return
     const user = await this.client.getEntity(userId)
     if (user instanceof Api.User) {
       const mappedUser = this.mapper.mapUser(user)
-      this.upsertParticipants(dialogId, [mappedUser])
+      this.upsertParticipants(dialogIdUnmarked, [mappedUser])
     }
   }
 
