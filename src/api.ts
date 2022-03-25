@@ -219,10 +219,10 @@ export default class TelegramAPI implements PlatformAPI {
       this.messageMediaStore.set(message.id, message.media)
     }
     if (!message.chatId) return
-    const threadID = message.chatId.toString()
-    const thread = this.chatIdMessageId.get(threadID)
-    if (thread) {
-      thread.add(message.id)
+    const threadID = getPeerIdUnmarked(message.chatId)
+    const set = this.chatIdMessageId.get(threadID)
+    if (set) {
+      set.add(message.id)
     } else {
       this.chatIdMessageId.set(threadID, new Set([message.id]))
     }
