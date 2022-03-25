@@ -14,7 +14,6 @@ import { CustomFile } from 'telegram/client/uploads'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
@@ -97,6 +96,7 @@ export default class TelegramAPI implements PlatformAPI {
       retryDelay: 5000,
       autoReconnect: true,
       connectionRetries: Infinity,
+      maxConcurrentDownloads: 8,
     })
 
     await this.client.connect()
@@ -143,7 +143,7 @@ export default class TelegramAPI implements PlatformAPI {
       return message
     }
 
-    if (IS_DEV) console.log('CREDS_CUSTOM', JSON.stringify(creds.custom, null, 4))
+    texts.log('CREDS_CUSTOM', JSON.stringify(creds.custom, null, 4))
     try {
       switch (this.authState) {
         case AuthState.PHONE_INPUT:
@@ -159,7 +159,7 @@ export default class TelegramAPI implements PlatformAPI {
               allowAppHash: true,
             }),
           }))
-          if (IS_DEV) console.log('PHONE_INPUT', JSON.stringify(res))
+          texts.log('PHONE_INPUT', JSON.stringify(res))
           this.loginInfo.phoneCodeHash = res.phoneCodeHash
           this.authState = AuthState.CODE_INPUT
           break
@@ -173,7 +173,7 @@ export default class TelegramAPI implements PlatformAPI {
             phoneCodeHash: this.loginInfo.phoneCodeHash,
             phoneCode: this.loginInfo.phoneCode,
           }))
-          if (IS_DEV) console.log('CODE_INPUT', JSON.stringify(res))
+          texts.log('CODE_INPUT', JSON.stringify(res))
           this.authState = AuthState.READY
           break
         }
@@ -185,21 +185,21 @@ export default class TelegramAPI implements PlatformAPI {
             apiId: API_ID,
           }, {
             password: async () => this.loginInfo.password ?? '',
-            onError: async err => { console.log(`Auth error ${err}`); return true },
+            onError: async err => { texts.log(`Auth error ${err}`); return true },
           })
           this.authState = AuthState.READY
           break
         }
         case AuthState.READY:
         {
-          if (IS_DEV) console.log('READY')
+          texts.log('READY')
           this.dbSession.save()
           await this.afterLogin()
           return { type: 'success' }
         }
         default:
         {
-          if (IS_DEV) console.log(`Auth state is ${this.authState}`)
+          texts.log(`Auth state is ${this.authState}`)
           return { type: 'error' }
         }
       }
@@ -447,10 +447,10 @@ export default class TelegramAPI implements PlatformAPI {
         // texts.log('Error emitParticipants', e)
         if (e.code === 400) {
           // only channel admins can request users
-          // if (IS_DEV) console.log(`Admin required for this channel: ${dialog.name}`)
+          // texts.log(`Admin required for this channel: ${dialog.name}`)
           return []
         }
-        // if (IS_DEV) console.log(`emitParticipants(): ${stringifyCircular(e, 2)}`)
+        // texts.log(`emitParticipants(): ${stringifyCircular(e, 2)}`)
         return []
       }
     })()
@@ -460,8 +460,11 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(dialog.id, mappedMembers)
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', id: string | number) =>
-    path.join(this.accountInfo.dataDirPath, assetType, id.toString())
+  private getAssetPath = (assetType: 'media' | 'photos', id: string | number, extension: string) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}.${extension}`)
+
+  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', id: string | number) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}`)
 
   private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
@@ -697,11 +700,15 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  getAsset = async (_, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) => {
+  getAsset = async (_, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
-    const filePath = this.getAssetPath(type, assetId)
+    const filePathWithoutExt = this.getAssetPathWithoutExt(type, assetId)
+    const filePath = this.getAssetPath(type, assetId, extension)
+    if (await fileExists(filePathWithoutExt)) { // for backwards compatiblity, remove later
+      await fsp.rename(filePathWithoutExt, filePath).catch(console.error)
+    }
     if (!await fileExists(filePath)) {
       let buffer: Buffer
       if (type === 'media') {
