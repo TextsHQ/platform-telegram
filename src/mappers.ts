@@ -576,17 +576,19 @@ export default class TelegramMapper {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
         mapped.text = `Channel "${title}" was created`
         mapped.isAction = true
-        mapped.parseTemplate = true
         mapped.action = {
           type: MessageActionType.GROUP_THREAD_CREATED,
           actorParticipantID: mapped.senderID,
           title,
         }
+      } else if (msg.action instanceof Api.MessageActionChannelMigrateFrom) {
+        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+        mapped.text = `Group "${title}" was created`
+        mapped.isAction = true
       } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
         mapped.text = `Group "${title}" was migrated`
         mapped.isAction = true
-        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionCustomAction) {
         mapped.text = msg.text
         mapped.isAction = true
