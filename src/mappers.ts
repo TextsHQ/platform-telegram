@@ -164,11 +164,18 @@ export default class TelegramMapper {
     }
   }
 
+  // getPeerId doesn't work on BigInteger
+  static markId = (type: 'user' | 'chat' | 'channel', id: bigInt.BigInteger | string) => {
+    if (id.toString().startsWith('-') || (type === 'user')) return `${id}`
+    if (type === 'chat') return `-${id}`
+    return `-100${id}`
+  }
+
   static mapUserAction(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping): UserActivityEvent {
     const [threadID, participantID] = (() => {
-      if (update instanceof Api.UpdateUserTyping) return [update.userId, update.userId]
-      if (update instanceof Api.UpdateChatUserTyping) return [update.chatId, getPeerId(update.fromId)]
-      return [update.channelId, getPeerId(update.fromId)]
+      if (update instanceof Api.UpdateUserTyping) return [update.userId, update.userId] // these don't need to be marked
+      if (update instanceof Api.UpdateChatUserTyping) return [this.markId('chat', update.chatId), getPeerId(update.fromId)]
+      return [this.markId('channel', update.channelId), getPeerId(update.fromId)]
     })().map(String)
 
     const durationMs = 10_000
