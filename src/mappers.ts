@@ -588,8 +588,6 @@ export default class TelegramMapper {
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
-      } else {
-        mapped.textHeading = `Unsupported Telegram message ${msg.media?.className} ${msg.action?.className}`
       }
       return true
     }
