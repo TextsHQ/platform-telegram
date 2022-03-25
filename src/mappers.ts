@@ -300,7 +300,7 @@ export default class TelegramMapper {
     const isThreadMessage = msg instanceof Api.MessageService
     const senderID = isThreadMessage ? '$thread' : getPeerIdUnmarked(msg.senderId?.toString()) ?? getPeerIdUnmarked(this.mapperData.me.id.toString())
     const mapped: Message = {
-      _original: stringifyCircular(msg),
+      _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: msg.id.toString(),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactions?.length ? new Date(msg.editDate * 1000) : undefined,
