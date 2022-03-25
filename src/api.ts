@@ -764,16 +764,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private reconnect = async () => {
-    texts.log('this.reconnect()')
+    texts.log('[telegram] reconnect()')
     if (this.client?.connected) return
 
     try {
       await this.client.connect()
-    } catch (e) {
-      texts.log(e)
-      texts.Sentry.captureException(e)
     } finally {
-      setTimeout(async () => { await this.reconnect() }, 10_000)
+      setTimeout(async () => { await this.reconnect() }, 5_000)
     }
   }
 
