@@ -17,7 +17,7 @@ import type { SendMessageParams } from 'telegram/client/messages'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper from './mappers'
-import { fileExists } from './util'
+import { fileExists, getPeerIdUnmarked } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './AirgramMigration'
 
@@ -229,10 +229,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitMessage = (message: Api.Message) => {
-    const threadID = message.chatId.toString()
+    const threadID = getPeerIdUnmarked(message.chatId)
     const mappedMessage = this.mapper.mapMessage(message)
     if (!mappedMessage) return
-    this.emitParticipantFromMessage(message.chatId, message.senderId)
+    this.emitParticipantFromMessage(threadID, message.senderId)
     if (!mappedMessage) return
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
@@ -288,7 +288,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
-    const id = update instanceof Api.UpdateChatParticipant ? update.chatId : update.channelId
+    const id = getPeerIdUnmarked(update instanceof Api.UpdateChatParticipant ? update.chatId : update.channelId)
     if (update.prevParticipant) {
       this.emitDeleteThread(id.toString())
     }
@@ -392,8 +392,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  private upsertParticipants(dialogId: BigInteger.BigInteger, entries: Participant[]) {
-    const threadID = dialogId.toString()
+  private upsertParticipants(dialogId: string, entries: Participant[]) {
+    const threadID = dialogId
     const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
 
@@ -410,8 +410,8 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private dialogToParticipantIdsUpdate = (dialogId: BigInteger.BigInteger | string, participantIds: string[]) => {
-    const threadID = dialogId.toString()
+  private dialogToParticipantIdsUpdate = (dialogId: string, participantIds: string[]) => {
+    const threadID = dialogId
     const dialog = this.dialogIdToParticipantIds.get(threadID)
     if (dialog) {
       participantIds.forEach(id => dialog.add(id))
@@ -420,7 +420,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
+  private emitParticipantFromMessage = async (dialogId: string, userId: BigInteger.BigInteger) => {
     const inputEntity = await this.client.getInputEntity(userId)
     if (inputEntity.className === 'InputPeerEmpty') return
     const user = await this.client.getEntity(userId)
@@ -439,10 +439,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emitParticipants = async (dialog: Dialog) => {
     if (!dialog.id) return
+    const dialogId = getPeerIdUnmarked(dialog.id)
     const limit = 256
     const members = await (async () => {
       try {
-        return await this.client.getParticipants(dialog.id as BigInteger.BigInteger, { showTotal: true, limit })
+        return await this.client.getParticipants(dialogId, { showTotal: true, limit })
       } catch (e) {
         // texts.log('Error emitParticipants', e)
         if (e.code === 400) {
@@ -457,7 +458,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (!members) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
-    this.upsertParticipants(dialog.id, mappedMembers)
+    this.upsertParticipants(dialogId, mappedMembers)
   }
 
   private getAssetPath = (assetType: 'media' | 'photos', id: string | number, extension: string) =>
