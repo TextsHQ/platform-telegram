@@ -570,7 +570,7 @@ export default class TelegramMapper {
           type: MessageActionType.THREAD_IMG_CHANGED,
           actorParticipantID: mapped.senderID,
         }
-      } else if (msg.action instanceof Api.MessageActionChatCreate || msg.action instanceof Api.MessageActionChannelCreate) {
+      } else if (msg.action instanceof Api.MessageActionChatCreate) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
         mapped.text = `${sender} created the group "${title}"`
         mapped.isAction = true
@@ -580,9 +580,19 @@ export default class TelegramMapper {
           actorParticipantID: mapped.senderID,
           title,
         }
+      } else if (msg.action instanceof Api.MessageActionChannelCreate) {
+        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+        mapped.text = `Channel "${title}" was created`
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        mapped.action = {
+          type: MessageActionType.GROUP_THREAD_CREATED,
+          actorParticipantID: mapped.senderID,
+          title,
+        }
       } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `${sender} migrated the group "${title}"`
+        mapped.text = `Group "${title}" was migrated`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionCustomAction) {
