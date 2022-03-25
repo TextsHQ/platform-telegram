@@ -779,13 +779,15 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private getTokenType = () => {
-    switch (process.platform) {
-      // @ts-expect-error
-      case 'ios':
-        return 1 // APNS
-      default:
-        return 0
+    // https://core.telegram.org/api/push-updates#subscribing-to-notifications
+    const tokenTypes = {
+      ios: 1,
+      darwin: 1,
+      android: 2,
+      win32: 8,
     }
+
+    return tokenTypes[process.platform]
   }
 
   private reconnect = async () => {
