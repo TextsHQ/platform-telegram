@@ -290,7 +290,7 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
     const id = getPeerIdUnmarked(update instanceof Api.UpdateChatParticipant ? update.chatId : update.channelId)
     if (update.prevParticipant) {
-      this.emitDeleteThread(id.toString())
+      this.emitDeleteThread(id)
     }
     if (update.newParticipant) this.emitParticipantFromMessage(id, update.userId)
   }
