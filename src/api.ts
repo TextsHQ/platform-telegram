@@ -16,8 +16,8 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
-import TelegramMapper from './mappers'
-import { fileExists, getPeerIdUnmarked } from './util'
+import TelegramMapper, { getMarkedId } from './mappers'
+import { fileExists } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './AirgramMigration'
 
@@ -218,18 +218,17 @@ export default class TelegramAPI implements PlatformAPI {
     if (message.media) {
       this.messageMediaStore.set(message.id, message.media)
     }
-    if (!message.chatId) return
-    const threadID = getPeerIdUnmarked(message.chatId)
-    const set = this.chatIdMessageId.get(threadID)
-    if (set) {
-      set.add(message.id)
+    const threadID = getMarkedId({ chatId: message.chatId })
+    const thread = this.chatIdMessageId.get(threadID)
+    if (thread) {
+      thread.add(message.id)
     } else {
       this.chatIdMessageId.set(threadID, new Set([message.id]))
     }
   }
 
   private emitMessage = (message: Api.Message) => {
-    const threadID = getPeerIdUnmarked(message.chatId)
+    const threadID = getMarkedId({ chatId: message.chatId })
     const mappedMessage = this.mapper.mapMessage(message)
     if (!mappedMessage) return
     this.emitParticipantFromMessage(threadID, message.senderId)
@@ -268,11 +267,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
-    const id = (update instanceof Api.UpdateChat ? update.chatId
-      : update instanceof Api.UpdateChannel ? update.channelId
-        : update.participants.chatId).toString()
+    const id = getMarkedId(update instanceof Api.UpdateChatParticipants ? update.participants : update)
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
-      if (dialog.entity.id.toString() === id) {
+      const threadId = String(dialog.id)
+      if (threadId === id) {
         const thread = await this.mapThread(dialog)
         const event: ServerEvent = {
           type: ServerEventType.STATE_SYNC,
@@ -288,7 +286,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
-    const id = getPeerIdUnmarked(update instanceof Api.UpdateChatParticipant ? update.chatId : update.channelId)
+    const id = getMarkedId(update)
     if (update.prevParticipant) {
       this.emitDeleteThread(id)
     }
@@ -297,17 +295,17 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages | Api.UpdateDeleteChannelMessages | Api.UpdateDeleteScheduledMessages) {
     if (!update.messages?.length) return
-    const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))
+    const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))?.[0]
     if (!threadID) return
     this.onEvent([
       {
         type: ServerEventType.STATE_SYNC,
         objectIDs: {
-          threadID: threadID[0].toString(),
+          threadID,
         },
         mutationType: 'delete',
         objectName: 'message',
-        entries: update.messages.map(id => id.toString()),
+        entries: update.messages.map(msgId => msgId.toString()),
       },
     ])
   }
@@ -317,7 +315,7 @@ export default class TelegramAPI implements PlatformAPI {
     const res = await this.client.getMessages(undefined, { ids: update.messages })
     const entries = this.mapper.mapMessages(res)
     if (res.length === 0) return
-    const threadID = res[0].chatId?.toString()
+    const threadID = getMarkedId({ chatId: res[0].chatId })
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
@@ -421,13 +419,12 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitParticipantFromMessage = async (dialogId: string, userId: BigInteger.BigInteger) => {
-    const dialogIdUnmarked = getPeerIdUnmarked(dialogId)
     const inputEntity = await this.client.getInputEntity(userId)
     if (inputEntity.className === 'InputPeerEmpty') return
     const user = await this.client.getEntity(userId)
     if (user instanceof Api.User) {
       const mappedUser = this.mapper.mapUser(user)
-      this.upsertParticipants(dialogIdUnmarked, [mappedUser])
+      this.upsertParticipants(dialogId, [mappedUser])
     }
   }
 
@@ -440,7 +437,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emitParticipants = async (dialog: Dialog) => {
     if (!dialog.id) return
-    const dialogId = getPeerIdUnmarked(dialog.id)
+    const dialogId = String(dialog.id)
     const limit = 256
     const members = await (async () => {
       try {
@@ -462,11 +459,11 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(dialogId, mappedMembers)
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', id: string | number, extension: string) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}.${extension}`)
+  private getAssetPath = (assetType: 'media' | 'photos', assetId: string | number, extension: string) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
-  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', id: string | number) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}`)
+  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', assetId: string | number) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}`)
 
   private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')

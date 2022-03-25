@@ -4,14 +4,13 @@ import { utils } from 'telegram'
 import { Api } from 'telegram/tl'
 import { returnBigInt } from 'telegram/Helpers'
 import { Session } from 'telegram/sessions'
-import { getDisplayName } from 'telegram/Utils'
+import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { texts } from '@textshq/platform-sdk'
 import { promises as fsp } from 'fs'
 import { dirname } from 'path'
 import Database, { Statement } from 'better-sqlite3'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
-import { getPeerIdUnmarked } from './util'
 
 interface EntityObject {
   id: string
@@ -215,7 +214,7 @@ export class DbSession extends Session {
   private entityObject = (e: any): EntityObject => {
     try {
       const peer = this.getInputEntity(e)
-      const peerId = getPeerIdUnmarked(peer)
+      const peerId = getPeerId(peer)
       const hash = 'accessHash' in peer ? peer.accessHash : bigInt.zero
       const username = e.username?.toLowerCase()
       const { phone } = e
@@ -237,9 +236,9 @@ export class DbSession extends Session {
       return this.prepareCache('select * from entity where id = ?').get(id)
     }
     const ids = [
-      getPeerIdUnmarked(new Api.PeerUser({ userId: returnBigInt(id) })),
-      getPeerIdUnmarked(new Api.PeerChat({ chatId: returnBigInt(id) })),
-      getPeerIdUnmarked(new Api.PeerChannel({ channelId: returnBigInt(id) })),
+      getPeerId(new Api.PeerUser({ userId: returnBigInt(id) })),
+      getPeerId(new Api.PeerChat({ chatId: returnBigInt(id) })),
+      getPeerId(new Api.PeerChannel({ channelId: returnBigInt(id) })),
     ]
     return this.prepareCache('select * from entity where id IN(?)').get(ids)
   }
@@ -269,7 +268,7 @@ export class DbSession extends Session {
     }
     // Not a TLObject or can't be cast into InputPeer
     if (typeof entityKey === 'object') {
-      entityKey = getPeerIdUnmarked(entityKey)
+      entityKey = getPeerId(entityKey)
       exact = true
     } else {
       exact = false

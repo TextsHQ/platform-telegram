@@ -1,6 +1,5 @@
+import bigInt from 'big-integer'
 import { promises as fs } from 'fs'
-import type { EntityLike } from 'telegram/define'
-import { getPeerId } from 'telegram/Utils'
 
 export const fileExists = (filePath: string) =>
   fs.access(filePath).then(() => true).catch(() => false)
@@ -20,4 +19,3 @@ const getCircularReplacer = () => {
 
 export const stringifyCircular = (value: any, space?: number) => JSON.stringify(value, getCircularReplacer(), space)
 
-export const getPeerIdUnmarked = (peer: EntityLike) => getPeerId(peer, false)
