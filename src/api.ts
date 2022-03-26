@@ -14,7 +14,7 @@ import { CustomFile } from 'telegram/client/uploads'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenTypes } from './constants'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenType } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
@@ -779,7 +779,7 @@ export default class TelegramAPI implements PlatformAPI {
   registerForPushNotifications = async (deviceToken: string, secret?: Buffer) => {
     const result = this.client.invoke(new Api.account.RegisterDevice({
       token: deviceToken,
-      tokenType: this.getTokenType(),
+      tokenType: pushTokenType,
       appSandbox: IS_DEV,
       noMuted: true,
       secret: secret || Buffer.from(''),
@@ -792,13 +792,11 @@ export default class TelegramAPI implements PlatformAPI {
   unregisterForPushNotifications = async (deviceToken: string) => {
     const result = this.client.invoke(new Api.account.UnregisterDevice({
       token: deviceToken,
-      tokenType: this.getTokenType(),
+      tokenType: pushTokenType,
     }))
 
     return result
   }
-
-  private getTokenType = () => pushTokenTypes[process.platform]
 
   private reconnect = async () => {
     texts.log('[telegram] reconnect()')
