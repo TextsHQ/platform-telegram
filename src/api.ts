@@ -3,8 +3,8 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
-import _, { debounce } from 'lodash'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User } from '@textshq/platform-sdk'
+import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
 import { TelegramClient } from 'telegram'
@@ -430,7 +430,7 @@ export default class TelegramAPI implements PlatformAPI {
     const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
       || (msg.action && 'users' in msg.action))
     // @ts-expect-error
-    Object.values(_.groupBy(withUserId, 'chatId')).forEach(m => this.emitParticipantFromMessages(String(m => m[0].chatId), m.map(m => m.fromId.chatId)))
+    Object.values(groupBy(withUserId, 'chatId')).forEach(m => this.emitParticipantFromMessages(String(m => m[0].chatId), m.map(m => m.fromId.chatId)))
   }
 
   private emitParticipants = async (dialog: Dialog) => {
@@ -586,12 +586,10 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 20
     let lastDate = 0
 
-    type mappedPromis = {
-      thread
-      participantsPromise
-    }
-
-    const mapped: Promise<mappedPromis>[] = []
+    const mapped: Promise<{
+      thread: Thread
+      participantsPromise: Promise<any>
+    }>[] = []
 
     for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
       if (!dialog?.id) continue

@@ -797,7 +797,7 @@ export default class TelegramMapper {
       return [TelegramMapper.mapUserAction(update)]
     }
     if (update instanceof Api.UpdateUserStatus) {
-      // return [TelegramMapper.mapUserPresence(update.userId, update.status)]
+      return [TelegramMapper.mapUserPresence(update.userId, update.status)]
     }
     if (update instanceof Api.UpdateEditMessage || update instanceof Api.UpdateEditChannelMessage) {
       if (update.message instanceof Api.MessageEmpty) return []
@@ -812,20 +812,20 @@ export default class TelegramMapper {
         entries: [updatedMessage],
       }]
     }
-    // if (update instanceof Api.UpdateShortMessage || update instanceof Api.UpdateShortChatMessage) {
-    //   const threadID = getMarkedId(update)
-    //   // TODO: review if all props are present
-    //   return [{
-    //     type: ServerEventType.STATE_SYNC,
-    //     mutationType: 'update',
-    //     objectName: 'message',
-    //     objectIDs: { threadID },
-    //     entries: [{
-    //       id: String(update.id),
-    //       text: update.message,
-    //     }],
-    //   }]
-    // }
+    if (update instanceof Api.UpdateShortMessage || update instanceof Api.UpdateShortChatMessage) {
+      const threadID = getMarkedId(update)
+      // TODO: review if all props are present
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID },
+        entries: [{
+          id: String(update.id),
+          text: update.message,
+        }],
+      }]
+    }
     if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
       // already handled
     } else {
