@@ -18,4 +18,3 @@ const getCircularReplacer = () => {
 }
 
 export const stringifyCircular = (value: any, space?: number) => JSON.stringify(value, getCircularReplacer(), space)
-
