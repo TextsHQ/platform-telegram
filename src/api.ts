@@ -14,7 +14,7 @@ import { CustomFile } from 'telegram/client/uploads'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenTypes } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
@@ -798,17 +798,7 @@ export default class TelegramAPI implements PlatformAPI {
     return result
   }
 
-  private getTokenType = () => {
-    // https://core.telegram.org/api/push-updates#subscribing-to-notifications
-    const tokenTypes = {
-      ios: 1,
-      darwin: 1,
-      android: 2,
-      win32: 8,
-    }
-
-    return tokenTypes[process.platform]
-  }
+  private getTokenType = () => pushTokenTypes[process.platform]
 
   private reconnect = async () => {
     texts.log('[telegram] reconnect()')
