@@ -776,13 +776,13 @@ export default class TelegramAPI implements PlatformAPI {
     }))
   }
 
-  registerForPushNotifications = async (deviceToken: string) => {
+  registerForPushNotifications = async (deviceToken: string, secret?: Buffer) => {
     const result = this.client.invoke(new Api.account.RegisterDevice({
       token: deviceToken,
       tokenType: this.getTokenType(),
       appSandbox: IS_DEV,
       noMuted: true,
-      secret: Buffer.from(''),
+      secret: secret || Buffer.from(''),
       otherUids: [],
     }))
 
