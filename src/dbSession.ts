@@ -236,9 +236,9 @@ export class DbSession extends Session {
       return this.prepareCache('select * from entity where id = ?').get(id)
     }
     const ids = [
-      utils.getPeerId(new Api.PeerUser({ userId: returnBigInt(id) })),
-      utils.getPeerId(new Api.PeerChat({ chatId: returnBigInt(id) })),
-      utils.getPeerId(new Api.PeerChannel({ channelId: returnBigInt(id) })),
+      getPeerId(new Api.PeerUser({ userId: returnBigInt(id) })),
+      getPeerId(new Api.PeerChat({ chatId: returnBigInt(id) })),
+      getPeerId(new Api.PeerChannel({ channelId: returnBigInt(id) })),
     ]
     return this.prepareCache('select * from entity where id IN(?)').get(ids)
   }
@@ -268,7 +268,7 @@ export class DbSession extends Session {
     }
     // Not a TLObject or can't be cast into InputPeer
     if (typeof entityKey === 'object') {
-      entityKey = utils.getPeerId(entityKey)
+      entityKey = getPeerId(entityKey)
       exact = true
     } else {
       exact = false

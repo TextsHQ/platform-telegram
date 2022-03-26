@@ -1,3 +1,4 @@
+import bigInt from 'big-integer'
 import { promises as fs } from 'fs'
 
 export const fileExists = (filePath: string) =>

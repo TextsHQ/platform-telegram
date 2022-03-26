@@ -2,19 +2,33 @@ import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntit
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
-import { getPeerId } from 'telegram/Utils'
 import { Api } from 'telegram/tl'
 import mime from 'mime-types'
 
-import type bigInt from 'big-integer'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { Entity } from 'telegram/define'
 
+import { getPeerId } from 'telegram/Utils'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
 type MapperData = { accountID: string, me: Api.User }
+
+interface UnmarkedId {
+
+  userId?: bigInt.BigInteger
+  chatId?: bigInt.BigInteger
+  channelId?: bigInt.BigInteger
+  peer?: Api.TypePeer
+}
+
+export function getMarkedId(unmarked: UnmarkedId) {
+  if (unmarked.userId) return `${unmarked.userId}`
+  if (unmarked.chatId) return `-${unmarked.chatId}`
+  if (unmarked.channelId) return `-100${unmarked.channelId}`
+  if (unmarked.peer) return getPeerId(unmarked.peer)
+}
 export default class TelegramMapper {
   private mapperData: MapperData
 
@@ -124,7 +138,7 @@ export default class TelegramMapper {
     return `Call reason unmapped ${reason}`
   }
 
-  static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, chatID: bigInt.BigInteger, messageID: number) {
+  static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, threadID: string, messageID: number) {
     switch (row.className) {
       case 'KeyboardButtonUrl':
       case 'KeyboardButtonUrlAuth':
@@ -132,7 +146,7 @@ export default class TelegramMapper {
       case 'KeyboardButtonSwitchInline':
         return 'texts://fill-textarea?text=' + encodeURIComponent(row.query)
       case 'KeyboardButtonCallback':
-        return `texts://platform-callback/${accountID}/callback/${chatID}/${messageID}/${'data' in row ? row.data : ''}`
+        return `texts://platform-callback/${accountID}/callback/${threadID}/${messageID}/${'data' in row ? row.data : ''}`
       // case 'inlineKeyboardButtonTypeCallbackGame':
       // case 'inlineKeyboardButtonTypeCallbackWithPassword':
       //   return 'texts://platform-callback/' + row.data
@@ -142,7 +156,7 @@ export default class TelegramMapper {
 
   static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
     const presence: UserPresence = {
-      userID: userId.toString(),
+      userID: getMarkedId({ userId }),
       lastActive: undefined,
       status: 'offline',
     }
@@ -166,9 +180,9 @@ export default class TelegramMapper {
 
   static mapUserAction(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping): UserActivityEvent {
     const [threadID, participantID] = (() => {
-      if (update instanceof Api.UpdateUserTyping) return [update.userId, update.userId]
-      if (update instanceof Api.UpdateChatUserTyping) return [update.chatId, update.fromId]
-      return [update.channelId, update.fromId]
+      if (update instanceof Api.UpdateUserTyping) return [update.userId, update.userId] // these don't need to be marked
+      if (update instanceof Api.UpdateChatUserTyping) return [getMarkedId({ chatId: update.chatId }), getMarkedId({ peer: update.fromId })]
+      return [getMarkedId({ channelId: update.channelId }), getMarkedId({ peer: update.fromId })]
     })().map(String)
 
     const durationMs = 10_000
@@ -233,13 +247,13 @@ export default class TelegramMapper {
     texts.log('unsupported activity', update.action.className, update.action)
   }
 
-  getMessageButtons(replyMarkup: Api.TypeReplyMarkup, chatID: bigInt.BigInteger, messageID: number) {
+  getMessageButtons(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number) {
     if (!replyMarkup) return
     switch (replyMarkup.className) {
       case 'ReplyInlineMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => ({
           label: row.text,
-          linkURL: TelegramMapper.getButtonLinkURL(row, this.mapperData.accountID, chatID, messageID) ?? '',
+          linkURL: TelegramMapper.getButtonLinkURL(row, this.mapperData.accountID, threadID, messageID) ?? '',
         })))
       case 'ReplyKeyboardMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
@@ -299,17 +313,17 @@ export default class TelegramMapper {
 
   mapMessage(msg: CustomMessage): Message {
     const isThreadMessage = msg instanceof Api.MessageService
-    const senderID = isThreadMessage ? '$thread' : msg.senderId?.toString() ?? this.mapperData.me.id.toString()
+    const senderID = String(isThreadMessage ? '$thread' : msg.senderId ?? this.mapperData.me.id)
     const mapped: Message = {
-      _original: stringifyCircular(msg),
-      id: msg.id.toString(),
+      _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
+      id: String(msg.id),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.reactions?.recentReactions?.length ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards || (msg.forward ? 1 : 0),
       senderID,
       isSender: msg.out && !isThreadMessage,
       linkedMessageID: msg.replyToMsgId?.toString(),
-      buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, msg.chatId, msg.id) : undefined,
+      buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, getMarkedId({ chatId: msg.chatId }), msg.id) : undefined,
       expiresInSeconds: msg.ttlPeriod,
     }
 
@@ -317,8 +331,8 @@ export default class TelegramMapper {
       if (reactions.recentReactions || reactions.results) {
         const mappedReactions: MessageReaction[] = reactions.recentReactions?.map(r => (
           {
-            id: getPeerId(r.peerId),
-            participantID: getPeerId(r.peerId),
+            id: getMarkedId({ peer: r.peerId }),
+            participantID: getMarkedId({ peer: r.peerId }),
             emoji: true,
             reactionKey: r.reaction.replace('❤', '❤️'),
           })) ?? []
@@ -331,7 +345,7 @@ export default class TelegramMapper {
               emoji: true,
               reactionKey: r.reaction.replace('❤', '❤️'),
             }))
-          if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = this.mapperData.me.id.toString() }
+          if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = String(this.mapperData.me.id) }
           return reactionResult
         }) ?? []
 
@@ -357,7 +371,7 @@ export default class TelegramMapper {
         size.height = sizeAttribute.h
         mapped.attachments = mapped.attachments || []
         mapped.attachments.push({
-          id: sticker.id.toString(),
+          id: String(sticker.id),
           srcURL: this.getMediaUrl(sticker.id, messageId, sticker.mimeType),
           mimeType,
           type: isWebm ? MessageAttachmentType.VIDEO : MessageAttachmentType.IMG,
@@ -563,7 +577,7 @@ export default class TelegramMapper {
           type: MessageActionType.THREAD_IMG_CHANGED,
           actorParticipantID: mapped.senderID,
         }
-      } else if (msg.action instanceof Api.MessageActionChatCreate || msg.action instanceof Api.MessageActionChannelCreate) {
+      } else if (msg.action instanceof Api.MessageActionChatCreate) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
         mapped.text = `${sender} created the group "${title}"`
         mapped.isAction = true
@@ -573,11 +587,23 @@ export default class TelegramMapper {
           actorParticipantID: mapped.senderID,
           title,
         }
+      } else if (msg.action instanceof Api.MessageActionChannelCreate) {
+        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+        mapped.text = `Channel "${title}" was created`
+        mapped.isAction = true
+        mapped.action = {
+          type: MessageActionType.GROUP_THREAD_CREATED,
+          actorParticipantID: mapped.senderID,
+          title,
+        }
+      } else if (msg.action instanceof Api.MessageActionChannelMigrateFrom) {
+        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+        mapped.text = `Group "${title}" was created`
+        mapped.isAction = true
       } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `${sender} migrated the group "${title}"`
+        mapped.text = `Group "${title}" was migrated`
         mapped.isAction = true
-        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionCustomAction) {
         mapped.text = msg.text
         mapped.isAction = true
@@ -588,8 +614,6 @@ export default class TelegramMapper {
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
-      } else {
-        mapped.textHeading = `Unsupported Telegram message ${msg.media?.className} ${msg.action?.className}`
       }
       return true
     }
@@ -633,7 +657,7 @@ export default class TelegramMapper {
 
   mapUser = (user: Api.User): User => {
     const mapped: User = {
-      id: user.id.toString(),
+      id: String(user.id),
       username: user.username,
       fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     }
@@ -668,14 +692,14 @@ export default class TelegramMapper {
     const isReadOnly = !this.hasWritePermissions(dialog.entity)
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
-      id: String(getPeerId(dialog.id)),
+      id: getPeerId(dialog.id),
       type: isSingle ? 'single' : isChannel ? 'channel' : 'group',
       // isPinned: dialog.pinned,
       isArchived: dialog.archived,
       timestamp: new Date(dialog.date * 1000),
       isUnread: dialog.unreadCount !== 0,
       isReadOnly,
-      lastReadMessageID: (dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId).toString(),
+      lastReadMessageID: String(dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId),
       mutedUntil: this.mapMuteUntil(dialog.dialog.notifySettings.muteUntil ?? 0),
       imgURL: imgFile,
       title: dialog.title,
@@ -694,6 +718,7 @@ export default class TelegramMapper {
   mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m)).filter(Boolean)
 
   mapUpdate = (update: Api.TypeUpdate | Api.TypeUpdates): ServerEvent[] => {
+    texts.log(update.className)
     if (update instanceof Api.UpdateNotifySettings) {
       if (!('peer' in update.peer)) {
         texts.log('Unknown updateNotifySettings', stringifyCircular(update, 2))
@@ -706,7 +731,7 @@ export default class TelegramMapper {
         mutationType: 'update',
         objectName: 'thread',
         entries: [{
-          id: getPeerId(update.peer.peer).toString(),
+          id: getMarkedId({ peer: update.peer.peer }).toString(),
           mutedUntil: mutedForever || this.mapMuteUntil(update.notifySettings.muteUntil),
         }],
       }]
@@ -718,14 +743,14 @@ export default class TelegramMapper {
         mutationType: 'update',
         objectName: 'thread',
         entries: [{
-          id: getPeerId(f.peer).toString(),
+          id: getMarkedId({ peer: f.peer }).toString(),
           isArchived: f.folderId === 1,
         }],
       }))
     }
     if (update instanceof Api.UpdateDialogUnreadMark) {
       if (!(update.peer instanceof Api.DialogPeer)) return []
-      const threadID = getPeerId(update.peer.peer)
+      const threadID = getMarkedId({ peer: update.peer.peer })
       return [{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -740,7 +765,7 @@ export default class TelegramMapper {
       }]
     }
     if (update instanceof Api.UpdateReadHistoryInbox) {
-      const threadID = getPeerId(update.peer)
+      const threadID = getMarkedId({ peer: update.peer })
       return [{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -755,8 +780,8 @@ export default class TelegramMapper {
       }]
     }
     if (update instanceof Api.UpdateReadHistoryOutbox) {
-      const threadID = getPeerId(update.peer)
-      const messageID = update.maxId.toString()
+      const threadID = getMarkedId({ peer: update.peer })
+      const messageID = String(update.maxId)
       return [{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -776,7 +801,7 @@ export default class TelegramMapper {
     }
     if (update instanceof Api.UpdateEditMessage || update instanceof Api.UpdateEditChannelMessage) {
       if (update.message instanceof Api.MessageEmpty) return []
-      const threadID = getPeerId(update.message.peerId).toString()
+      const threadID = getMarkedId({ chatId: update.message.chatId })
       const updatedMessage = this.mapMessage(update.message)
       if (!updatedMessage) return
       return [{
@@ -788,7 +813,7 @@ export default class TelegramMapper {
       }]
     }
     if (update instanceof Api.UpdateShortMessage || update instanceof Api.UpdateShortChatMessage) {
-      const threadID = getPeerId('userId' in update ? update.userId : update.chatId).toString()
+      const threadID = getMarkedId(update)
       // TODO: review if all props are present
       return [{
         type: ServerEventType.STATE_SYNC,
@@ -796,7 +821,7 @@ export default class TelegramMapper {
         objectName: 'message',
         objectIDs: { threadID },
         entries: [{
-          id: update.id.toString(),
+          id: String(update.id),
           text: update.message,
         }],
       }]

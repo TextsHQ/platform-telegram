@@ -3,10 +3,10 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, StateSyncEvent, Participant, AccountInfo, User } from '@textshq/platform-sdk'
-import { debounce } from 'lodash'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User } from '@textshq/platform-sdk'
+import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
-import bluebird from 'bluebird'
+import bluebird, { Promise } from 'bluebird'
 import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
@@ -16,7 +16,7 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
-import TelegramMapper from './mappers'
+import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './AirgramMigration'
@@ -96,7 +96,7 @@ export default class TelegramAPI implements PlatformAPI {
       retryDelay: 5000,
       autoReconnect: true,
       connectionRetries: Infinity,
-      maxConcurrentDownloads: 8,
+      maxConcurrentDownloads: 2,
     })
 
     await this.client.connect()
@@ -218,8 +218,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (message.media) {
       this.messageMediaStore.set(message.id, message.media)
     }
-    if (!message.chatId) return
-    const threadID = message.chatId.toString()
+    const threadID = getMarkedId({ chatId: message.chatId })
     const thread = this.chatIdMessageId.get(threadID)
     if (thread) {
       thread.add(message.id)
@@ -229,10 +228,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitMessage = (message: Api.Message) => {
-    const threadID = message.chatId.toString()
+    const threadID = getMarkedId({ chatId: message.chatId })
     const mappedMessage = this.mapper.mapMessage(message)
     if (!mappedMessage) return
-    this.emitParticipantFromMessage(message.chatId, message.senderId)
+    this.emitParticipantFromMessages(threadID, [message.senderId])
     if (!mappedMessage) return
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
@@ -260,20 +259,20 @@ export default class TelegramAPI implements PlatformAPI {
     if (dialog.message) this.storeMessage(dialog.message)
     this.dialogs.set(thread.id, dialog)
 
-    // has to run once thread is included
-    // not best way but simplest place to put this for now
-    if (participants.length === 0) setTimeout(() => this.emitParticipants(dialog), 5_000)
+    const participantsPromise = participants.length
+      ? Promise.resolve(() => {})
+      : Promise.resolve(setTimeout(() => this.emitParticipants(dialog), 500))
 
-    return thread
+    return { thread, participantsPromise }
   }
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
-    const id = (update instanceof Api.UpdateChat ? update.chatId
-      : update instanceof Api.UpdateChannel ? update.channelId
-        : update.participants.chatId).toString()
+    const id = getMarkedId(update instanceof Api.UpdateChatParticipants ? update.participants : update)
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
-      if (dialog.entity.id.toString() === id) {
-        const thread = await this.mapThread(dialog)
+      const threadId = String(dialog.id)
+      if (threadId === id) {
+        const { thread, participantsPromise } = await this.mapThread(dialog)
+        await participantsPromise
         const event: ServerEvent = {
           type: ServerEventType.STATE_SYNC,
           mutationType: 'upsert',
@@ -288,26 +287,26 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
-    const id = update instanceof Api.UpdateChatParticipant ? update.chatId : update.channelId
+    const id = getMarkedId(update)
     if (update.prevParticipant) {
-      this.emitDeleteThread(id.toString())
+      this.emitDeleteThread(id)
     }
-    if (update.newParticipant) this.emitParticipantFromMessage(id, update.userId)
+    if (update.newParticipant) this.emitParticipantFromMessages(id, [update.userId])
   }
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages | Api.UpdateDeleteChannelMessages | Api.UpdateDeleteScheduledMessages) {
     if (!update.messages?.length) return
-    const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))
+    const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))?.[0]
     if (!threadID) return
     this.onEvent([
       {
         type: ServerEventType.STATE_SYNC,
         objectIDs: {
-          threadID: threadID[0].toString(),
+          threadID,
         },
         mutationType: 'delete',
         objectName: 'message',
-        entries: update.messages.map(id => id.toString()),
+        entries: update.messages.map(msgId => msgId.toString()),
       },
     ])
   }
@@ -317,7 +316,7 @@ export default class TelegramAPI implements PlatformAPI {
     const res = await this.client.getMessages(undefined, { ids: update.messages })
     const entries = this.mapper.mapMessages(res)
     if (res.length === 0) return
-    const threadID = res[0].chatId?.toString()
+    const threadID = getMarkedId({ chatId: res[0].chatId })
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
@@ -392,8 +391,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  private upsertParticipants(dialogId: BigInteger.BigInteger, entries: Participant[]) {
-    const threadID = dialogId.toString()
+  private upsertParticipants(dialogId: string, entries: Participant[]) {
+    const threadID = dialogId
     const dialogParticipants = this.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
 
@@ -410,8 +409,8 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private dialogToParticipantIdsUpdate = (dialogId: BigInteger.BigInteger | string, participantIds: string[]) => {
-    const threadID = dialogId.toString()
+  private dialogToParticipantIdsUpdate = (dialogId: string, participantIds: string[]) => {
+    const threadID = dialogId
     const dialog = this.dialogIdToParticipantIds.get(threadID)
     if (dialog) {
       participantIds.forEach(id => dialog.add(id))
@@ -420,29 +419,27 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private emitParticipantFromMessage = async (dialogId: BigInteger.BigInteger, userId: BigInteger.BigInteger) => {
-    const inputEntity = await this.client.getInputEntity(userId)
-    if (inputEntity.className === 'InputPeerEmpty') return
-    const user = await this.client.getEntity(userId)
-    if (user instanceof Api.User) {
-      const mappedUser = this.mapper.mapUser(user)
-      this.upsertParticipants(dialogId, [mappedUser])
-    }
+  private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
+    const inputEntities = await Promise.all(userIds.filter(Boolean).map(id => this.client.getInputEntity(id)))
+    const users = await Promise.all(inputEntities.filter(e => e instanceof Api.InputPeerUser).map(ef => this.client.getEntity(ef)))
+    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapUser(entity) : undefined)).filter(Boolean)
+    this.upsertParticipants(dialogId, mapped)
   }
 
   private emitParticipantsFromMessageAction = async (messages: CustomMessage[]) => {
     const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
       || (msg.action && 'users' in msg.action))
     // @ts-expect-error
-    withUserId.forEach(({ chatId, fromId }) => this.emitParticipantFromMessage(chatId, fromId.userId))
+    Object.values(groupBy(withUserId, 'chatId')).forEach(m => this.emitParticipantFromMessages(String(m => m[0].chatId), m.map(m => m.fromId.chatId)))
   }
 
   private emitParticipants = async (dialog: Dialog) => {
     if (!dialog.id) return
-    const limit = 256
+    const dialogId = String(dialog.id)
+    const limit = 1024
     const members = await (async () => {
       try {
-        return await this.client.getParticipants(dialog.id as BigInteger.BigInteger, { showTotal: true, limit })
+        return await this.client.getParticipants(dialogId, { showTotal: true, limit })
       } catch (e) {
         // texts.log('Error emitParticipants', e)
         if (e.code === 400) {
@@ -457,14 +454,14 @@ export default class TelegramAPI implements PlatformAPI {
 
     if (!members) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
-    this.upsertParticipants(dialog.id, mappedMembers)
+    this.upsertParticipants(dialogId, mappedMembers)
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', id: string | number, extension: string) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}.${extension}`)
+  private getAssetPath = (assetType: 'media' | 'photos', assetId: string | number, extension: string) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
-  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', id: string | number) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${id.toString()}`)
+  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', assetId: string | number) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}`)
 
   private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
@@ -519,13 +516,22 @@ export default class TelegramAPI implements PlatformAPI {
   createThread = async (userIDs: string[], title?: string) => {
     if (userIDs.length === 0) throw Error('userIDs empty')
     if (userIDs.length === 1) {
-      // const entity = await this.client.getEntity(+userIDs[0])
-      // TODO
-      throw Error('not implemented')
-    } else {
-      if (!title) throw Error('title required')
-      await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
+      const user = await this.getUser({ userID: userIDs[0] })
+      if (!user) throw Error('user not found')
+      const thread: Thread = {
+        id: userIDs[0],
+        isReadOnly: false,
+        isUnread: false,
+        type: 'single',
+        messages: { hasMore: false, items: [] },
+        participants: { hasMore: false, items: [user] },
+        timestamp: new Date(),
+      }
+      return thread
     }
+    if (!title) throw Error('title required')
+    await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
+
     return true
   }
 
@@ -567,7 +573,9 @@ export default class TelegramAPI implements PlatformAPI {
   getThread = async (threadID: string) => {
     const dialogThread = this.dialogs.get(threadID)
     if (!dialogThread) return
-    return this.mapThread(dialogThread)
+    const { thread, participantsPromise } = await this.mapThread(dialogThread)
+    await participantsPromise
+    return thread
   }
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
@@ -578,16 +586,21 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 20
     let lastDate = 0
 
-    const threads: Thread[] = []
+    const mapped: Promise<{
+      thread: Thread
+      participantsPromise: Promise<any>
+    }>[] = []
 
     for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
       if (!dialog?.id) continue
-      threads.push(await this.mapThread(dialog))
+      mapped.push(this.mapThread(dialog))
       lastDate = dialog.message?.date ?? lastDate
     }
 
+    const threads = await Promise.all(mapped)
+    await Promise.all(threads.map(t => t.participantsPromise))
     return {
-      items: threads,
+      items: threads.map(t => t.thread),
       oldestCursor: lastDate.toString() ?? '*',
       hasMore: lastDate !== 0,
     }
@@ -617,7 +630,7 @@ export default class TelegramAPI implements PlatformAPI {
     replies.forEach(this.storeMessage)
     messages.push(...replies)
 
-    setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 1_000)
+    setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 100)
 
     return {
       items: this.mapper.mapMessages(messages),
@@ -700,7 +713,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  getAsset = async (_, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
+  getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
@@ -798,16 +811,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private reconnect = async () => {
-    texts.log('this.reconnect()')
+    texts.log('[telegram] reconnect()')
     if (this.client?.connected) return
 
     try {
       await this.client.connect()
-    } catch (e) {
-      texts.log(e)
-      texts.Sentry.captureException(e)
     } finally {
-      setTimeout(async () => { await this.reconnect() }, 10_000)
+      setTimeout(async () => { await this.reconnect() }, 5_000)
     }
   }
 
