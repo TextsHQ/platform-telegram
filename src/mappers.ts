@@ -365,30 +365,26 @@ export default class TelegramMapper {
     }
     const pushSticker = (sticker: Api.Document, messageId: number) => {
       const isWebm = sticker.mimeType === 'video/webm'
-      const animated = sticker.mimeType === 'application/x-tgsticker' || isWebm
-      const mimeType = sticker.mimeType === 'application/x-tgsticker' ? 'image/tgs' : isWebm ? 'video/webm' : undefined
-      const sizeAttribute = sticker.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo)
-      let size: Size | undefined
-      if (sizeAttribute && 'w' in sizeAttribute) {
-        size = {
-          width: sizeAttribute.w,
-          height: sizeAttribute.h,
-        }
-        size.height = sizeAttribute.h
-        mapped.attachments = mapped.attachments || []
-        mapped.attachments.push({
-          id: String(sticker.id),
-          srcURL: this.getMediaUrl(sticker.id, messageId, sticker.mimeType),
-          mimeType,
-          type: isWebm ? MessageAttachmentType.VIDEO : MessageAttachmentType.IMG,
-          isGif: true,
-          isSticker: true,
-          size,
-          extra: {
-            loop: animated,
-          },
-        })
+      const isTgs = sticker.mimeType === 'application/x-tgsticker'
+      const animated = isTgs || isWebm
+      const sizeAttribute = sticker.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
+      const size = {
+        width: sizeAttribute?.w || 100,
+        height: sizeAttribute?.h || 100,
       }
+      mapped.attachments ||= []
+      mapped.attachments.push({
+        id: String(sticker.id),
+        srcURL: this.getMediaUrl(sticker.id, messageId, sticker.mimeType),
+        mimeType: sticker.mimeType,
+        type: isWebm ? MessageAttachmentType.VIDEO : MessageAttachmentType.IMG,
+        isGif: true,
+        isSticker: true,
+        size,
+        extra: {
+          loop: animated,
+        },
+      })
     }
 
     const mapMessageMedia = () => {
