@@ -24,9 +24,15 @@ interface UnmarkedId {
 }
 
 export function getMarkedId(unmarked: UnmarkedId) {
-  if (unmarked.userId) return `${unmarked.userId}`
-  if (unmarked.chatId) return `-${unmarked.chatId}`
-  if (unmarked.channelId) return `-100${unmarked.channelId}`
+  if (unmarked.userId) return unmarked.userId.toString()
+  if (unmarked.chatId) {
+    const str = unmarked.chatId.toString()
+    return str.startsWith('-') ? str : `-${str}`
+  }
+  if (unmarked.channelId) {
+    const str = unmarked.channelId.toString()
+    return str.startsWith('-100') ? str : `-100${str}`
+  }
   if (unmarked.peer) return getPeerId(unmarked.peer)
 }
 export default class TelegramMapper {
