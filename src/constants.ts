@@ -15,4 +15,12 @@ const dylibPath = {
   win32: `${process.platform}-${process.arch}/libtdjson.dll`,
 }[process.platform]
 
+// https://core.telegram.org/api/push-updates#subscribing-to-notifications
+export const pushTokenType = {
+  ios: 1,
+  darwin: 1,
+  android: 2,
+  win32: 8,
+}[process.platform]
+
 export const tdlibPath = dylibPath ? path.join(BINARIES_DIR_PATH, dylibPath) : undefined
