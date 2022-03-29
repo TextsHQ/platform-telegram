@@ -20,7 +20,6 @@ interface UnmarkedId {
   userId?: bigInt.BigInteger
   chatId?: bigInt.BigInteger
   channelId?: bigInt.BigInteger
-  peer?: Api.TypePeer
 }
 
 export function getMarkedId(unmarked: UnmarkedId) {
@@ -33,7 +32,6 @@ export function getMarkedId(unmarked: UnmarkedId) {
     const str = unmarked.channelId.toString()
     return str.startsWith('-100') ? str : `-100${str}`
   }
-  if (unmarked.peer) return getPeerId(unmarked.peer)
 }
 export default class TelegramMapper {
   private mapperData: MapperData
@@ -162,7 +160,7 @@ export default class TelegramMapper {
 
   static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
     const presence: UserPresence = {
-      userID: getMarkedId({ userId }),
+      userID: getMarkedId({ userId: userId }),
       lastActive: undefined,
       status: 'offline',
     }
@@ -187,8 +185,8 @@ export default class TelegramMapper {
   static mapUserAction(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping): UserActivityEvent {
     const [threadID, participantID] = (() => {
       if (update instanceof Api.UpdateUserTyping) return [update.userId, update.userId] // these don't need to be marked
-      if (update instanceof Api.UpdateChatUserTyping) return [getMarkedId({ chatId: update.chatId }), getMarkedId({ peer: update.fromId })]
-      return [getMarkedId({ channelId: update.channelId }), getMarkedId({ peer: update.fromId })]
+      if (update instanceof Api.UpdateChatUserTyping) return [getMarkedId({ chatId: update.chatId }), getPeerId(update.fromId)]
+      return [getMarkedId({ channelId: update.channelId }), getPeerId(update.fromId)]
     })().map(String)
 
     const durationMs = 10_000
@@ -337,8 +335,8 @@ export default class TelegramMapper {
       if (reactions.recentReactions || reactions.results) {
         const mappedReactions: MessageReaction[] = reactions.recentReactions?.map(r => (
           {
-            id: getMarkedId({ peer: r.peerId }),
-            participantID: getMarkedId({ peer: r.peerId }),
+            id: getPeerId(r.peerId),
+            participantID: getPeerId(r.peerId),
             emoji: true,
             reactionKey: r.reaction.replace('❤', '❤️'),
           })) ?? []
@@ -733,7 +731,7 @@ export default class TelegramMapper {
         mutationType: 'update',
         objectName: 'thread',
         entries: [{
-          id: getMarkedId({ peer: update.peer.peer }).toString(),
+          id: getPeerId(update.peer.peer),
           mutedUntil: mutedForever || this.mapMuteUntil(update.notifySettings.muteUntil),
         }],
       }]
@@ -745,14 +743,14 @@ export default class TelegramMapper {
         mutationType: 'update',
         objectName: 'thread',
         entries: [{
-          id: getMarkedId({ peer: f.peer }).toString(),
+          id: getPeerId(f.peer),
           isArchived: f.folderId === 1,
         }],
       }))
     }
     if (update instanceof Api.UpdateDialogUnreadMark) {
       if (!(update.peer instanceof Api.DialogPeer)) return []
-      const threadID = getMarkedId({ peer: update.peer.peer })
+      const threadID = getPeerId(update.peer.peer)
       return [{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -767,7 +765,7 @@ export default class TelegramMapper {
       }]
     }
     if (update instanceof Api.UpdateReadHistoryInbox) {
-      const threadID = getMarkedId({ peer: update.peer })
+      const threadID = getPeerId(update.peer)
       return [{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -782,7 +780,7 @@ export default class TelegramMapper {
       }]
     }
     if (update instanceof Api.UpdateReadHistoryOutbox) {
-      const threadID = getMarkedId({ peer: update.peer })
+      const threadID = getPeerId(update.peer)
       const messageID = String(update.maxId)
       return [{
         type: ServerEventType.STATE_SYNC,

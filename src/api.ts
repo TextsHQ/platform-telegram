@@ -20,6 +20,7 @@ import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './AirgramMigration'
+import { getPeerId } from 'telegram/Utils'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -228,7 +229,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private emitMessage = (message: Api.Message) => {
-    const threadID = getMarkedId({ chatId: message.chatId })
+    const threadID = getPeerId(message.peerId)
     const mappedMessage = this.mapper.mapMessage(message)
     if (!mappedMessage) return
     this.emitParticipantFromMessages(threadID, [message.senderId])
@@ -267,10 +268,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
-    const id = getMarkedId(update instanceof Api.UpdateChatParticipants ? update.participants : update)
+    let markedId : string
+    if ('chatId' in update) { markedId = getMarkedId({chatId: update.chatId}) } 
+    else if ( update instanceof Api.UpdateChannel) { markedId = getMarkedId({channelId: update.channelId}) }
+    else { markedId = getMarkedId({chatId: update.participants.chatId}) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
-      if (threadId === id) {
+      if (threadId === markedId) {
         const { thread, participantsPromise } = await this.mapThread(dialog)
         await participantsPromise
         const event: ServerEvent = {
@@ -287,7 +291,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
-    const id = getMarkedId(update)
+    const id = update instanceof Api.UpdateChatParticipant ? getMarkedId({chatId: update.chatId}) : getMarkedId({channelId: update.channelId})
     if (update.prevParticipant) {
       this.emitDeleteThread(id)
     }
