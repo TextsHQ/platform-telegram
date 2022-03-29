@@ -797,6 +797,7 @@ export default class TelegramAPI implements PlatformAPI {
     const result = this.client.invoke(new Api.account.UnregisterDevice({
       token: deviceToken,
       tokenType: pushTokenType,
+      otherUids: [],
     }))
 
     return result
