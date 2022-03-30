@@ -8,6 +8,7 @@
   "scripts": {
     "prepack": "tsc",
     "build": "yarn tsc",
+    "deploy": "inject-platform-commit src/info.ts && yarn build",
     "lint": "eslint src --ext ts,tsx,js,jsx --cache",
     "rebuild-windows": "yarn tsc && taskkill.exe /IM Texts.exe /F; cmd /c \"start cmd /c \"start /wait %LOCALAPPDATA%/Programs/jack/Texts.exe\"\""
   },

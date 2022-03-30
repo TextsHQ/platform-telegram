@@ -4,6 +4,7 @@ import { REACTIONS } from './common-constants'
 const info: PlatformInfo = {
   name: 'telegram',
   version: '1.0.1',
+  commitHash: 'fa1ea55edd6cf55c2b34f05d184b5a71d059d2ad',
   displayName: 'Telegram',
   icon: `<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="16" height="16" rx="5" fill="#179CDE"/>
