@@ -675,11 +675,9 @@ export default class TelegramMapper {
   }
 
   private hasWritePermissions = (entity: Entity) => {
-    const channelWrite = ('adminRights' in entity && entity.adminRights?.postMessages)
-    && ('bannedRights' in entity && !entity.bannedRights?.sendMessages)
-    && ('defaultBannedRights' in entity && !entity.defaultBannedRights?.sendMessages)
-    const userWrite = entity instanceof Api.User || entity instanceof Api.Chat
-    return channelWrite || userWrite
+    // signle and group chats (entity instanceof Api.User || entity instanceof Api.Chat) can always be written to
+    if (entity instanceof Api.Channel && (!entity.adminRights && !entity.bannedRights && !entity.defaultBannedRights)) return false
+    return true
   }
 
   mapThread = (dialog: Dialog, participants: Participant[]): Thread => {
