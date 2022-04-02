@@ -493,11 +493,9 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client?.destroy()
   }
 
-  getCurrentUser = async (): Promise<CurrentUser> => {
+  getCurrentUser = (): CurrentUser => {
     const user: CurrentUser = {
-      id: this.meMapped.id,
-      username: this.me.username,
-      fullName: this.meMapped.fullName,
+      ...this.meMapped,
       displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phone),
     }
     return user
