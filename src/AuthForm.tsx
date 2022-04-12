@@ -37,7 +37,7 @@ const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
             <div>Authentication code has been sent to {phoneNumber} (check your Telegram app)</div>
             <label>
               <span>Code</span>
-              <input type="number" autoComplete="one-time-code" onChange={ev => setCode(ev.target.value)} value={code} autoFocus />
+              <input type="number" autoComplete="one-time-code" pattern="[0-9]*" onChange={ev => setCode(ev.target.value)} value={code} autoFocus />
             </label>
           </>
         )}
