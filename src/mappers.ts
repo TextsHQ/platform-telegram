@@ -613,6 +613,12 @@ export default class TelegramMapper {
         mapped.text = `You have successfully transfered ${msg.action.currency} ${msg.action.totalAmount}`
         mapped.isAction = true
         mapped.parseTemplate = true
+      } else if (msg.action instanceof Api.MessageActionSetChatTheme) {
+        mapped.text = msg.action.emoticon
+          ? `${sender} changed the chat theme to ${msg.action.emoticon}`
+          : `${sender} disabled the chat theme`
+        mapped.isAction = true
+        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
       }
