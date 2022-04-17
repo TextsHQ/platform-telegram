@@ -619,6 +619,13 @@ export default class TelegramMapper {
           : `${sender} disabled the chat theme`
         mapped.isAction = true
         mapped.parseTemplate = true
+      } else if (msg.action instanceof Api.MessageActionSetMessagesTTL) {
+        const days = Math.floor(msg.action.period / (60 * 60 * 24))
+        mapped.text = msg.action.period
+          ? `${sender} set messages to automatically delete after ${days} day${days === 1 ? '' : 's'}`
+          : `${sender} disabled the auto-delete timer`
+        mapped.isAction = true
+        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
       }
