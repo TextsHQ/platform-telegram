@@ -96,7 +96,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
       retryDelay: 5000,
       autoReconnect: true,
-      connectionRetries: 3,
+      connectionRetries: Infinity,
       maxConcurrentDownloads: 2,
       useWSS: false,
     })
