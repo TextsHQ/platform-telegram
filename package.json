@@ -25,12 +25,12 @@
     "airgram": "^5.0.0",
     "big-integer": "^1.6.51",
     "bluebird": "^3.7.2",
-    "date-fns": "^2.27.0",
+    "date-fns": "^2.28.0",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
     "react": "https://github.com/TextsHQ/react-global-shim",
-    "react-phone-number-input": "^3.1.16",
-    "telegram": "^2.5.2",
+    "react-phone-number-input": "^3.1.50",
+    "telegram": "^2.6.13",
     "vcard-creator": "^0.4.2"
   },
   "devDependencies": {
@@ -47,10 +47,10 @@
     "eslint": "^7.21.0",
     "husky": "^4.3.5",
     "source-map-support": "^0.5.21",
-    "typescript": "^4.5.2"
+    "typescript": "^4.6.3"
   },
   "resolutions": {
     "ffi-napi": "^4.0.3"
   },
-  "packageManager": "yarn@3.1.0"
+  "packageManager": "yarn@3.2.0"
 }

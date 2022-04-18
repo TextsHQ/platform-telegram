@@ -729,13 +729,13 @@ export default class TelegramAPI implements PlatformAPI {
       if (type === 'media') {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
-          buffer = await this.client.downloadMedia(media, { workers: 16 })
+          buffer = await this.client.downloadMedia(media, {}) as Buffer
           this.messageMediaStore.delete(+messageId)
         } else {
           throw Error('message media not found')
         }
       } else if (type === 'photos') {
-        buffer = await this.client.downloadProfilePhoto(assetId, {})
+        buffer = await this.client.downloadProfilePhoto(assetId, {}) as Buffer
       }
       // tgs stickers only appear to work on thread refresh
       // only happens first time
