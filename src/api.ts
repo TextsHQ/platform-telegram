@@ -14,13 +14,13 @@ import { CustomFile } from 'telegram/client/uploads'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
+import { getPeerId } from 'telegram/Utils'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenType } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
 import { DbSession } from './dbSession'
 import type { AirgramMigration, AirgramSession } from './AirgramMigration'
-import { getPeerId } from 'telegram/Utils'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -96,8 +96,9 @@ export default class TelegramAPI implements PlatformAPI {
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
       retryDelay: 5000,
       autoReconnect: true,
-      connectionRetries: Infinity,
+      connectionRetries: 3,
       maxConcurrentDownloads: 2,
+      useWSS: false,
     })
 
     await this.client.connect()
@@ -268,10 +269,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
-    let markedId : string
-    if ('chatId' in update) { markedId = getMarkedId({chatId: update.chatId}) } 
-    else if ( update instanceof Api.UpdateChannel) { markedId = getMarkedId({channelId: update.channelId}) }
-    else { markedId = getMarkedId({chatId: update.participants.chatId}) }
+    let markedId: string
+    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) } else { markedId = getMarkedId({ chatId: update.participants.chatId }) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
@@ -291,7 +290,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
-    const id = update instanceof Api.UpdateChatParticipant ? getMarkedId({chatId: update.chatId}) : getMarkedId({channelId: update.channelId})
+    const id = update instanceof Api.UpdateChatParticipant ? getMarkedId({ chatId: update.chatId }) : getMarkedId({ channelId: update.channelId })
     if (update.prevParticipant) {
       this.emitDeleteThread(id)
     }
