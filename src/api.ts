@@ -98,7 +98,7 @@ export default class TelegramAPI implements PlatformAPI {
       autoReconnect: true,
       connectionRetries: Infinity,
       maxConcurrentDownloads: 2,
-      useWSS: false,
+      useWSS: true,
     })
 
     await this.client.connect()
