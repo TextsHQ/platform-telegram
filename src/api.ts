@@ -741,20 +741,33 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   handleDeepLink = async (link: string) => {
+    let message: string
+    const linkParsed = new URL(link)
+    if (linkParsed.host === 't.me' || linkParsed.host === 'tg') {
+      const info = await this.client.invoke(new Api.help.GetDeepLinkInfo({ path: link }))
+      if (info instanceof Api.help.DeepLinkInfo) {
+        if (info.message) message = info.message
+      }
+    }
+
     const [, , , , type, chatID, messageID, data] = link.split('/')
-    if (type !== 'callback') return
-    const res = await this.client.invoke(new Api.messages.GetBotCallbackAnswer({
-      data: Buffer.from(data),
-      peer: chatID,
-      msgId: +messageID,
-    }))
-    if (!res.message) return
-    this.onEvent([{
-      type: ServerEventType.TOAST,
-      toast: {
-        text: res.message,
-      },
-    }])
+    if (type === 'callback' && !message) {
+      const res = await this.client.invoke(new Api.messages.GetBotCallbackAnswer({
+        data: Buffer.from(data),
+        peer: chatID,
+        msgId: +messageID,
+      }))
+      if (res.message) message = res.message
+    }
+
+    if (message) {
+      this.onEvent([{
+        type: ServerEventType.TOAST,
+        toast: {
+          text: message,
+        },
+      }])
+    }
   }
 
   addReaction = async (threadID: string, messageID: string, reactionKey: string) => {
