@@ -142,6 +142,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
       if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
       if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
+      if (message === 'PHONE_PASSWORD_FLOOD') return 'You have tried logging in too many times.'
       return message
     }
 
