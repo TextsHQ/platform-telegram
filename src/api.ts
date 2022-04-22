@@ -553,7 +553,8 @@ export default class TelegramAPI implements PlatformAPI {
   deleteThread = async (threadID: string) => {
     this.client.invoke(new Api.messages.DeleteHistory({
       peer: await this.client.getInputEntity(threadID),
-      revoke: true,
+      revoke: false,
+      justClear: true,
     }))
   }
 
