@@ -552,22 +552,17 @@ export default class TelegramAPI implements PlatformAPI {
 
   deleteThread = async (threadID: string) => {
     this.client.invoke(new Api.messages.DeleteHistory({
-      peer: threadID,
+      peer: await this.client.getInputEntity(threadID),
       revoke: true,
-    }))
-    this.client.invoke(new Api.messages.DeleteChatUser({
-      userId: 'me',
-      chatId: BigInteger(threadID),
-      revokeHistory: true,
     }))
   }
 
   reportThread = async (type: 'spam', threadID: string) => {
     await this.client.invoke(new Api.account.ReportPeer({
-      peer: threadID,
+      peer: await this.client.getInputEntity(threadID),
       reason: new Api.InputReportReasonSpam(),
+      message: 'Spam',
     }))
-    await this.deleteThread(threadID)
     return true
   }
 
