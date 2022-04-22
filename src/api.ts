@@ -379,6 +379,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.mapper = new TelegramMapper(this.accountInfo, this.me)
     this.meMapped = this.mapper.mapUser(this.me)
     this.registerUpdateListeners()
+    // let's only do this when the sticker menu is open
     // await this.getAllStickers()
   }
 
@@ -652,12 +653,15 @@ export default class TelegramAPI implements PlatformAPI {
       this.storeMessage(msg)
       messages.push(msg)
     }
+
+    // user is more likely to use their recent stickers so this serves as a little optimization
+    const stickers = messages.filter(m => m.sticker).map(m => this.mapper.stickerInfoFromMessage(m.sticker, m.id))
     const replies = await this.getMessageReplies(BigInteger(threadID), messages)
     replies.forEach(this.storeMessage)
     messages.push(...replies)
 
     setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 100)
-
+    this.addStickers(await Promise.all(stickers))
     return {
       items: this.mapper.mapMessages(messages),
       hasMore: messages.length !== 0,
