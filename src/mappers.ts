@@ -1,6 +1,6 @@
 import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, Participant, ServerEvent, texts, MessageBehavior, StickerInfo } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
-import { range } from 'lodash'
+import { range, zip, zipObject, zipWith } from 'lodash'
 import VCard from 'vcard-creator'
 import { Api } from 'telegram/tl'
 import mime from 'mime-types'
@@ -9,7 +9,7 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { Entity } from 'telegram/define'
 
-import { getPeerId } from 'telegram/Utils'
+import { getAttributes, getInputDocument, getPeerId } from 'telegram/Utils'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
@@ -251,14 +251,16 @@ export default class TelegramMapper {
     texts.log('unsupported activity', update.action.className, update.action)
   }
 
-  stickerInfoFromMessage = async (sticker: Api.Document, messageId: number) => {
-    const stickerInfo: StickerInfo = {
-      id: sticker.id.toJSNumber(),
-      mimeType: sticker.mimeType,
-      file: this.getMediaUrl(sticker.id, messageId, sticker.mimeType),
+  mapStickerSetInfo = (packs: Api.StickerPack[], documents: Api.TypeDocument[], set: Api.StickerSet) => zip(packs, documents).flatMap(sticker => {
+    if (!sticker[0] || !sticker[1]) return []
+    if (sticker[1] instanceof Api.DocumentEmpty) return []
+    return {
+      id: set.id.toJSNumber(),
+      mimeType: sticker[1].mimeType,
+      file: this.getStickerUrl(sticker[1].id, sticker[1].mimeType),
+      name: sticker[0].emoticon,
     }
-    return stickerInfo
-  }
+  })
 
   getMessageButtons(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number) {
     if (!replyMarkup) return
@@ -291,6 +293,9 @@ export default class TelegramMapper {
 
   getMediaUrl = (id: bigInt.BigInteger, messageId: number, mimeType: string) =>
     `asset://${this.mapperData.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${messageId}`
+
+  getStickerUrl = (id: bigInt.BigInteger, mimeType: string) =>
+    `asset://${this.mapperData.accountID}/sticker/${id}/${mime.extension(mimeType) || 'bin'}`
 
   getProfilePhotoUrl = (id: bigInt.BigInteger, mimeType: string) =>
     `asset://${this.mapperData.accountID}/photos/${id}/${mime.extension(mimeType) || 'bin'}`

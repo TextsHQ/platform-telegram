@@ -3,8 +3,8 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User, StickerInfo } from '@textshq/platform-sdk'
-import { groupBy, debounce } from 'lodash'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User, StickerInfo, Awaitable } from '@textshq/platform-sdk'
+import { groupBy, debounce, zip } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
 import { TelegramClient } from 'telegram'
@@ -14,8 +14,7 @@ import { CustomFile } from 'telegram/client/uploads'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-import { getPeerId } from 'telegram/Utils'
-import bigInt from 'big-integer'
+import { getInputDocument, getPeerId } from 'telegram/Utils'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenType } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -61,6 +60,8 @@ export default class TelegramAPI implements PlatformAPI {
   private dialogs: Map<string, Dialog> = new Map<string, Dialog>()
 
   private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
+
+  private stickerDocumentStore = new Map<number, Api.TypeDocument>()
 
   private chatIdMessageId = new Map<string, Set<number>>()
 
@@ -249,8 +250,6 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
-    if (message.sticker) this.addStickers([await this.mapper.stickerInfoFromMessage(message.sticker, message.id)])
-    texts.log('Emitting sticker from message')
     this.emitMessage(message)
   }
 
@@ -379,29 +378,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.mapper = new TelegramMapper(this.accountInfo, this.me)
     this.meMapped = this.mapper.mapUser(this.me)
     this.registerUpdateListeners()
-    // let's only do this when the sticker menu is open
-    // await this.getAllStickers()
-  }
-
-  private getAllStickers = async () => {
-    const stickerinfoArray = []
-    const stickers = await this.client.invoke(new Api.messages.GetAllStickers({ hash: bigInt.zero }))
-    if (stickers.className !== 'messages.AllStickers') return stickerinfoArray
-    for (const s of stickers.sets) {
-      const current = await this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: s.accessHash, id: s.id }) }))
-      if (current.className !== 'messages.StickerSet') continue
-      for (const doc of current.documents) {
-        if (doc.className === 'DocumentEmpty') continue
-        stickerinfoArray.push({
-          id: doc.id.toJSNumber(),
-          mimeType: doc.mimeType,
-          file: await this.client.downloadFile(new Api.InputDocumentFileLocation({ accessHash: doc.accessHash, fileReference: doc.fileReference, id: doc.id, thumbSize: 'm' }), { dcId: doc.dcId }),
-          stickerPackName: current.set.shortName,
-          name: current.set.title,
-        })
-      }
-    }
-    this.addStickers(stickerinfoArray)
+    await this.getStickers()
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -486,18 +463,20 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(dialogId, mappedMembers)
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', assetId: string | number, extension: string) =>
+  private getAssetPath = (assetType: 'media' | 'photos' | 'sticker', assetId: string | number, extension: string) =>
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
-  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', assetId: string | number) =>
+  private getAssetPathWithoutExt = (assetType: 'media' | 'photos' | 'sticker', assetId: string | number) =>
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}`)
 
   private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
     const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
+    const stickerDir = path.join(this.accountInfo.dataDirPath, 'sticker')
 
     await fsp.mkdir(mediaDir, { recursive: true })
     await fsp.mkdir(photosDir, { recursive: true })
+    await fsp.mkdir(stickerDir, { recursive: true })
   }
 
   private deleteAssetsDir = async () => {
@@ -654,14 +633,12 @@ export default class TelegramAPI implements PlatformAPI {
       messages.push(msg)
     }
 
-    // user is more likely to use their recent stickers so this serves as a little optimization
-    const stickers = messages.filter(m => m.sticker).map(m => this.mapper.stickerInfoFromMessage(m.sticker, m.id))
     const replies = await this.getMessageReplies(BigInteger(threadID), messages)
     replies.forEach(this.storeMessage)
     messages.push(...replies)
 
     setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 100)
-    this.addStickers(await Promise.all(stickers))
+
     return {
       items: this.mapper.mapMessages(messages),
       hasMore: messages.length !== 0,
@@ -743,7 +720,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
+  getAsset = async (_: any, type: 'media' | 'photos' | 'sticker', assetId: string, extension: string, messageId: string, extra?: string) => {
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
@@ -764,6 +741,18 @@ export default class TelegramAPI implements PlatformAPI {
         }
       } else if (type === 'photos') {
         buffer = await this.client.downloadProfilePhoto(assetId, {}) as Buffer
+      } else if (type === 'sticker') {
+        const sticker = this.stickerDocumentStore.get(+assetId)
+        if (sticker instanceof Api.Document) {
+          buffer = await this.client.downloadFile(
+            new Api.InputDocumentFileLocation({ accessHash: sticker.accessHash,
+              fileReference: sticker.fileReference,
+              id: sticker.id,
+              thumbSize: sticker.size.toString() }),
+            { dcId: sticker.dcId },
+          ) as Buffer
+          this.stickerDocumentStore.delete(+assetId)
+        }
       }
       // tgs stickers only appear to work on thread refresh
       // only happens first time
@@ -844,5 +833,46 @@ export default class TelegramAPI implements PlatformAPI {
     await this.reconnect()
   }
 
-  addStickers = async (stickerinfoArray: StickerInfo[]) => stickerinfoArray
+  getStickers = async () => {
+    const stickerinfoArray = []
+    const allStickers = await this.client.invoke(new Api.messages.GetAllStickers({}))
+    if (allStickers instanceof Api.messages.AllStickersNotModified) return stickerinfoArray
+    const stickerSets = await Promise.all(allStickers.sets.map(s => this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: s.accessHash, id: s.id }) }))))
+    return stickerSets.flatMap(async stickerset => {
+      if (stickerset instanceof Api.messages.StickerSetNotModified) return []
+      const { packs, documents, set } = stickerset
+      documents.forEach(a => { if ('accessHash' in a) this.stickerDocumentStore.set(a.accessHash.toJSNumber(), a) })
+      if (!packs || !documents || !set) return []
+      documents.forEach(async a => {
+        if ('accessHash' in a) {
+          const mapped: StickerInfo[] = this.mapper.mapStickerSetInfo(packs, documents, set)
+          documents.forEach(async a => {
+            if (a instanceof Api.DocumentEmpty) return
+            const buffer = await this.client.downloadFile(
+              new Api.InputDocumentFileLocation({ accessHash: a.accessHash,
+                fileReference: a.fileReference,
+                id: a.id,
+                thumbSize: a.size.toString() }),
+              { dcId: a.dcId },
+            ) as Buffer
+            console.log(buffer)
+            // some test code
+            const filePath = this.getAssetPath('sticker', a.id.toJSNumber(), a.mimeType)
+            if (buffer) await fsp.writeFile(filePath, buffer)
+          })
+          const events = mapped.map(m => {
+            const event: ServerEvent = {
+              type: ServerEventType.STATE_SYNC,
+              mutationType: 'upsert',
+              objectName: 'sticker',
+              objectIDs: { },
+              entries: [m],
+            }
+            return event
+          })
+          this.onEvent(events)
+        }
+      })
+    })
+  }
 }
