@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User, StickerInfo } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
@@ -15,6 +15,7 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 import { getPeerId } from 'telegram/Utils'
+import bigInt from 'big-integer'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenType } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -248,6 +249,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
     const { message } = newMessageEvent
+    if (message.sticker) this.addStickers([await this.mapper.stickerInfoFromMessage(message.sticker, message.id)])
+    texts.log('Emitting sticker from message')
     this.emitMessage(message)
   }
 
@@ -376,6 +379,28 @@ export default class TelegramAPI implements PlatformAPI {
     this.mapper = new TelegramMapper(this.accountInfo, this.me)
     this.meMapped = this.mapper.mapUser(this.me)
     this.registerUpdateListeners()
+    // await this.getAllStickers()
+  }
+
+  private getAllStickers = async () => {
+    const stickerinfoArray = []
+    const stickers = await this.client.invoke(new Api.messages.GetAllStickers({ hash: bigInt.zero }))
+    if (stickers.className !== 'messages.AllStickers') return stickerinfoArray
+    for (const s of stickers.sets) {
+      const current = await this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: s.accessHash, id: s.id }) }))
+      if (current.className !== 'messages.StickerSet') continue
+      for (const doc of current.documents) {
+        if (doc.className === 'DocumentEmpty') continue
+        stickerinfoArray.push({
+          id: doc.id.toJSNumber(),
+          mimeType: doc.mimeType,
+          file: await this.client.downloadFile(new Api.InputDocumentFileLocation({ accessHash: doc.accessHash, fileReference: doc.fileReference, id: doc.id, thumbSize: 'm' }), { dcId: doc.dcId }),
+          stickerPackName: current.set.shortName,
+          name: current.set.title,
+        })
+      }
+    }
+    this.addStickers(stickerinfoArray)
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -814,4 +839,6 @@ export default class TelegramAPI implements PlatformAPI {
   onResumeFromSleep = async () => {
     await this.reconnect()
   }
+
+  addStickers = async (stickerinfoArray: StickerInfo[]) => stickerinfoArray
 }

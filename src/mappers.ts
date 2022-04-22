@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, Participant, ServerEvent, texts, MessageBehavior } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, Participant, ServerEvent, texts, MessageBehavior, StickerInfo } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -160,7 +160,7 @@ export default class TelegramMapper {
 
   static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
     const presence: UserPresence = {
-      userID: getMarkedId({ userId: userId }),
+      userID: getMarkedId({ userId }),
       lastActive: undefined,
       status: 'offline',
     }
@@ -249,6 +249,15 @@ export default class TelegramMapper {
       }
     }
     texts.log('unsupported activity', update.action.className, update.action)
+  }
+
+  stickerInfoFromMessage = async (sticker: Api.Document, messageId: number) => {
+    const stickerInfo: StickerInfo = {
+      id: sticker.id.toJSNumber(),
+      mimeType: sticker.mimeType,
+      file: this.getMediaUrl(sticker.id, messageId, sticker.mimeType),
+    }
+    return stickerInfo
   }
 
   getMessageButtons(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number) {
@@ -361,6 +370,7 @@ export default class TelegramMapper {
       mapped.text = msgText
       mapped.textAttributes = TelegramMapper.mapTextAttributes(msgText, msgEntities)
     }
+
     const pushSticker = (sticker: Api.Document, messageId: number) => {
       const isWebm = sticker.mimeType === 'video/webm'
       const isTgs = sticker.mimeType === 'application/x-tgsticker'
