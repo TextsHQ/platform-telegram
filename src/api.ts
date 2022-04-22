@@ -11,10 +11,11 @@ import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
+import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-import { getPeerId } from 'telegram/Utils'
+
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenType } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -45,6 +46,20 @@ interface LoginInfo {
 
 const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
   !!(session as AirgramSession)?.dbKey
+
+// https://core.telegram.org/method/auth.sendcode
+// https://core.telegram.org/method/auth.signIn
+const LOGIN_ERROR_MAP = {
+  PASSWORD_HASH_INVALID: 'Password is invalid.',
+  PHONE_CODE_EXPIRED: 'Code is expired.',
+  PHONE_CODE_INVALID: 'Code is invalid.',
+  PHONE_NUMBER_BANNED: 'Phone number is banned from Telegram.',
+  PHONE_NUMBER_FLOOD: 'You asked for the code too many times.',
+  PHONE_NUMBER_INVALID: 'Phone number is invalid.',
+  PHONE_NUMBER_UNOCCUPIED: 'Phone number is not yet being used.',
+  PHONE_PASSWORD_FLOOD: "You've tried logging in too many times. Try again after a while.",
+  PHONE_PASSWORD_PROTECTED: 'Phone is password protected.',
+}
 
 export default class TelegramAPI implements PlatformAPI {
   private client: TelegramClient
@@ -138,19 +153,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
-    const mapError = (message: string) => {
-      if (message === 'PASSWORD_HASH_INVALID') return 'Password is invalid.'
-      if (message === 'PHONE_CODE_INVALID') return 'Code is invalid.'
-      if (message === 'PHONE_NUMBER_INVALID') return 'Phone number is invalid.'
-      if (message === 'PHONE_PASSWORD_FLOOD') return 'You have tried logging in too many times.'
-      return message
-    }
-
     texts.log('CREDS_CUSTOM', JSON.stringify(creds.custom, null, 4))
     try {
       switch (this.authState) {
-        case AuthState.PHONE_INPUT:
-        {
+        case AuthState.PHONE_INPUT: {
           this.loginInfo.phoneNumber = creds.custom.phoneNumber
           const res = await this.client.invoke(new Api.auth.SendCode({
             apiHash: API_HASH,
@@ -167,8 +173,7 @@ export default class TelegramAPI implements PlatformAPI {
           this.authState = AuthState.CODE_INPUT
           break
         }
-        case AuthState.CODE_INPUT:
-        {
+        case AuthState.CODE_INPUT: {
           this.loginInfo.phoneCode = creds.custom.code
           if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
           const res = await this.client.invoke(new Api.auth.SignIn({
@@ -180,8 +185,7 @@ export default class TelegramAPI implements PlatformAPI {
           this.authState = AuthState.READY
           break
         }
-        case AuthState.PASSWORD_INPUT:
-        {
+        case AuthState.PASSWORD_INPUT: {
           this.loginInfo.password = creds.custom.password
           await this.client.signInWithPassword({
             apiHash: API_HASH,
@@ -193,15 +197,13 @@ export default class TelegramAPI implements PlatformAPI {
           this.authState = AuthState.READY
           break
         }
-        case AuthState.READY:
-        {
+        case AuthState.READY: {
           texts.log('READY')
           this.dbSession.save()
           await this.afterLogin()
           return { type: 'success' }
         }
-        default:
-        {
+        default: {
           texts.log(`Auth state is ${this.authState}`)
           return { type: 'error' }
         }
@@ -210,7 +212,7 @@ export default class TelegramAPI implements PlatformAPI {
       texts.log('err', e, JSON.stringify(e, null, 4))
       texts.Sentry.captureException(e)
       if (e.code === 401) this.authState = AuthState.PASSWORD_INPUT
-      else return { type: 'error', errorMessage: mapError(e.errorMessage) }
+      else return { type: 'error', errorMessage: LOGIN_ERROR_MAP[e.errorMessage] || e.errorMessage }
     }
 
     this.loginEventCallback(this.authState)
@@ -271,7 +273,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
     let markedId: string
-    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) } else { markedId = getMarkedId({ chatId: update.participants.chatId }) }
+    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } 
+    else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) } 
+    else { markedId = getMarkedId({ chatId: update.participants.chatId }) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
