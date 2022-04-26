@@ -273,8 +273,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
     let markedId: string
-    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } 
-    else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) } 
+    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) }
+    else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
     else { markedId = getMarkedId({ chatId: update.participants.chatId }) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
@@ -825,7 +825,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  onResumeFromSleep = async () => {
+  reconnectRealtime = async () => {
     await this.reconnect()
   }
 }
