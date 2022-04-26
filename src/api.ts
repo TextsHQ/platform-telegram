@@ -494,6 +494,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
+    clearTimeout(this.reconnectTimeout)
     await this.client?.destroy()
   }
 
@@ -814,14 +815,17 @@ export default class TelegramAPI implements PlatformAPI {
     return result
   }
 
+  private reconnectTimeout: NodeJS.Timeout
+
   private reconnect = async () => {
     texts.log('[telegram] reconnect()')
+    clearTimeout(this.reconnectTimeout)
     if (this.client?.connected) return
 
     try {
       await this.client.connect()
     } finally {
-      setTimeout(async () => { await this.reconnect() }, 5_000)
+      this.reconnectTimeout = setTimeout(() => this.reconnect(), 5_000)
     }
   }
 
