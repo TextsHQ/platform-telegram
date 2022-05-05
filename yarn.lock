@@ -1628,13 +1628,13 @@ __metadata:
   dependencies:
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#1c200ae33d4adccc1404fb55669b13a70172a1b9"
-    "@types/better-sqlite3": ^7.4.2
-    "@types/bluebird": ^3.5.33
+    "@types/better-sqlite3": ^7.5.0
+    "@types/bluebird": ^3.5.36
     "@types/eslint": ^7.2.6
     "@types/glob": ^7.2.0
-    "@types/lodash": ^4.14.168
+    "@types/lodash": ^4.14.182
     "@types/mime-types": ^2.1.1
-    "@types/node": ^17.0.12
+    "@types/node": ^17.0.31
     "@types/react": 17.0.2
     "@types/react-phone-number-input": ^3.0.13
     airgram: ^5.0.0
@@ -1646,10 +1646,10 @@ __metadata:
     lodash: ^4.17.21
     mime-types: ^2.1.35
     react: "https://github.com/TextsHQ/react-global-shim"
-    react-phone-number-input: ^3.1.50
+    react-phone-number-input: ^3.1.52
     source-map-support: ^0.5.21
-    telegram: ^2.6.13
-    typescript: ^4.6.3
+    telegram: ^2.7.12
+    typescript: ^4.6.4
     vcard-creator: ^0.4.2
   languageName: unknown
   linkType: soft
@@ -1661,16 +1661,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/better-sqlite3@npm:^7.4.2":
-  version: 7.4.2
-  resolution: "@types/better-sqlite3@npm:7.4.2"
+"@types/better-sqlite3@npm:^7.5.0":
+  version: 7.5.0
+  resolution: "@types/better-sqlite3@npm:7.5.0"
   dependencies:
     "@types/node": "*"
-  checksum: e3ea65b4d75cd6bdb5e4d3638c9501bc58ec243c3e24914993e81df5811ed6adb797b353ef973b8efcfeb3dea623708b83bf941eb7af81ec87b8833f6e44feb2
+  checksum: 8ff28d9ad2c315544fe16b223d7106c013555ea86ca2a2f2bf9c0931976763b1093db0dc1d7a6e67f0ed45264b15f66157afb45f8dd80896a3bb80efd87e800f
   languageName: node
   linkType: hard
 
-"@types/bluebird@npm:^3.5.33":
+"@types/bluebird@npm:^3.5.36":
   version: 3.5.36
   resolution: "@types/bluebird@npm:3.5.36"
   checksum: efe7484e1f6c3443c083f052efb7688b461a9f43899b1891c10b1faf92e4932d686265d10c3e02b8c8fe0c8c371774e6a55ff6eec5e79525390a1ddeee7eb41b
@@ -1718,10 +1718,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/lodash@npm:^4.14.168":
-  version: 4.14.178
-  resolution: "@types/lodash@npm:4.14.178"
-  checksum: a69a04a60bfc5257c3130a554b4efa0c383f0141b7b3db8ab7cf07ad2a46ea085fce66d0242da41da7e5647b133d5dfb2c15add9cbed8d7fef955e4a1e5b3128
+"@types/lodash@npm:^4.14.182":
+  version: 4.14.182
+  resolution: "@types/lodash@npm:4.14.182"
+  checksum: 7dd137aa9dbabd632408bd37009d984655164fa1ecc3f2b6eb94afe35bf0a5852cbab6183148d883e9c73a958b7fec9a9bcf7c8e45d41195add6a18c34958209
   languageName: node
   linkType: hard
 
@@ -1739,10 +1739,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:^17.0.12":
+"@types/node@npm:*":
   version: 17.0.17
   resolution: "@types/node@npm:17.0.17"
   checksum: 8ddba2829acdf1684fbd8fd248ec13f033efb70ecd1085677b547c40ef8e936a006b95eac3bdc28c47939c62526f3f027afeb4a930e30e4394923bbae4626476
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^17.0.31":
+  version: 17.0.31
+  resolution: "@types/node@npm:17.0.31"
+  checksum: 704618350f8420d5c47db0f7778398e821b7724369946f5c441a7e6b9343295553936400eb8309f0b07d5e39c240988ab3456b983712ca86265dabc9aee4ad3d
   languageName: node
   linkType: hard
 
@@ -4084,10 +4091,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"libphonenumber-js@npm:^1.9.51":
-  version: 1.9.51
-  resolution: "libphonenumber-js@npm:1.9.51"
-  checksum: 73a280a20c0570ef0a843a5757f24621f17126a43115b9eb596efb09a81c4c633515ddb42c0c49f60f64ba8d2eb85f12c519a6586540f107b045e7bd20f521f3
+"libphonenumber-js@npm:^1.9.52":
+  version: 1.9.52
+  resolution: "libphonenumber-js@npm:1.9.52"
+  checksum: d7856fd674b14abdf13162553a7ffe1de634295ab9b4cf959e1b42737de58347a8f83c41f18e14803a033e9ab8a3e3affbbfd81fa2c456545331129908b89a30
   languageName: node
   linkType: hard
 
@@ -4795,19 +4802,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-phone-number-input@npm:^3.1.50":
-  version: 3.1.50
-  resolution: "react-phone-number-input@npm:3.1.50"
+"react-phone-number-input@npm:^3.1.52":
+  version: 3.1.52
+  resolution: "react-phone-number-input@npm:3.1.52"
   dependencies:
     classnames: ^2.2.5
     country-flag-icons: ^1.0.2
     input-format: ^0.3.7
-    libphonenumber-js: ^1.9.51
+    libphonenumber-js: ^1.9.52
     prop-types: ^15.7.2
   peerDependencies:
     react: ">=0.16.8"
     react-dom: ">=0.16.8"
-  checksum: a56af29db629c0a67ee9c1ae6f2c08b9392a911237a8ec4a66b9f64dc87f889101c468d9f51b2fd32eea477cdd7387fe3e7bc8fb89e6094fc699a7989811142c
+  checksum: bb14ae0ef92da8fc0000f235aa0b05dd68be7f3cfa5f03c6c35d9c81955bcab6976edbfae165b70398d165a969290cf43708fa863c129c9c7ae7d54f24eea73b
   languageName: node
   linkType: hard
 
@@ -5370,9 +5377,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.6.13":
-  version: 2.6.13
-  resolution: "telegram@npm:2.6.13"
+"telegram@npm:^2.7.12":
+  version: 2.7.12
+  resolution: "telegram@npm:2.7.12"
   dependencies:
     "@cryptography/aes": ^0.1.1
     async-mutex: ^0.3.0
@@ -5394,7 +5401,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 00c2f481b30ba597d24d83723267b5a21a15c0826affa0af673f4d3850eb47aa05c4bc506bd66ad64e3edc939d5e5f67a878706661703e5fc900e0076232c89d
+  checksum: 337a4b59e4afc3ae2eecf588fdd2cfe48cb3446fde171eb107f5da967e10caabcbe3d82072edbea063b5f391837055110ac011c7accf0b982014f4e604556c46
   languageName: node
   linkType: hard
 
@@ -5504,23 +5511,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^4.6.3":
-  version: 4.6.3
-  resolution: "typescript@npm:4.6.3"
+"typescript@npm:^4.6.4":
+  version: 4.6.4
+  resolution: "typescript@npm:4.6.4"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 255bb26c8cb846ca689dd1c3a56587af4f69055907aa2c154796ea28ee0dea871535b1c78f85a6212c77f2657843a269c3a742d09d81495b97b914bf7920415b
+  checksum: e7bfcc39cd4571a63a54e5ea21f16b8445268b9900bf55aee0e02ad981be576acc140eba24f1af5e3c1457767c96cea6d12861768fb386cf3ffb34013718631a
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@^4.6.3#~builtin<compat/typescript>":
-  version: 4.6.3
-  resolution: "typescript@patch:typescript@npm%3A4.6.3#~builtin<compat/typescript>::version=4.6.3&hash=bda367"
+"typescript@patch:typescript@^4.6.4#~builtin<compat/typescript>":
+  version: 4.6.4
+  resolution: "typescript@patch:typescript@npm%3A4.6.4#~builtin<compat/typescript>::version=4.6.4&hash=bda367"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 6bf45caf847062420592e711bc9c28bf5f9a9a7fa8245343b81493e4ededae33f1774009d1234d911422d1646a2c839f44e1a23ecb111b40a60ac2ea4c1482a8
+  checksum: 1cb434fbc637d347be90e3a0c6cd05e33c38f941713c8786d3031faf1842c2c148ba91d2fac01e7276b0ae3249b8633f1660e32686cc7a8c6a8fd5361dc52c66
   languageName: node
   linkType: hard
 

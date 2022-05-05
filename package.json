@@ -29,25 +29,25 @@
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
     "react": "https://github.com/TextsHQ/react-global-shim",
-    "react-phone-number-input": "^3.1.50",
-    "telegram": "^2.6.13",
+    "react-phone-number-input": "^3.1.52",
+    "telegram": "^2.7.12",
     "vcard-creator": "^0.4.2"
   },
   "devDependencies": {
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main",
-    "@types/better-sqlite3": "^7.4.2",
-    "@types/bluebird": "^3.5.33",
+    "@types/better-sqlite3": "^7.5.0",
+    "@types/bluebird": "^3.5.36",
     "@types/eslint": "^7.2.6",
     "@types/glob": "^7.2.0",
-    "@types/lodash": "^4.14.168",
+    "@types/lodash": "^4.14.182",
     "@types/mime-types": "^2.1.1",
-    "@types/node": "^17.0.12",
+    "@types/node": "^17.0.31",
     "@types/react": "17.0.2",
     "@types/react-phone-number-input": "^3.0.13",
     "eslint": "^7.21.0",
     "husky": "^4.3.5",
     "source-map-support": "^0.5.21",
-    "typescript": "^4.6.3"
+    "typescript": "^4.6.4"
   },
   "resolutions": {
     "ffi-napi": "^4.0.3"
