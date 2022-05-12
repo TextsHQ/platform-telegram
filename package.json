@@ -30,7 +30,7 @@
     "mime-types": "^2.1.35",
     "react": "https://github.com/TextsHQ/react-global-shim",
     "react-phone-number-input": "^3.1.52",
-    "telegram": "^2.7.12",
+    "telegram": "^2.7.32",
     "vcard-creator": "^0.4.2"
   },
   "devDependencies": {
