@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Size, Participant, ServerEvent, texts, MessageBehavior } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, AccountInfo, Participant, ServerEvent, texts, MessageBehavior } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -160,7 +160,7 @@ export default class TelegramMapper {
 
   static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
     const presence: UserPresence = {
-      userID: getMarkedId({ userId: userId }),
+      userID: getMarkedId({ userId }),
       lastActive: undefined,
       status: 'offline',
     }
@@ -555,6 +555,15 @@ export default class TelegramMapper {
         }
       } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
         mapped.text = `${sender} joined the group via invite link`
+        mapped.isAction = true
+        mapped.parseTemplate = true
+        mapped.action = {
+          type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+          participantIDs: [sender],
+          actorParticipantID: '',
+        }
+      } else if (msg.action instanceof Api.MessageActionChatJoinedByRequest) {
+        mapped.text = `${sender} was accepted into the group`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
