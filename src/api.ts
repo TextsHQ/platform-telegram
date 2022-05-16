@@ -103,8 +103,14 @@ export default class TelegramAPI implements PlatformAPI {
     }
     this.sessionName = session as string || randomBytes(8).toString('hex')
 
-    const dbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
-    this.dbSession = new DbSession({ dbPath })
+    const oldDbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
+    const dbPath = path.join(accountInfo.dataDirPath, 'session.sqlite')
+
+    if (await fileExists(oldDbPath)) {
+      await fsp.copyFile(oldDbPath, dbPath)
+    }
+
+    this.dbSession = new DbSession({ dbPath: dbPath })
 
     await this.dbSession.init()
 
