@@ -16,6 +16,7 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
+import { getProxySettings } from 'get-proxy-settings'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenType } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -92,7 +93,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginInfo: LoginInfo = {}
 
-  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
+  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo, prefs: Record<string, any>) => {
     this.accountInfo = accountInfo
 
     if (isAirgramSession(session) && tdlibPath && await fileExists(tdlibPath)) {
@@ -108,15 +109,43 @@ export default class TelegramAPI implements PlatformAPI {
 
     await this.dbSession.init()
 
-    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
+    const proxy = await getProxySettings()
+
+    const proxySettings = proxy && (prefs?.use_system_proxy || true) ? {
+      useWSS: false,
+      connectionRetries: 2,
+      retryDelay: 2000,
+      proxy: {
+        ip: proxy.http?.host || proxy.https?.host,
+        port: Number(proxy.http?.port || proxy.https?.port),
+        MTProxy: false,
+        socksType: 5 as 4 | 5,
+        timeout: 2,
+      },
+    } : {}
+
+    const clientSettings = {
       retryDelay: 5000,
       autoReconnect: true,
       connectionRetries: Infinity,
       maxConcurrentDownloads: 2,
       useWSS: true,
-    })
+    }
 
-    await this.client.connect()
+    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, { ...{ ...clientSettings, ...proxySettings } })
+
+    // we don't have a way to know if it's a working SOCKS5 proxy or not yet
+    if (proxy) texts.log(`Using proxy: ${JSON.stringify({ ...clientSettings, ...proxySettings }, null, 2)}`)
+
+    try {
+      await this.client.connect()
+    } catch {
+      // this is only used for the initial connection
+      // users have the option to disable the system proxy for telegram after the account is initialized
+      texts.log('Attempting connection without proxy')
+      this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, { ...clientSettings })
+      await this.client.connect()
+    }
     if (this.airgramMigration) {
       await this.airgramMigration.migrateAirgramSession(this.accountInfo.dataDirPath, this.client, this.dbSession)
       this.onEvent([

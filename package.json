@@ -21,11 +21,12 @@
     "ref-napi": "^3.0.3"
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#2dc321597a9ed232946e3d7bb2c3831cb527b7ba",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#0dd1da5e221696bc63626a76efb34e598434d104",
     "airgram": "^5.0.0",
     "big-integer": "^1.6.51",
     "bluebird": "^3.7.2",
     "date-fns": "^2.28.0",
+    "get-proxy-settings": "^0.1.13",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
     "react": "https://github.com/TextsHQ/react-global-shim",

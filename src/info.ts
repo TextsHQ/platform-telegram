@@ -54,6 +54,13 @@ const info: PlatformInfo = {
   reactions: {
     supported: REACTIONS,
   },
+  prefs: {
+    use_system_proxy: {
+      label: 'Use system proxy settings for Telegram',
+      type: 'checkbox',
+      default: true,
+    },
+  },
   getUserProfileLink: ({ username }) =>
     (username ? `https://t.me/${username}` : null),
 }
