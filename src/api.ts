@@ -93,7 +93,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginInfo: LoginInfo = {}
 
-  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo, prefs: Record<string, any>) => {
+  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
 
     if (isAirgramSession(session) && tdlibPath && await fileExists(tdlibPath)) {
@@ -111,7 +111,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     const proxy = await getProxySettings()
 
-    const proxySettings = proxy && (prefs?.use_system_proxy || true) ? {
+    const proxySettings = proxy ? {
       useWSS: false,
       connectionRetries: 2,
       retryDelay: 2000,
@@ -143,7 +143,7 @@ export default class TelegramAPI implements PlatformAPI {
       // this is only used for the initial connection
       // users have the option to disable the system proxy for telegram after the account is initialized
       texts.log('Attempting connection without proxy')
-      this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, { ...clientSettings })
+      this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, clientSettings)
       await this.client.connect()
     }
     if (this.airgramMigration) {
