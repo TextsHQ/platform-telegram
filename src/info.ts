@@ -54,6 +54,10 @@ const info: PlatformInfo = {
   reactions: {
     supported: REACTIONS,
   },
+  notifications: {
+    web: {},
+    apple: {},
+  },
   getUserProfileLink: ({ username }) =>
     (username ? `https://t.me/${username}` : null),
 }

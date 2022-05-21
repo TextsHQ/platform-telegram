@@ -16,7 +16,7 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath, pushTokenType } from './constants'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
@@ -792,27 +792,26 @@ export default class TelegramAPI implements PlatformAPI {
     }))
   }
 
-  registerForPushNotifications = async (deviceToken: string, secret?: Buffer) => {
-    const result = this.client.invoke(new Api.account.RegisterDevice({
-      token: deviceToken,
-      tokenType: pushTokenType,
+  registerForPushNotifications = async (type: 'apple' | 'web', token: string) => {
+    const result = await this.client.invoke(new Api.account.RegisterDevice({
+      token,
+      // https://core.telegram.org/api/push-updates#subscribing-to-notifications
+      tokenType: type === 'apple' ? 1 : 10,
       appSandbox: IS_DEV,
       noMuted: true,
-      secret: secret || Buffer.from(''),
+      secret: Buffer.from(''),
       otherUids: [],
     }))
-
-    return result
+    if (!result) throw new Error('Could not register for push notifications')
   }
 
-  unregisterForPushNotifications = async (deviceToken: string) => {
-    const result = this.client.invoke(new Api.account.UnregisterDevice({
-      token: deviceToken,
-      tokenType: pushTokenType,
+  unregisterForPushNotifications = async (type: 'apple' | 'web', token: string) => {
+    const result = await this.client.invoke(new Api.account.UnregisterDevice({
+      token,
+      tokenType: type === 'apple' ? 1 : 10,
       otherUids: [],
     }))
-
-    return result
+    if (!result) throw new Error('Could not unregister for push notifications')
   }
 
   private reconnectTimeout: NodeJS.Timeout
