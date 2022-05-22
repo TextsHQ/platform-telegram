@@ -4821,7 +4821,7 @@ __metadata:
 "react@https://github.com/TextsHQ/react-global-shim":
   version: 17.0.0
   resolution: "react@https://github.com/TextsHQ/react-global-shim.git#commit=a762cc8eada10c6e581a4592bef7ecb020b542ba"
-  checksum: 32881f413a52afa2549f075aa32cf58e949623b3197041654cb2180d85903ab8ac4914d1be56207c0cba0a8ff27b61bd94b6b80386d52035979bcd0b05580c92
+  checksum: fb6a3b3338c0d8ba93eff5c293cb7421896cf9d15d0dc6815369cda3dfbe1e43708565b50a0f5482c0e1206e6320bc6dfff436afc506e70eeb11d20d2e454e6c
   languageName: node
   linkType: hard
 

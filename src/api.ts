@@ -16,12 +16,11 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, tdlibPath } from './constants'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
 import { DbSession } from './dbSession'
-import type { AirgramMigration, AirgramSession } from './AirgramMigration'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -43,9 +42,6 @@ interface LoginInfo {
   phoneCode?: string
   password?: string
 }
-
-const isAirgramSession = (session: string | AirgramSession): session is AirgramSession =>
-  !!(session as AirgramSession)?.dbKey
 
 // https://core.telegram.org/method/auth.sendcode
 // https://core.telegram.org/method/auth.signIn
@@ -88,19 +84,10 @@ export default class TelegramAPI implements PlatformAPI {
 
   private sessionName: string
 
-  private airgramMigration: AirgramMigration
-
   private loginInfo: LoginInfo = {}
 
-  init = async (session: string | AirgramSession | undefined, accountInfo: AccountInfo) => {
+  init = async (session: string | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
-
-    if (isAirgramSession(session) && tdlibPath && await fileExists(tdlibPath)) {
-      const { AirgramMigration } = await import('./AirgramMigration')
-      this.airgramMigration = new AirgramMigration()
-      this.airgramMigration.connectAirgramSession(session, accountInfo)
-      session = randomBytes(8).toString('hex')
-    }
     this.sessionName = session as string || randomBytes(8).toString('hex')
 
     const dbPath = path.join(accountInfo.dataDirPath, this.sessionName + '.sqlite')
@@ -117,20 +104,6 @@ export default class TelegramAPI implements PlatformAPI {
     })
 
     await this.client.connect()
-    if (this.airgramMigration) {
-      await this.airgramMigration.migrateAirgramSession(this.accountInfo.dataDirPath, this.client, this.dbSession)
-      this.onEvent([
-        {
-          type: ServerEventType.SESSION_UPDATED,
-        },
-        {
-          type: ServerEventType.TOAST,
-          toast: {
-            text: "Telegram integration has been rebuilt for speed. Your login session was auto-migrated and you'll see a new login notification.",
-          },
-        },
-      ])
-    }
 
     this.authState = AuthState.PHONE_INPUT
 
