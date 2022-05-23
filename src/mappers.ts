@@ -850,6 +850,21 @@ export default class TelegramMapper {
         }],
       }]
     }
+    if (update instanceof Api.UpdatePeerHistoryTTL) {
+      const threadID = getPeerId(update.peer)
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'thread',
+        objectIDs: {},
+        entries: [
+          {
+            id: threadID,
+            messageExpirySeconds: update.ttlPeriod,
+          },
+        ],
+      }]
+    }
     if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
       // already handled
     } else {

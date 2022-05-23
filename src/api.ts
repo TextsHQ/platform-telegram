@@ -336,6 +336,14 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
+  private emitRefreshThread(threadID: string) {
+    const event: ServerEvent = {
+      type: ServerEventType.THREAD_MESSAGES_REFRESH,
+      threadID,
+    }
+    this.onEvent([event])
+  }
+
   private emptyAssets = async () => {
     // for perfomance testing
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
@@ -527,6 +535,17 @@ export default class TelegramAPI implements PlatformAPI {
           muteUntil: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0,
         }),
       }))
+    }
+
+    if (typeof updates.messageExpirySeconds !== 'undefined') {
+      const inputPeer = await this.client.getEntity(threadID)
+      await this.client.invoke(
+        new Api.messages.SetHistoryTTL({
+          peer: inputPeer,
+          period: updates.messageExpirySeconds,
+        }),
+      )
+      this.emitRefreshThread(threadID)
     }
   }
 
