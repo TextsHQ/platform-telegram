@@ -851,7 +851,6 @@ export default class TelegramMapper {
       }]
     }
     if (update instanceof Api.UpdatePeerHistoryTTL) {
-
       const threadID = getPeerId(update.peer)
       return [{
         type: ServerEventType.STATE_SYNC,
@@ -861,7 +860,7 @@ export default class TelegramMapper {
         entries: [
           {
             id: threadID,
-            messageExpirySeconds: update.ttlPeriod
+            messageExpirySeconds: update.ttlPeriod,
           },
         ],
       }]

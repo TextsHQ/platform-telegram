@@ -39,7 +39,7 @@ const info: PlatformInfo = {
     Attribute.GROUP_THREAD_CREATION_REQUIRES_TITLE,
     Attribute.SUPPORTS_PRESENCE,
     Attribute.SUBSCRIBE_TO_ONLINE_OFFLINE_ACTIVITY,
-    Attribute.SUPPORTS_MESSAGE_EXPIRY
+    Attribute.SUPPORTS_MESSAGE_EXPIRY,
   ]),
   attachments: {
     supportsCaption: true,
