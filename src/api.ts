@@ -528,6 +528,17 @@ export default class TelegramAPI implements PlatformAPI {
         }),
       }))
     }
+
+    if (typeof updates.messageExpirySeconds !== 'undefined') {
+      const inputPeer = await this.client.getEntity(threadID)
+      await this.client.invoke(
+        new Api.messages.SetHistoryTTL({
+          peer: inputPeer,
+          period: updates.messageExpirySeconds,
+        })
+      );
+    }
+
   }
 
   deleteThread = async (threadID: string) => {

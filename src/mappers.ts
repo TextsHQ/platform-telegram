@@ -850,6 +850,8 @@ export default class TelegramMapper {
         }],
       }]
     }
+    if (update instanceof Api.UpdatePeerHistoryTTL) {
+    }
     if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
       // already handled
     } else {
