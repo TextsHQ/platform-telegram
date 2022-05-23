@@ -241,14 +241,15 @@ export default class TelegramAPI implements PlatformAPI {
       ? Promise.resolve(() => {})
       : Promise.resolve(setTimeout(() => this.emitParticipants(dialog), 500))
 
+    // so we have "last seen" for users we haven't been sent an update about yet
+    if (dialog.isUser) setTimeout(() => this.onEvent([TelegramMapper.mapUserPresence(dialog.id, (dialog.entity as Api.User).status)]), 500)
+
     return { thread, participantsPromise }
   }
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
     let markedId: string
-    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) }
-    else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
-    else { markedId = getMarkedId({ chatId: update.participants.chatId }) }
+    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) } else { markedId = getMarkedId({ chatId: update.participants.chatId }) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
@@ -575,6 +576,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     const threads = await Promise.all(mapped)
     await Promise.all(threads.map(t => t.participantsPromise))
+
     return {
       items: threads.map(t => t.thread),
       oldestCursor: lastDate.toString() ?? '*',
@@ -653,11 +655,17 @@ export default class TelegramAPI implements PlatformAPI {
       [ActivityType.NONE]: new Api.SendMessageCancelAction(),
       [ActivityType.RECORDING_VOICE]: new Api.SendMessageRecordAudioAction(),
       [ActivityType.RECORDING_VIDEO]: new Api.SendMessageRecordVideoAction(),
+      [ActivityType.ONLINE]: new Api.account.UpdateStatus({ offline: false }),
+      [ActivityType.OFFLINE]: new Api.account.UpdateStatus({ offline: true }),
     }[type]
     if (!action) return
-    const peer = await this.client.getInputEntity(threadID)
-    if (!peer || this.dialogs.get(threadID)?.isChannel) return
-    this.client.invoke(new Api.messages.SetTyping({ peer, action }))
+    if (action instanceof Api.account.UpdateStatus) {
+      this.client.invoke(action)
+    } else {
+      const peer = await this.client.getInputEntity(threadID)
+      if (!peer || this.dialogs.get(threadID)?.isChannel) return
+      this.client.invoke(new Api.messages.SetTyping({ peer, action }))
+    }
   }
 
   deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {

@@ -37,6 +37,8 @@ const info: PlatformInfo = {
     Attribute.SUPPORTS_QUOTED_MESSAGES,
     Attribute.SUPPORTS_PUSH_NOTIFICATIONS,
     Attribute.GROUP_THREAD_CREATION_REQUIRES_TITLE,
+    Attribute.SUPPORTS_PRESENCE,
+    Attribute.SUBSCRIBE_TO_ONLINE_OFFLINE_ACTIVITY,
   ]),
   attachments: {
     supportsCaption: true,

@@ -175,7 +175,10 @@ export default class TelegramMapper {
       presence.lastActive = new Date(Date.now() - 7 * oneDay)
     } else if (status instanceof Api.UserStatusLastMonth) {
       presence.lastActive = new Date(Date.now() - 30 * oneDay)
+    } else if (status instanceof Api.UserStatusOffline) {
+      presence.lastActive = new Date(status.wasOnline * 1000)
     }
+
     return {
       type: ServerEventType.USER_PRESENCE_UPDATED,
       presence,
