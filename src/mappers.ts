@@ -16,7 +16,6 @@ import { stringifyCircular } from './util'
 type MapperData = { accountID: string, me: Api.User }
 
 interface UnmarkedId {
-
   userId?: bigInt.BigInteger
   chatId?: bigInt.BigInteger
   channelId?: bigInt.BigInteger
@@ -33,6 +32,12 @@ export function getMarkedId(unmarked: UnmarkedId) {
     return str.startsWith('-100') ? str : `-100${str}`
   }
 }
+function getUnmarkedId(unmarked: UnmarkedId) {
+  if (unmarked.userId) return unmarked.userId.toString()
+  if (unmarked.chatId) return unmarked.chatId.toString()
+  if (unmarked.channelId) return unmarked.channelId.toString()
+}
+
 export default class TelegramMapper {
   private mapperData: MapperData
 
@@ -650,6 +655,8 @@ export default class TelegramMapper {
         const msgLink = this.mapMessageLink(msg.webPreview, msg.id)
         mapped.links = msgLink ? [msgLink] : undefined
       }
+    } else if (msg.message) {
+      mapped.text = msg.message
     }
     if (msg.reactions) {
       setReactions(msg.reactions)
@@ -825,7 +832,7 @@ export default class TelegramMapper {
     }
     if (update instanceof Api.UpdateEditMessage || update instanceof Api.UpdateEditChannelMessage) {
       if (update.message instanceof Api.MessageEmpty) return []
-      const threadID = getMarkedId({ chatId: update.message.chatId })
+      const threadID = update.message.chatId.toString() // deliberately unmarked
       const updatedMessage = this.mapMessage(update.message)
       if (!updatedMessage) return
       return [{
@@ -837,7 +844,7 @@ export default class TelegramMapper {
       }]
     }
     if (update instanceof Api.UpdateShortMessage || update instanceof Api.UpdateShortChatMessage) {
-      const threadID = getMarkedId(update)
+      const threadID = getUnmarkedId(update)
       // TODO: review if all props are present
       return [{
         type: ServerEventType.STATE_SYNC,
