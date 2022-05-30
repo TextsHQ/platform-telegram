@@ -11,7 +11,7 @@ import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
-import { getPeerId } from 'telegram/Utils'
+import { getInputPeer, getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
@@ -695,8 +695,11 @@ export default class TelegramAPI implements PlatformAPI {
   sendReadReceipt = async (threadID: string, messageID: string) =>
     this.client.markAsRead(threadID, +messageID, { clearMentions: true })
 
-  markAsUnread = () => {
-    this.client.invoke(new Api.messages.MarkDialogUnread({ unread: true }))
+  markAsUnread = async (threadID?: string) => {
+    if (!threadID) return
+    const dialogPeer = await this.client._getInputDialog(threadID)
+    if (!dialogPeer) return
+    await this.client.invoke(new Api.messages.MarkDialogUnread({ unread: true, peer: dialogPeer }))
   }
 
   archiveThread = async (threadID: string, archived: boolean) => {
