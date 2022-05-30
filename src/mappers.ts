@@ -163,7 +163,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
+  static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresence {
     const presence: UserPresence = {
       userID: getMarkedId({ userId }),
       lastActive: undefined,
@@ -184,6 +184,11 @@ export default class TelegramMapper {
       presence.lastActive = new Date(status.wasOnline * 1000)
     }
 
+    return presence
+  }
+
+  static mapUserPresenceEvent(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
+    const presence = this.mapUserPresence(userId, status)
     return {
       type: ServerEventType.USER_PRESENCE_UPDATED,
       presence,
@@ -828,7 +833,7 @@ export default class TelegramMapper {
       return [TelegramMapper.mapUserAction(update)]
     }
     if (update instanceof Api.UpdateUserStatus) {
-      return [TelegramMapper.mapUserPresence(update.userId, update.status)]
+      return [TelegramMapper.mapUserPresenceEvent(update.userId, update.status)]
     }
     if (update instanceof Api.UpdateEditMessage || update instanceof Api.UpdateEditChannelMessage) {
       if (update.message instanceof Api.MessageEmpty) return []

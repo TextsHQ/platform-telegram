@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
 import { randomBytes } from 'crypto'
 import path from 'path'
-import { promises as fsp } from 'fs'
+import { promises as fsp, stat } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User, Awaitable, PresenceMap } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
@@ -108,6 +108,12 @@ export default class TelegramAPI implements PlatformAPI {
     this.authState = AuthState.PHONE_INPUT
 
     if (session) await this.afterLogin()
+  }
+
+  getPresence = async (): Promise<PresenceMap> => {
+    const status = await this.client.invoke(new Api.contacts.GetStatuses())
+    const map: PresenceMap = status.reduce((a, v) => ({ ...a, [v.userId.toString()]: TelegramMapper.mapUserPresence(v.userId, v.status) }), {})
+    return map
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
@@ -240,9 +246,6 @@ export default class TelegramAPI implements PlatformAPI {
     const participantsPromise = participants.length
       ? Promise.resolve(() => {})
       : Promise.resolve(setTimeout(() => this.emitParticipants(dialog), 500))
-
-    // so we have "last seen" for users we haven't been sent an update about yet
-    if (dialog.isUser) setTimeout(() => this.onEvent([TelegramMapper.mapUserPresence(dialog.id, (dialog.entity as Api.User).status)]), 500)
 
     return { thread, participantsPromise }
   }
