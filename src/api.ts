@@ -16,6 +16,7 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
+import { Mutex, Semaphore } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -99,7 +100,7 @@ export default class TelegramAPI implements PlatformAPI {
       retryDelay: 5000,
       autoReconnect: true,
       connectionRetries: Infinity,
-      maxConcurrentDownloads: 2,
+      maxConcurrentDownloads: 1,
       useWSS: true,
     })
 
@@ -722,6 +723,8 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
+  private profilePhotoMutex = new Mutex()
+
   getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
@@ -731,6 +734,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (await fileExists(filePathWithoutExt)) { // for backwards compatiblity, remove later
       await fsp.rename(filePathWithoutExt, filePath).catch(console.error)
     }
+
     if (!await fileExists(filePath)) {
       let buffer: Buffer
       if (type === 'media') {
@@ -742,7 +746,7 @@ export default class TelegramAPI implements PlatformAPI {
           throw Error('message media not found')
         }
       } else if (type === 'photos') {
-        buffer = await this.client.downloadProfilePhoto(assetId, {}) as Buffer
+        buffer = await this.profilePhotoMutex.runExclusive(async () => await this.client.downloadProfilePhoto(assetId, {}) as Buffer)
       }
       // tgs stickers only appear to work on thread refresh
       // only happens first time
