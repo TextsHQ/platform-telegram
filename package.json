@@ -17,7 +17,7 @@
     }
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#cf04fb41313dd6d491ee4ed7bb627d612aaf4a53",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#872b1e896be308bb0120924dabdefa9fd451a861",
     "big-integer": "^1.6.51",
     "bluebird": "^3.7.2",
     "date-fns": "^2.28.0",
@@ -25,7 +25,7 @@
     "mime-types": "^2.1.35",
     "react": "https://github.com/TextsHQ/react-global-shim",
     "react-phone-number-input": "^3.1.52",
-    "telegram": "^2.7.32",
+    "telegram": "^2.8.4",
     "vcard-creator": "^0.4.2"
   },
   "devDependencies": {

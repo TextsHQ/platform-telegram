@@ -1599,12 +1599,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#cf04fb41313dd6d491ee4ed7bb627d612aaf4a53":
+"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#872b1e896be308bb0120924dabdefa9fd451a861":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=cf04fb41313dd6d491ee4ed7bb627d612aaf4a53"
+  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=872b1e896be308bb0120924dabdefa9fd451a861"
   dependencies:
     form-data: ^4.0.0
-  checksum: dcae39ac36e5c5193f1fbd7b7c2f811df4132c3e6b58eb9ca2128fd2d61b69ebc7bea7162cac54c32efa581b1235f5d5a7ad789fd1cd16728a17f112bd798a6c
+  checksum: cd258ddeedcb498bbde5fcd600d6607df8842200688f20f638af86a58ffdaaa99ca6b68d8eb6d6d5a9fb7b30a1d1f38dafd3103f8221692fcb2ea6d399af8d30
   languageName: node
   linkType: hard
 
@@ -1613,7 +1613,7 @@ __metadata:
   resolution: "@textshq/platform-telegram@workspace:."
   dependencies:
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#cf04fb41313dd6d491ee4ed7bb627d612aaf4a53"
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#872b1e896be308bb0120924dabdefa9fd451a861"
     "@types/better-sqlite3": ^7.5.0
     "@types/bluebird": ^3.5.36
     "@types/eslint": ^7.2.6
@@ -1633,7 +1633,7 @@ __metadata:
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: ^3.1.52
     source-map-support: ^0.5.21
-    telegram: ^2.7.32
+    telegram: ^2.8.4
     typescript: ^4.6.4
     vcard-creator: ^0.4.2
   languageName: unknown
@@ -5288,9 +5288,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.7.32":
-  version: 2.7.32
-  resolution: "telegram@npm:2.7.32"
+"telegram@npm:^2.8.4":
+  version: 2.8.4
+  resolution: "telegram@npm:2.8.4"
   dependencies:
     "@cryptography/aes": ^0.1.1
     async-mutex: ^0.3.0
@@ -5312,7 +5312,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 854c35d1e14c7119882e4d4970d3198563efa57d8f1014cc0b81b194ea5b002ead3cda0b9af254b60790d6e8c4aa706c9d5d94912a8a8e5683822c57efbc4f3a
+  checksum: 7dd1bf1d3e2467d4cd5b4d6fc1cb247768fe6239636552f96505c578f557fbdc50b3ede2396654b65ee70b97f27c1e7943949236ca831a36af7697df01d342d8
   languageName: node
   linkType: hard
 
