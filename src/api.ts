@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
 import { randomBytes } from 'crypto'
 import path from 'path'
-import { promises as fsp, stat } from 'fs'
+import { promises as fsp } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User, Awaitable, PresenceMap } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, User, PresenceMap } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
@@ -11,12 +11,12 @@ import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
-import { getInputPeer, getPeerId } from 'telegram/Utils'
+import { getPeerId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
-import { Mutex, Semaphore } from 'async-mutex'
+import { Mutex } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -113,8 +113,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getPresence = async (): Promise<PresenceMap> => {
     const status = await this.client.invoke(new Api.contacts.GetStatuses())
-    const map: PresenceMap = status.reduce((a, v) => ({ ...a, [v.userId.toString()]: TelegramMapper.mapUserPresence(v.userId, v.status) }), {})
-    return map
+    return Object.fromEntries(status.map(v => [v.userId.toString(), TelegramMapper.mapUserPresence(v.userId, v.status)]))
   }
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
@@ -699,8 +698,7 @@ export default class TelegramAPI implements PlatformAPI {
   sendReadReceipt = async (threadID: string, messageID: string) =>
     this.client.markAsRead(threadID, +messageID, { clearMentions: true })
 
-  markAsUnread = async (threadID?: string) => {
-    if (!threadID) return
+  markAsUnread = async (threadID: string) => {
     const dialogPeer = await this.client._getInputDialog(threadID)
     if (!dialogPeer) return
     await this.client.invoke(new Api.messages.MarkDialogUnread({ unread: true, peer: dialogPeer }))
