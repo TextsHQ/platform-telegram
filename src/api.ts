@@ -22,7 +22,6 @@ import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
 import { DbSession } from './dbSession'
-import { DebugClient } from './DebugClient'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -432,7 +431,8 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 1024
     const members = await (async () => {
       try {
-        return await this.client.getParticipants(dialogId, { showTotal: true, limit })
+        const res = await this.client.getParticipants(dialogId, { showTotal: true, limit })
+        return res
       } catch (e) {
         // texts.log('Error emitParticipants', e)
         if (e.code === 400) {
