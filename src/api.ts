@@ -22,6 +22,7 @@ import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
 import { DbSession } from './dbSession'
+import { DebugClient } from './DebugClient'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -57,7 +58,6 @@ const LOGIN_ERROR_MAP = {
   PHONE_PASSWORD_FLOOD: "You've tried logging in too many times. Try again after a while.",
   PHONE_PASSWORD_PROTECTED: 'Phone is password protected.',
 }
-
 export default class TelegramAPI implements PlatformAPI {
   private client: TelegramClient
 
@@ -103,7 +103,7 @@ export default class TelegramAPI implements PlatformAPI {
       maxConcurrentDownloads: 1,
       useWSS: true,
     })
-
+    // this.client.setLogLevel(LogLevel.DEBUG)
     await this.client.connect()
 
     this.authState = AuthState.PHONE_INPUT
@@ -799,6 +799,37 @@ export default class TelegramAPI implements PlatformAPI {
       reaction: '',
     }))
   }
+
+  modifyParticipant = async (threadID: string, participantID: string, remove) => {
+    const inputEntity = await this.client.getInputEntity(threadID)
+    try {
+      let res: Api.TypeUpdates // the server will send the same updates to us shortly
+      if (inputEntity instanceof Api.InputPeerChat) {
+        res = remove
+          ? await this.client.invoke(new Api.messages.DeleteChatUser({ chatId: inputEntity.chatId, userId: participantID }))
+          : await this.client.invoke(new Api.messages.AddChatUser({ chatId: inputEntity.chatId, userId: participantID }))
+        texts.log(JSON.stringify(res, null, 2))
+      } else if (inputEntity instanceof Api.InputPeerChannel) {
+        // unsure if supported in Texts but call works
+        res = await this.client.invoke(new Api.channels.InviteToChannel({ channel: inputEntity.channelId, users: [participantID] }))
+      }
+    } catch (e) {
+      if (e.code === 400) {
+        this.onEvent([{
+          type: ServerEventType.TOAST,
+          toast: {
+            text: 'You do not have enough permissions to invite a user.',
+          },
+        }])
+      } else {
+        texts.log(JSON.stringify(e, null, 2))
+      }
+    }
+  }
+
+  addParticipant = async (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, false)
+
+  removeParticipant = async (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, true)
 
   registerForPushNotifications = async (type: 'apple' | 'web', token: string) => {
     const result = await this.client.invoke(new Api.account.RegisterDevice({

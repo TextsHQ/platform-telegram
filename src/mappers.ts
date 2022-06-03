@@ -880,7 +880,7 @@ export default class TelegramMapper {
     if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
       // already handled
     } else {
-      texts.log('Unmapped update', update.className, stringifyCircular(update))
+      texts.log('Unmapped update', update.className/* , stringifyCircular(update) */)
     }
     return []
   }
