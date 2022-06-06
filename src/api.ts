@@ -813,6 +813,12 @@ export default class TelegramAPI implements PlatformAPI {
         // unsure if supported in Texts but call works
         res = await this.client.invoke(new Api.channels.InviteToChannel({ channel: inputEntity.channelId, users: [participantID] }))
       }
+      if (res && res.className === 'Updates') {
+        const newMessageUpdates = res.updates.filter(u => u.className === 'UpdateNewMessage')
+        // texts.log(JSON.stringify(newMessageUpdates, null, 2))
+        // @ts-expect-error
+        if (newMessageUpdates?.length) newMessageUpdates.forEach(this.onUpdateNewMessage)
+      }
     } catch (e) {
       if (e.code === 400) {
         this.onEvent([{
