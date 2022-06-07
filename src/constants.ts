@@ -8,3 +8,5 @@ export const API_ID = 1216419
 export const API_HASH = '7353efc824823e14ad31cd2b05272466'
 
 export const MUTED_FOREVER_CONSTANT = 2147483647 // max int32
+
+export const MEDIA_SIZE_MAX_SIZE_BYTES = 5 * 1024 * 1024 // 5 megabytes

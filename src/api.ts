@@ -16,8 +16,8 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
-import { Mutex } from 'async-mutex'
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT } from './constants'
+import { Mutex, Semaphore } from 'async-mutex'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists } from './util'
@@ -721,7 +721,9 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private profilePhotoMutex = new Mutex()
+  private downloadMediaSemaphore = new Semaphore(5)
+
+  private profilePhotoSemaphore = new Semaphore(5)
 
   getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
     if (!['media', 'photos'].includes(type)) {
@@ -738,13 +740,35 @@ export default class TelegramAPI implements PlatformAPI {
       if (type === 'media') {
         const media = this.messageMediaStore.get(+messageId)
         if (media) {
-          buffer = await this.client.downloadMedia(media, {}) as Buffer
+          if (media.className === 'MessageMediaDocument' && media.document.className === 'Document') {
+            texts.log(`Will attempt to download document ${media.document?.id}`)
+            if (media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES) {
+              // give a chance for smaller files to take a spot in the semaphore first
+              texts.log(`File is larger than ${MEDIA_SIZE_MAX_SIZE_BYTES / (1024 * 1024)} megabytes, delaying loading`)
+              await bluebird.delay(500)
+              texts.log(`Downloading document ${media.document?.id}`)
+            }
+          }
+          buffer = await this.downloadMediaSemaphore.runExclusive(async value => {
+            texts.log(`downloadMediaSemaphore: ${value}`)
+            return this.client.downloadMedia(media)
+          }) as Buffer
+
           this.messageMediaStore.delete(+messageId)
         } else {
           throw Error('message media not found')
         }
       } else if (type === 'photos') {
-        buffer = await this.profilePhotoMutex.runExclusive(async () => await this.client.downloadProfilePhoto(assetId, {}) as Buffer)
+        if (this.dialogs.has(assetId)) {
+          texts.log()
+          texts.log(`Profile photo for one of our chats ${this.dialogs.get(assetId).name}`)
+        } else {
+          await bluebird.delay(500)
+        }
+        buffer = await this.profilePhotoSemaphore.runExclusive(async value => {
+          texts.log(`profilePhotoSemaphore: ${value}`)
+          return this.client.downloadProfilePhoto(assetId, {})
+        }) as Buffer
       }
       // tgs stickers only appear to work on thread refresh
       // only happens first time
