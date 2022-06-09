@@ -17,7 +17,7 @@
     }
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#872b1e896be308bb0120924dabdefa9fd451a861",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#main",
     "async-mutex": "^0.3.2",
     "big-integer": "^1.6.51",
     "bluebird": "^3.7.2",

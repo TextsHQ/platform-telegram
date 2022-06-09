@@ -616,6 +616,12 @@ export default class TelegramAPI implements PlatformAPI {
     return replyToMessages
   }
 
+  getMessage = async (threadID: string, messageID: string) => {
+    await this.waitForClientConnected()
+    const msg = await this.client.getMessages(threadID, { ids: [+messageID] })
+    return this.mapper.mapMessage(msg[0])
+  }
+
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
     await this.waitForClientConnected()
     const { cursor } = pagination || { cursor: null, direction: null }
@@ -662,13 +668,11 @@ export default class TelegramAPI implements PlatformAPI {
     return true
   }
 
-  forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[]): Promise<boolean> => {
-    if (!threadIDs) return false
-    const resArr = await Promise.all(threadIDs.map(async toThreadID => {
+  forwardMessage = async (threadID: string, messageID: string, threadIDs?: string[]): Promise<void> => {
+    await Promise.all(threadIDs.map(async toThreadID => {
       const res = await this.client.forwardMessages(toThreadID, { messages: +messageID, fromPeer: threadID })
       return res.length
     }))
-    return resArr.every(Boolean)
   }
 
   sendActivityIndicator = async (type: ActivityType, threadID: string) => {
@@ -690,13 +694,13 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  deleteMessage = async (threadID: string, messageID: string, forEveryone: boolean) => {
+  deleteMessage = async (_: string, messageID: string, forEveryone: boolean) => {
     await this.client.deleteMessages(undefined, [Number(messageID)], { revoke: forEveryone })
-    return true
   }
 
-  sendReadReceipt = async (threadID: string, messageID: string) =>
-    this.client.markAsRead(threadID, +messageID, { clearMentions: true })
+  sendReadReceipt = async (threadID: string, messageID: string) => {
+    await this.client.markAsRead(threadID, +messageID, { clearMentions: true })
+  }
 
   markAsUnread = async (threadID: string) => {
     const dialogPeer = await this.client._getInputDialog(threadID)
