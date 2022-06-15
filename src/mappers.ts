@@ -328,7 +328,7 @@ export default class TelegramMapper {
     }
   }
 
-  mapMessage(msg: CustomMessage): Message {
+  mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
     const isThreadMessage = msg instanceof Api.MessageService
     const senderID = String(isThreadMessage ? '$thread' : msg.senderId ?? this.mapperData.me.id)
     const mapped: Message = {
@@ -343,6 +343,7 @@ export default class TelegramMapper {
       buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, getMarkedId({ chatId: msg.chatId }), msg.id) : undefined,
       expiresInSeconds: msg.ttlPeriod,
     }
+    if (readOutboxMaxId) mapped.seen = msg.id <= readOutboxMaxId
 
     const setReactions = (reactions: Api.MessageReactions) => {
       if (reactions.recentReactions || reactions.results) {
@@ -745,13 +746,17 @@ export default class TelegramMapper {
       },
       messages: {
         hasMore: true,
-        items: dialog.message ? [this.mapMessage(dialog.message)].filter(Boolean) : [],
+        items: dialog.message ? [this.mapMessage(dialog.message, dialog.dialog.readOutboxMaxId)].filter(Boolean) : [],
       },
     }
     return t
   }
 
-  mapMessages = (messages: Api.Message[]) => messages.sort((a, b) => a.date - b.date).map(m => this.mapMessage(m)).filter(Boolean)
+  mapMessages = (messages: Api.Message[], readOutboxMaxId: number) =>
+    messages
+      .sort((a, b) => a.date - b.date)
+      .map(m => this.mapMessage(m, readOutboxMaxId))
+      .filter(Boolean)
 
   mapUpdate = (update: Api.TypeUpdate | Api.TypeUpdates): ServerEvent[] => {
     texts.log(update.className)
@@ -838,7 +843,7 @@ export default class TelegramMapper {
     if (update instanceof Api.UpdateEditMessage || update instanceof Api.UpdateEditChannelMessage) {
       if (update.message instanceof Api.MessageEmpty) return []
       const threadID = update.message.chatId.toString() // deliberately unmarked
-      const updatedMessage = this.mapMessage(update.message)
+      const updatedMessage = this.mapMessage(update.message, undefined)
       if (!updatedMessage) return
       return [{
         type: ServerEventType.STATE_SYNC,

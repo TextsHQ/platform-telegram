@@ -212,7 +212,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emitMessage = (message: Api.Message) => {
     const threadID = getPeerId(message.peerId)
-    const mappedMessage = this.mapper.mapMessage(message)
+    const readOutboxMaxId = this.dialogs.get(threadID)?.dialog.readOutboxMaxId
+    const mappedMessage = this.mapper.mapMessage(message, readOutboxMaxId)
     if (!mappedMessage) return
     this.emitParticipantFromMessages(threadID, [message.senderId])
     if (!mappedMessage) return
@@ -298,9 +299,10 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents | Api.UpdateChannelReadMessagesContents) => {
     const messageID = String(update.messages[0])
     const res = await this.client.getMessages(undefined, { ids: update.messages })
-    const entries = this.mapper.mapMessages(res)
     if (res.length === 0) return
     const threadID = getMarkedId({ chatId: res[0].chatId })
+    const readOutboxMaxId = this.dialogs.get(threadID)?.dialog.readOutboxMaxId
+    const entries = this.mapper.mapMessages(res, readOutboxMaxId)
     this.onEvent([{
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
@@ -322,6 +324,10 @@ export default class TelegramAPI implements PlatformAPI {
         || update instanceof Api.UpdateDeleteScheduledMessages) this.onUpdateDeleteMessages(update)
       else if (update instanceof Api.UpdateReadMessagesContents
         || update instanceof Api.UpdateChannelReadMessagesContents) await this.onUpdateReadMessagesContents(update)
+      if (update instanceof Api.UpdateReadHistoryOutbox) {
+        const dialog = this.dialogs.get(getPeerId(update.peer))
+        if (dialog) dialog.dialog.readOutboxMaxId = update.maxId
+      }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
     })
@@ -619,7 +625,8 @@ export default class TelegramAPI implements PlatformAPI {
   getMessage = async (threadID: string, messageID: string) => {
     await this.waitForClientConnected()
     const msg = await this.client.getMessages(threadID, { ids: [+messageID] })
-    return this.mapper.mapMessage(msg[0])
+    const readOutboxMaxId = this.dialogs.get(threadID)?.dialog.readOutboxMaxId
+    return this.mapper.mapMessage(msg[0], readOutboxMaxId)
   }
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
@@ -638,8 +645,9 @@ export default class TelegramAPI implements PlatformAPI {
 
     setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 100)
 
+    const readOutboxMaxId = this.dialogs.get(threadID)?.dialog.readOutboxMaxId
     return {
-      items: this.mapper.mapMessages(messages),
+      items: this.mapper.mapMessages(messages, readOutboxMaxId),
       hasMore: messages.length !== 0,
     }
   }
@@ -657,7 +665,7 @@ export default class TelegramAPI implements PlatformAPI {
     const fullMessage = await this.client.getMessages(threadID, { ids: res.id })
     const sentMessage = fullMessage.length ? fullMessage[0] : res
     this.storeMessage(sentMessage)
-    return [this.mapper.mapMessage(sentMessage)]
+    return [this.mapper.mapMessage(sentMessage, undefined)]
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
