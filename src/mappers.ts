@@ -330,7 +330,8 @@ export default class TelegramMapper {
 
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
     const isThreadMessage = msg instanceof Api.MessageService
-    const senderID = String(isThreadMessage ? '$thread' : msg.senderId ?? this.mapperData.me.id)
+    const senderID = String(isThreadMessage ? '$thread' : msg.senderId)
+    const msgPeerId = msg.peerId ? getPeerId(msg.peerId) : undefined
     const mapped: Message = {
       _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: String(msg.id),
@@ -338,7 +339,8 @@ export default class TelegramMapper {
       editedTimestamp: msg.editDate ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards || (msg.forward ? 1 : 0),
       senderID,
-      isSender: msg.out && !isThreadMessage,
+      isSender: (msg.out && !isThreadMessage)
+        || msgPeerId === this.mapperData.me.id?.toString(), // if self thread
       linkedMessageID: msg.replyToMsgId?.toString(),
       buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, getMarkedId({ chatId: msg.chatId }), msg.id) : undefined,
       expiresInSeconds: msg.ttlPeriod,
