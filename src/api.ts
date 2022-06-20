@@ -16,11 +16,11 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
-import { Mutex, Semaphore } from 'async-mutex'
+import { Semaphore } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
-import { fileExists } from './util'
+import { hasInternetConnection, fileExists } from './util'
 import { DbSession } from './dbSession'
 
 type LoginEventCallback = (authState: AuthState) => void
@@ -900,8 +900,11 @@ export default class TelegramAPI implements PlatformAPI {
   private reconnect = async () => {
     texts.log('[telegram] reconnect()')
     clearTimeout(this.reconnectTimeout)
-    if (this.client?.connected) return
+    if (this.client?.connected && await hasInternetConnection()) return
 
+    if (this.client?.connected) {
+      await this.client.disconnect()
+    }
     try {
       await this.client.connect()
     } finally {
