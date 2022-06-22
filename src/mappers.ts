@@ -284,7 +284,7 @@ export default class TelegramMapper {
           if (row.className.startsWith('KeyboardButton')) {
             return {
               label: row.text,
-              linkURL: 'texts://fill-textarea?text=' + encodeURIComponent(row.text),
+              linkURL: `texts://platform-callback/${this.mapperData.accountID}/inline-query/${threadID}/${messageID}/${encodeURIComponent(row.text)}`,
             }
           }
           return { label: `Unsupported link button: ${row.className}`, linkURL: '' }

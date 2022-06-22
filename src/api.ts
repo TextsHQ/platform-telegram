@@ -11,7 +11,7 @@ import { TelegramClient } from 'telegram'
 import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
-import { getPeerId } from 'telegram/Utils'
+import { getPeerId, resolveId } from 'telegram/Utils'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
@@ -792,7 +792,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   handleDeepLink = async (link: string) => {
     let message: string
+
     const linkParsed = new URL(link)
+
     if (linkParsed.host === 't.me' || linkParsed.host === 'tg') {
       const info = await this.client.invoke(new Api.help.GetDeepLinkInfo({ path: link }))
       if (info instanceof Api.help.DeepLinkInfo) {
@@ -800,11 +802,19 @@ export default class TelegramAPI implements PlatformAPI {
       }
     }
 
-    const [, , , , type, chatID, messageID, data] = link.split('/')
-    if (type === 'callback' && !message) {
+    const [, , , , type, threadID, messageID, data] = link.split('/')
+
+    if (type === 'inline-query') {
+      const peerID = resolveId(BigInteger(threadID))[0]
+      const sendRes = await this.client.sendMessage(peerID, { message: decodeURIComponent(data) })
+      const sentMessage = await this.client.getMessages(peerID, { ids: sendRes.id })
+      if (sentMessage?.length) {
+        this.emitMessage(sentMessage[0])
+      }
+    } else if (type === 'callback' && !message) {
       const res = await this.client.invoke(new Api.messages.GetBotCallbackAnswer({
         data: Buffer.from(data),
-        peer: chatID,
+        peer: threadID,
         msgId: +messageID,
       }))
       if (res.message) message = res.message
