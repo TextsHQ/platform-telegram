@@ -330,8 +330,8 @@ export default class TelegramMapper {
 
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
     const isThreadMessage = msg instanceof Api.MessageService
-    const senderID = String(isThreadMessage ? '$thread' : msg.senderId)
     const msgPeerId = msg.peerId ? getPeerId(msg.peerId) : undefined
+    const senderID = String(isThreadMessage ? '$thread' : msg.senderId) ?? msgPeerId
     const mapped: Message = {
       _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: String(msg.id),
