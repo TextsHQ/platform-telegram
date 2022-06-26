@@ -395,6 +395,7 @@ export default class TelegramMapper {
         isGif: true,
         isSticker: true,
         size,
+        fileSize: sticker.size?.toJSNumber(),
         extra: {
           loop: animated,
         },
@@ -405,9 +406,9 @@ export default class TelegramMapper {
       if (msg.media instanceof Api.MessageMediaPhoto) {
         const { photo } = msg
         if (!photo) return
-        mapped.attachments = mapped.attachments || []
         const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) : undefined
         // setting to 'image/png' seems fine as other formats are sent as "Api.Document"
+        mapped.attachments ||= []
         mapped.attachments.push({
           id: String(photo.id),
           srcURL: this.getMediaUrl(photo.id, msg.id, 'image/png'),
@@ -421,7 +422,7 @@ export default class TelegramMapper {
         } else {
           const { video } = msg
           const sizeAttribute = video.attributes.find(a => a instanceof Api.DocumentAttributeVideo)
-          mapped.attachments = mapped.attachments || []
+          mapped.attachments ||= []
           mapped.attachments.push({
             id: String(video.id),
             srcURL: this.getMediaUrl(video.id, msg.id, video.mimeType),
@@ -429,45 +430,50 @@ export default class TelegramMapper {
             fileName: video.accessHash.toString(),
             mimeType: video.mimeType,
             size: sizeAttribute && 'w' in sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined,
+            fileSize: video.size?.toJSNumber(),
           })
         }
       } else if (msg.audio) {
         const { audio } = msg
-        mapped.attachments = mapped.attachments || []
+        mapped.attachments ||= []
         mapped.attachments.push({
           id: String(audio.id),
           srcURL: this.getMediaUrl(audio.id, msg.id, audio.mimeType),
           type: MessageAttachmentType.AUDIO,
           fileName: audio.accessHash.toString(),
           mimeType: audio.mimeType,
+          fileSize: audio.size?.toJSNumber(),
         })
       } else if (msg.videoNote) {
         const { videoNote } = msg
         mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
-        mapped.attachments = mapped.attachments || []
+        mapped.attachments ||= []
         mapped.attachments.push({
           id: String(videoNote.id),
           srcURL: this.getMediaUrl(videoNote.id, msg.id, videoNote.mimeType),
           type: MessageAttachmentType.VIDEO,
+          fileSize: videoNote.size?.toJSNumber(),
         })
       } else if (msg.voice) {
         const { voice } = msg
-        mapped.attachments = mapped.attachments || []
+        mapped.attachments ||= []
         mapped.attachments.push({
           id: String(voice.id),
           srcURL: this.getMediaUrl(voice.id, msg.id, voice.mimeType),
           type: MessageAttachmentType.AUDIO,
+          fileSize: voice.size?.toJSNumber(),
         })
       } else if (msg.gif) {
         const animation = msg.gif
-        mapped.attachments = mapped.attachments || []
         const sizeAttribute = animation.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo)
+        mapped.attachments ||= []
         mapped.attachments.push({
           id: String(animation.id),
           srcURL: this.getMediaUrl(animation.id, msg.id, animation.mimeType),
           type: MessageAttachmentType.VIDEO,
           isGif: true,
           fileName: animation.accessHash.toString(),
+          fileSize: animation.size?.toJSNumber(),
           mimeType: animation.mimeType,
           size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
         })
@@ -476,7 +482,7 @@ export default class TelegramMapper {
       } else if (msg.contact) {
         const { contact } = msg
         const vcard = contact.vcard ? contact.vcard : new VCard().addName(contact.lastName, contact.firstName).addPhoneNumber(contact.phoneNumber).buildVCard()
-        mapped.attachments = mapped.attachments || []
+        mapped.attachments ||= []
         mapped.attachments.push({
           id: String(contact.userId),
           type: MessageAttachmentType.UNKNOWN,
@@ -486,8 +492,8 @@ export default class TelegramMapper {
       } else if (msg.document) {
         const { document } = msg
         const sizeAttribute = document.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || Api.DocumentAttributeVideo)
-        mapped.attachments = mapped.attachments || []
         const fileName = document.attributes.find(f => f instanceof Api.DocumentAttributeFilename)
+        mapped.attachments ||= []
         mapped.attachments.push({
           id: String(document.id),
           type: MessageAttachmentType.UNKNOWN,
@@ -495,12 +501,11 @@ export default class TelegramMapper {
           fileName: fileName && 'fileName' in fileName ? fileName.fileName : undefined,
           size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
           mimeType: document.mimeType,
-          fileSize: document.size,
+          fileSize: document.size?.toJSNumber(),
         })
       } else if (msg.dice) {
         if (mapped.textHeading) mapped.textHeading += '\n'
         else mapped.textHeading = ''
-
         mapped.extra = { ...mapped.extra, className: 'telegram-dice' }
         mapped.text = msg.dice.emoticon
         mapped.textHeading = `Dice: ${msg.dice.value}`

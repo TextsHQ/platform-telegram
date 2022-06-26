@@ -57,6 +57,9 @@ const LOGIN_ERROR_MAP = {
   PHONE_PASSWORD_FLOOD: "You've tried logging in too many times. Try again after a while.",
   PHONE_PASSWORD_PROTECTED: 'Phone is password protected.',
 }
+
+const MEDIA_SIZE_MAX_SIZE_BYTES_BI = BigInteger(MEDIA_SIZE_MAX_SIZE_BYTES)
+
 export default class TelegramAPI implements PlatformAPI {
   private client: TelegramClient
 
@@ -754,7 +757,7 @@ export default class TelegramAPI implements PlatformAPI {
         if (media) {
           if (media.className === 'MessageMediaDocument' && media.document.className === 'Document') {
             texts.log(`Will attempt to download document ${media.document?.id}`)
-            if (media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES) {
+            if (media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES_BI) {
               // give a chance for smaller files to take a spot in the semaphore first
               texts.log(`File is larger than ${MEDIA_SIZE_MAX_SIZE_BYTES / (1024 * 1024)} megabytes, delaying loading`)
               await bluebird.delay(500)
