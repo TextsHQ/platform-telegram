@@ -479,7 +479,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   logout = async () => {
-    await this.deleteAssetsDir()
+    await Promise.all([
+      this.deleteAssetsDir(),
+      this.client.invoke(new Api.auth.LogOut()),
+    ])
   }
 
   dispose = async () => {
