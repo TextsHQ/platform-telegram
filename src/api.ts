@@ -460,12 +460,6 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(dialogId, mappedMembers)
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', assetId: string | number, extension: string) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
-
-  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', assetId: string | number) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}`)
-
   private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
     const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
@@ -737,9 +731,55 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
+  private getAssetPath = (assetType: 'media' | 'photos', assetId: string | number, extension: string) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
+
+  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', assetId: string | number) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}`)
+
   private downloadMediaSemaphore = new Semaphore(5)
 
   private profilePhotoSemaphore = new Semaphore(5)
+
+  private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) {
+    switch (type) {
+      case 'media': {
+        const media = this.messageMediaStore.get(+messageId)
+        if (!media) throw Error('message media not found')
+        if (media.className === 'MessageMediaDocument' && media.document.className === 'Document') {
+          texts.log(`Will attempt to download document ${media.document?.id}`)
+          if (media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES_BI) {
+            // give a chance for smaller files to take a spot in the semaphore first
+            texts.log(`File is larger than ${MEDIA_SIZE_MAX_SIZE_BYTES / (1024 * 1024)} megabytes, delaying loading`)
+            await bluebird.delay(400)
+            texts.log(`Downloading document ${media.document?.id}`)
+          }
+        }
+        await this.downloadMediaSemaphore.runExclusive(value => {
+          texts.log(`downloadMediaSemaphore: ${value}`)
+          return this.client.downloadMedia(media, { outputFile: filePath })
+        })
+        this.messageMediaStore.delete(+messageId)
+        return
+      }
+      case 'photos': {
+        if (this.dialogs.has(assetId)) {
+          texts.log(`Downloading profile photo for chat ${this.dialogs.get(assetId).name}`)
+        } else {
+          await bluebird.delay(400)
+        }
+        const buffer = await this.profilePhotoSemaphore.runExclusive(value => {
+          texts.log(`profilePhotoSemaphore: ${value}`)
+          return this.client.downloadProfilePhoto(assetId, {})
+        }) as Buffer
+        await fsp.writeFile(filePath, buffer)
+        return
+      }
+      default:
+        break
+    }
+    throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${messageId}/${extra}`)
+  }
 
   getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
     if (!['media', 'photos'].includes(type)) {
@@ -751,46 +791,7 @@ export default class TelegramAPI implements PlatformAPI {
       await fsp.rename(filePathWithoutExt, filePath).catch(console.error)
     }
 
-    if (!await fileExists(filePath)) {
-      let buffer: Buffer
-      if (type === 'media') {
-        const media = this.messageMediaStore.get(+messageId)
-        if (media) {
-          if (media.className === 'MessageMediaDocument' && media.document.className === 'Document') {
-            texts.log(`Will attempt to download document ${media.document?.id}`)
-            if (media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES_BI) {
-              // give a chance for smaller files to take a spot in the semaphore first
-              texts.log(`File is larger than ${MEDIA_SIZE_MAX_SIZE_BYTES / (1024 * 1024)} megabytes, delaying loading`)
-              await bluebird.delay(500)
-              texts.log(`Downloading document ${media.document?.id}`)
-            }
-          }
-          buffer = await this.downloadMediaSemaphore.runExclusive(async value => {
-            texts.log(`downloadMediaSemaphore: ${value}`)
-            return this.client.downloadMedia(media)
-          }) as Buffer
-
-          this.messageMediaStore.delete(+messageId)
-        } else {
-          throw Error('message media not found')
-        }
-      } else if (type === 'photos') {
-        if (this.dialogs.has(assetId)) {
-          texts.log()
-          texts.log(`Profile photo for one of our chats ${this.dialogs.get(assetId).name}`)
-        } else {
-          await bluebird.delay(500)
-        }
-        buffer = await this.profilePhotoSemaphore.runExclusive(async value => {
-          texts.log(`profilePhotoSemaphore: ${value}`)
-          return this.client.downloadProfilePhoto(assetId, {})
-        }) as Buffer
-      }
-      // tgs stickers only appear to work on thread refresh
-      // only happens first time
-      if (buffer) await fsp.writeFile(filePath, buffer)
-      else throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${messageId}/${extra}`)
-    }
+    if (!await fileExists(filePath)) await this.downloadAsset(filePath, type, assetId, messageId, extra)
     return url.pathToFileURL(filePath).href
   }
 
