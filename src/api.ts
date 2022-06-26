@@ -76,7 +76,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private messageMediaStore = new Map<number, Api.TypeMessageMedia>()
 
-  private chatIdMessageId = new Map<string, Set<number>>()
+  private messageChatIdMap = new Map<number, string>()
 
   private dialogIdToParticipantIds = new Map<string, Set<string>>()
 
@@ -204,13 +204,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (message.media) {
       this.messageMediaStore.set(message.id, message.media)
     }
-    const threadID = getMarkedId({ chatId: message.chatId })
-    const thread = this.chatIdMessageId.get(threadID)
-    if (thread) {
-      thread.add(message.id)
-    } else {
-      this.chatIdMessageId.set(threadID, new Set([message.id]))
-    }
+    this.messageChatIdMap.set(message.id, message.chatId.toString())
   }
 
   private emitMessage = (message: Api.Message) => {
@@ -284,14 +278,15 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages | Api.UpdateDeleteChannelMessages | Api.UpdateDeleteScheduledMessages) {
     if (!update.messages?.length) return
-    const threadID = Array.from(this.chatIdMessageId).find(chat => chat[1].has(update.messages[0]))?.[0]
+    const threadID = this.messageChatIdMap.get(update.messages[0])
     if (!threadID) return
+    update.messages.forEach(m => {
+      this.messageChatIdMap.delete(m)
+    })
     this.onEvent([
       {
         type: ServerEventType.STATE_SYNC,
-        objectIDs: {
-          threadID,
-        },
+        objectIDs: { threadID },
         mutationType: 'delete',
         objectName: 'message',
         entries: update.messages.map(msgId => msgId.toString()),
