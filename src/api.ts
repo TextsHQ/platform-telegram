@@ -12,6 +12,7 @@ import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
+import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
@@ -37,11 +38,11 @@ async function getMessageContent(msgContent: MessageContent) {
   const buffer = filePath ? await fsp.readFile(filePath) : fileBuffer
   return buffer && new CustomFile(fileName, buffer.byteLength, filePath, buffer)
 }
+
 interface LoginInfo {
   phoneNumber?: string
   phoneCodeHash?: string
   phoneCode?: string
-  password?: string
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -149,7 +150,7 @@ export default class TelegramAPI implements PlatformAPI {
               allowAppHash: true,
             }),
           }))
-          texts.log('PHONE_INPUT', JSON.stringify(res))
+          texts.log('telegram.login: PHONE_INPUT', JSON.stringify(res))
           this.loginInfo.phoneCodeHash = res.phoneCodeHash
           this.authState = AuthState.CODE_INPUT
           break
@@ -162,30 +163,27 @@ export default class TelegramAPI implements PlatformAPI {
             phoneCodeHash: this.loginInfo.phoneCodeHash,
             phoneCode: this.loginInfo.phoneCode,
           }))
-          texts.log('CODE_INPUT', JSON.stringify(res))
+          texts.log('telegram.login: CODE_INPUT', JSON.stringify(res))
           this.authState = AuthState.READY
           break
         }
         case AuthState.PASSWORD_INPUT: {
-          this.loginInfo.password = creds.custom.password
-          await this.client.signInWithPassword({
-            apiHash: API_HASH,
-            apiId: API_ID,
-          }, {
-            password: async () => this.loginInfo.password ?? '',
-            onError: async err => { texts.log(`Auth error ${err}`); return true },
-          })
+          const { password } = creds.custom
+          if (!password) throw new Error('Password is empty')
+          const passwordSrpResult = await this.client.invoke(new Api.account.GetPassword())
+          const passwordSrpCheck = await computePasswordSrpCheck(passwordSrpResult, password)
+          await this.client.invoke(new Api.auth.CheckPassword({ password: passwordSrpCheck }))
           this.authState = AuthState.READY
           break
         }
         case AuthState.READY: {
-          texts.log('READY')
+          texts.log('telegram.login: READY')
           this.dbSession.save()
           await this.afterLogin()
           return { type: 'success' }
         }
         default: {
-          texts.log(`Auth state is ${this.authState}`)
+          texts.log(`telegram.login: auth state is ${this.authState}`)
           return { type: 'error' }
         }
       }
