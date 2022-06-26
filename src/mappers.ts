@@ -329,9 +329,9 @@ export default class TelegramMapper {
   }
 
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
-    const isThreadMessage = msg instanceof Api.MessageService
+    const isThreadSender = msg instanceof Api.MessageService || !msg.senderId || msg.senderId.equals(msg.chatId)
     const msgPeerId = msg.peerId ? getPeerId(msg.peerId) : undefined
-    const senderID = String(isThreadMessage || !msg.senderId ? '$thread' : msg.senderId)
+    const senderID = isThreadSender ? '$thread' : String(msg.senderId)
     const mapped: Message = {
       _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: String(msg.id),
@@ -339,8 +339,8 @@ export default class TelegramMapper {
       editedTimestamp: msg.editDate && !msg.editHide ? new Date(msg.editDate * 1000) : undefined,
       forwardedCount: msg.forwards || (msg.forward ? 1 : 0),
       senderID,
-      isSender: (msg.out && !isThreadMessage)
-        || msgPeerId === this.mapperData.me.id?.toString(), // if self thread
+      isSender: (msg.out && !isThreadSender)
+        || (msgPeerId === this.mapperData.me.id?.toString() && !msg.fwdFrom), // if self thread but not forwarded
       linkedMessageID: msg.replyToMsgId?.toString(),
       buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, getMarkedId({ chatId: msg.chatId }), msg.id) : undefined,
       expiresInSeconds: msg.ttlPeriod,
