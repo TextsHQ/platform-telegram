@@ -914,22 +914,22 @@ export default class TelegramAPI implements PlatformAPI {
 
   private reconnectTimeout: NodeJS.Timeout
 
-  private reconnect = async () => {
-    texts.log('[telegram] reconnect()')
-    clearTimeout(this.reconnectTimeout)
-    if (this.client?.connected && await hasInternetConnection()) return
+  // private reconnect = async () => {
+  //   texts.log('[telegram] reconnect()')
+  //   clearTimeout(this.reconnectTimeout)
+  //   if (this.client?.connected && await hasInternetConnection()) return
 
-    if (this.client?.connected) {
-      await this.client.disconnect()
-    }
-    try {
-      await this.client.connect()
-    } finally {
-      this.reconnectTimeout = setTimeout(() => this.reconnect(), 5_000)
-    }
-  }
+  //   if (this.client?.connected) {
+  //     await this.client.disconnect()
+  //   }
+  //   try {
+  //     await this.client.connect()
+  //   } finally {
+  //     this.reconnectTimeout = setTimeout(() => this.reconnect(), 5_000)
+  //   }
+  // }
 
-  reconnectRealtime = async () => {
-    await this.reconnect()
-  }
+  // reconnectRealtime = async () => {
+  //   await this.reconnect()
+  // }
 }
