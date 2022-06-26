@@ -13,8 +13,6 @@ import { getPeerId } from 'telegram/Utils'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
-type MapperData = { accountID: string, me: Api.User }
-
 interface UnmarkedId {
   userId?: bigInt.BigInteger
   chatId?: bigInt.BigInteger
@@ -39,14 +37,7 @@ function getUnmarkedId(unmarked: UnmarkedId) {
 }
 
 export default class TelegramMapper {
-  private mapperData: MapperData
-
-  constructor(accountInfo: AccountInfo, me: Api.User) {
-    this.mapperData = {
-      accountID: accountInfo.accountID,
-      me,
-    }
-  }
+  constructor(private readonly accountID: string, private readonly me: Api.User) {}
 
   static* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {
     if (interactionInfo?.views) yield `${interactionInfo!.views.toLocaleString()} ${interactionInfo!.views === 1 ? 'view' : 'views'}`
@@ -270,7 +261,7 @@ export default class TelegramMapper {
       case 'ReplyInlineMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => ({
           label: row.text,
-          linkURL: TelegramMapper.getButtonLinkURL(row, this.mapperData.accountID, threadID, messageID) ?? '',
+          linkURL: TelegramMapper.getButtonLinkURL(row, this.accountID, threadID, messageID) ?? '',
         })))
       case 'ReplyKeyboardMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
@@ -284,7 +275,7 @@ export default class TelegramMapper {
           if (row.className.startsWith('KeyboardButton')) {
             return {
               label: row.text,
-              linkURL: `texts://platform-callback/${this.mapperData.accountID}/inline-query/${threadID}/${messageID}/${encodeURIComponent(row.text)}`,
+              linkURL: `texts://platform-callback/${this.accountID}/inline-query/${threadID}/${messageID}/${encodeURIComponent(row.text)}`,
             }
           }
           return { label: `Unsupported link button: ${row.className}`, linkURL: '' }
@@ -294,10 +285,10 @@ export default class TelegramMapper {
   }
 
   getMediaUrl = (id: bigInt.BigInteger, messageId: number, mimeType: string) =>
-    `asset://${this.mapperData.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${messageId}`
+    `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${messageId}`
 
   getProfilePhotoUrl = (id: bigInt.BigInteger, mimeType: string) =>
-    `asset://${this.mapperData.accountID}/photos/${id}/${mime.extension(mimeType) || 'bin'}`
+    `asset://${this.accountID}/photos/${id}/${mime.extension(mimeType) || 'bin'}`
 
   mapMessageLink(webPage: Api.TypeWebPage, messageId: number) {
     if (!(webPage instanceof Api.WebPage)) return
@@ -329,7 +320,7 @@ export default class TelegramMapper {
   }
 
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
-    const isSender = msg.senderId.equals(this.mapperData.me.id)
+    const isSender = msg.senderId.equals(this.me.id)
     const isThreadSender = !isSender && (msg instanceof Api.MessageService || !msg.senderId || msg.senderId.equals(msg.chatId))
     const senderID = isThreadSender ? '$thread' : String(msg.senderId)
     const mapped: Message = {
@@ -364,7 +355,7 @@ export default class TelegramMapper {
               emoji: true,
               reactionKey: r.reaction.replace('❤', '❤️'),
             }))
-          if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = String(this.mapperData.me.id) }
+          if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = String(this.me.id) }
           return reactionResult
         }) ?? []
 
@@ -709,7 +700,7 @@ export default class TelegramMapper {
     if (user.photo instanceof Api.UserProfilePhoto) mapped.imgURL = this.getProfilePhotoUrl(user.id, 'image/png')
     if (user.phone) mapped.phoneNumber = '+' + user.phone
     if (user.verified) mapped.isVerified = true
-    if (user.id === this.mapperData.me.id) mapped.isSelf = true
+    if (user.id === this.me.id) mapped.isSelf = true
     return mapped
   }
 
