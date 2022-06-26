@@ -373,7 +373,12 @@ export default class TelegramAPI implements PlatformAPI {
   private afterLogin = async () => {
     // await this.emptyAssets()
     await this.createAssetsDir()
-    this.me = this.me || await this.client.getMe() as Api.User
+    try {
+      this.me ||= await this.client.getMe() as Api.User
+    } catch (err) {
+      if (err.code === 401 && err.errorMessage === 'AUTH_KEY_UNREGISTERED') throw new ReAuthError()
+      else throw err
+    }
     this.mapper = new TelegramMapper(this.accountInfo, this.me)
     this.meMapped = this.mapper.mapUser(this.me)
     this.registerUpdateListeners()
