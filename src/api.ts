@@ -189,11 +189,13 @@ export default class TelegramAPI implements PlatformAPI {
           return { type: 'error' }
         }
       }
-    } catch (e) {
-      texts.log('err', e, JSON.stringify(e, null, 4))
-      texts.Sentry.captureException(e)
-      if (e.code === 401) this.authState = AuthState.PASSWORD_INPUT
-      else return { type: 'error', errorMessage: LOGIN_ERROR_MAP[e.errorMessage] || e.errorMessage }
+    } catch (err) {
+      if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') this.authState = AuthState.PASSWORD_INPUT
+      else {
+        texts.log('telegram.login err', err, stringifyCircular(err, 2))
+        texts.Sentry.captureException(err)
+        return { type: 'error', errorMessage: LOGIN_ERROR_MAP[err.errorMessage] || err.errorMessage || err.message }
+      }
     }
 
     this.loginEventCallback(this.authState)
