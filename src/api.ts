@@ -20,7 +20,7 @@ import { Semaphore } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
-import { hasInternetConnection, fileExists } from './util'
+import { hasInternetConnection, fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 
 type LoginEventCallback = (authState: AuthState) => void
@@ -320,13 +320,14 @@ export default class TelegramAPI implements PlatformAPI {
     this.client.addEventHandler(async (update: Api.TypeUpdate | Api.TypeUpdates) => {
       if (update instanceof Api.UpdateChat
         || update instanceof Api.UpdateChannel
-        || update instanceof Api.UpdateChatParticipants) await this.onUpdateChatChannel(update)
-      else if (update instanceof Api.ChatParticipant || update instanceof Api.UpdateChannelParticipant) this.onUpdateChatChannelParticipant(update)
-      else if (update instanceof Api.UpdateDeleteMessages
+        || update instanceof Api.UpdateChatParticipants) return this.onUpdateChatChannel(update)
+      if (update instanceof Api.ChatParticipant || update instanceof Api.UpdateChannelParticipant) return this.onUpdateChatChannelParticipant(update)
+      if (update instanceof Api.UpdateDeleteMessages
         || update instanceof Api.UpdateDeleteChannelMessages
-        || update instanceof Api.UpdateDeleteScheduledMessages) this.onUpdateDeleteMessages(update)
-      else if (update instanceof Api.UpdateReadMessagesContents
-        || update instanceof Api.UpdateChannelReadMessagesContents) await this.onUpdateReadMessagesContents(update)
+        || update instanceof Api.UpdateDeleteScheduledMessages) return this.onUpdateDeleteMessages(update)
+      if (update instanceof Api.UpdateReadMessagesContents
+        || update instanceof Api.UpdateChannelReadMessagesContents) return this.onUpdateReadMessagesContents(update)
+
       if (update instanceof Api.UpdateReadHistoryOutbox) {
         const dialog = this.dialogs.get(getPeerId(update.peer))
         if (dialog) dialog.dialog.readOutboxMaxId = update.maxId
@@ -849,7 +850,7 @@ export default class TelegramAPI implements PlatformAPI {
     }))
   }
 
-  modifyParticipant = async (threadID: string, participantID: string, remove) => {
+  private modifyParticipant = async (threadID: string, participantID: string, remove: boolean) => {
     const inputEntity = await this.client.getInputEntity(threadID)
     try {
       let res: Api.TypeUpdates // the server will send the same updates to us shortly
@@ -857,27 +858,26 @@ export default class TelegramAPI implements PlatformAPI {
         res = remove
           ? await this.client.invoke(new Api.messages.DeleteChatUser({ chatId: inputEntity.chatId, userId: participantID }))
           : await this.client.invoke(new Api.messages.AddChatUser({ chatId: inputEntity.chatId, userId: participantID }))
-        texts.log(JSON.stringify(res, null, 2))
+        texts.log(stringifyCircular(res, 2))
       } else if (inputEntity instanceof Api.InputPeerChannel) {
         // unsure if supported in Texts but call works
         res = await this.client.invoke(new Api.channels.InviteToChannel({ channel: inputEntity.channelId, users: [participantID] }))
       }
       if (res && res.className === 'Updates') {
         const newMessageUpdates = res.updates.filter(u => u.className === 'UpdateNewMessage')
-        // texts.log(JSON.stringify(newMessageUpdates, null, 2))
+        // texts.log(stringifyCircular(newMessageUpdates, 2))
         // @ts-expect-error
         if (newMessageUpdates?.length) newMessageUpdates.forEach(this.onUpdateNewMessage)
       }
-    } catch (e) {
-      if (e.code === 400) {
+    } catch (err) {
+      texts.Sentry.captureException(err)
+      if (err.code === 400) {
         this.onEvent([{
           type: ServerEventType.TOAST,
-          toast: {
-            text: 'You do not have enough permissions to invite a user.',
-          },
+          toast: { text: 'You do not have enough permissions to invite a user.' },
         }])
       } else {
-        texts.log(JSON.stringify(e, null, 2))
+        texts.log(stringifyCircular(err, 2))
       }
     }
   }
