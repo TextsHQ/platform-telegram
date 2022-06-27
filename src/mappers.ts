@@ -320,7 +320,7 @@ export default class TelegramMapper {
   }
 
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
-    const isSender = msg.senderId.equals(this.me.id)
+    const isSender = msg.senderId?.equals(this.me.id)
     const isThreadSender = !isSender && (msg instanceof Api.MessageService || !msg.senderId || msg.senderId.equals(msg.chatId))
     const senderID = isThreadSender ? '$thread' : String(msg.senderId)
     const mapped: Message = {
