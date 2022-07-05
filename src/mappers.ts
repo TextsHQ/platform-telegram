@@ -285,10 +285,10 @@ export default class TelegramMapper {
   }
 
   getMediaUrl = (id: bigInt.BigInteger, messageId: number, mimeType: string) =>
-    `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${messageId}`
+    `asset://${this.accountID}/media/${String(id)}/${mime.extension(mimeType) || 'bin'}/${messageId}`
 
-  getProfilePhotoUrl = (id: bigInt.BigInteger, mimeType: string) =>
-    `asset://${this.accountID}/photos/${id}/${mime.extension(mimeType) || 'bin'}`
+  getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger, mimeType = 'image/png') =>
+    `asset://${this.accountID}/photos/${String(assetId.xor(userId))}/${mime.extension(mimeType) || 'bin'}/${String(userId)}`
 
   mapMessageLink(webPage: Api.TypeWebPage, messageId: number) {
     if (!(webPage instanceof Api.WebPage)) return
@@ -463,7 +463,7 @@ export default class TelegramMapper {
           type: MessageAttachmentType.VIDEO,
           isGif: true,
           fileName: animation.accessHash.toString(),
-          fileSize: animation.size?.toJSNumber(),
+          fileSize: animation.size.toJSNumber(),
           mimeType: animation.mimeType,
           size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
         })
@@ -491,7 +491,7 @@ export default class TelegramMapper {
           fileName: fileName && 'fileName' in fileName ? fileName.fileName : undefined,
           size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
           mimeType: document.mimeType,
-          fileSize: document.size?.toJSNumber(),
+          fileSize: document.size.toJSNumber(),
         })
       } else if (msg.dice) {
         if (mapped.textHeading) mapped.textHeading += '\n'
@@ -697,7 +697,7 @@ export default class TelegramMapper {
       username: user.username,
       fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
     }
-    if (user.photo instanceof Api.UserProfilePhoto) mapped.imgURL = this.getProfilePhotoUrl(user.id, 'image/png')
+    if (user.photo instanceof Api.UserProfilePhoto) mapped.imgURL = this.getProfilePhotoUrl(user.photo.photoId, user.id)
     if (user.phone) mapped.phoneNumber = '+' + user.phone
     if (user.verified) mapped.isVerified = true
     if (user.id === this.me.id) mapped.isSelf = true
@@ -722,7 +722,7 @@ export default class TelegramMapper {
     const isChannel = dialog.dialog.peer instanceof Api.PeerChannel
     const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
     const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
-    const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(dialog.id, 'image/png')
+    const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(photo.photoId, dialog.id)
     const isReadOnly = !this.hasWritePermissions(dialog.entity)
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
@@ -875,6 +875,21 @@ export default class TelegramMapper {
           {
             id: threadID,
             messageExpirySeconds: update.ttlPeriod,
+          },
+        ],
+      }]
+    }
+    if (update instanceof Api.UpdateUserPhoto) {
+      if (!(update.photo instanceof Api.UserProfilePhoto)) return []
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'participant',
+        objectIDs: { threadID: String(update.userId) },
+        entries: [
+          {
+            id: String(update.userId),
+            imgURL: this.getProfilePhotoUrl(update.photo.photoId, update.userId),
           },
         ],
       }]

@@ -21,7 +21,7 @@ import { Semaphore } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
-import { hasInternetConnection, fileExists, stringifyCircular } from './util'
+import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 
 type LoginEventCallback = (authState: AuthState) => void
@@ -60,7 +60,6 @@ const LOGIN_ERROR_MAP = {
 }
 
 const MEDIA_SIZE_MAX_SIZE_BYTES_BI = BigInteger(MEDIA_SIZE_MAX_SIZE_BYTES)
-
 export default class TelegramAPI implements PlatformAPI {
   private client: TelegramClient
 
@@ -737,17 +736,14 @@ export default class TelegramAPI implements PlatformAPI {
   private getAssetPath = (assetType: 'media' | 'photos', assetId: string | number, extension: string) =>
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
-  private getAssetPathWithoutExt = (assetType: 'media' | 'photos', assetId: string | number) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}`)
-
   private downloadMediaSemaphore = new Semaphore(5)
 
   private profilePhotoSemaphore = new Semaphore(5)
 
-  private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, messageId: string, extra?: string) {
+  private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
     switch (type) {
       case 'media': {
-        const media = this.messageMediaStore.get(+messageId)
+        const media = this.messageMediaStore.get(+entityId)
         if (!media) throw Error('message media not found')
         if (media.className === 'MessageMediaDocument' && media.document.className === 'Document') {
           texts.log(`Will attempt to download document ${media.document?.id}`)
@@ -762,18 +758,18 @@ export default class TelegramAPI implements PlatformAPI {
           texts.log(`downloadMediaSemaphore: ${value}`)
           return this.client.downloadMedia(media, { outputFile: filePath })
         })
-        this.messageMediaStore.delete(+messageId)
+        this.messageMediaStore.delete(+entityId)
         return
       }
       case 'photos': {
-        if (this.dialogs.has(assetId)) {
-          texts.log(`Downloading profile photo for chat ${this.dialogs.get(assetId).name}`)
+        if (this.dialogs.has(entityId)) {
+          texts.log(`Downloading profile photo for chat ${this.dialogs.get(entityId)?.name}`)
         } else {
           await bluebird.delay(400)
         }
         const buffer = await this.profilePhotoSemaphore.runExclusive(value => {
           texts.log(`profilePhotoSemaphore: ${value}`)
-          return this.client.downloadProfilePhoto(assetId, {})
+          return this.client.downloadProfilePhoto(entityId, {})
         }) as Buffer
         await fsp.writeFile(filePath, buffer)
         return
@@ -781,20 +777,28 @@ export default class TelegramAPI implements PlatformAPI {
       default:
         break
     }
-    throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${messageId}/${extra}`)
+    throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
 
-  getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, messageId: string, extra?: string) => {
+  getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, entityId: string, extra?: string) => {
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
-    const filePathWithoutExt = this.getAssetPathWithoutExt(type, assetId)
     const filePath = this.getAssetPath(type, assetId, extension)
-    if (await fileExists(filePathWithoutExt)) { // for backwards compatiblity, remove later
-      await fsp.rename(filePathWithoutExt, filePath).catch(console.error)
+
+    // TODO - remove
+    // eslint-disable-next-line no-lone-blocks
+    {
+      if (type === 'photos') {
+        const oldPath = this.getAssetPath(type, entityId, extension)
+        if (await fileExists(oldPath)) {
+          await fsp.rename(oldPath, filePath).catch(console.log)
+          return url.pathToFileURL(filePath).href
+        }
+      }
     }
 
-    if (!await fileExists(filePath)) await this.downloadAsset(filePath, type, assetId, messageId, extra)
+    if (!await fileExists(filePath)) await this.downloadAsset(filePath, type, assetId, entityId)
     return url.pathToFileURL(filePath).href
   }
 
