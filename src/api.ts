@@ -18,7 +18,7 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
 import { Mutex, Semaphore } from 'async-mutex'
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES } from './constants'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -50,6 +50,7 @@ interface LocalState {
   date: number
   updateMutex: Mutex
   deltaTimeout?: NodeJS.Timeout
+  watchdogTimeout?: NodeJS.Timeout
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -251,7 +252,6 @@ export default class TelegramAPI implements PlatformAPI {
     const participantsPromise = participants.length
       ? Promise.resolve(() => {})
       : Promise.resolve(setTimeout(() => this.emitParticipants(dialog), 500))
-
     return { thread, participantsPromise }
   }
 
@@ -318,9 +318,10 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private async deltaUpdates(remotePts: number) {
-    const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: remotePts, date: this.localState.date }))
+  private async deltaUpdates() {
+    const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: this.localState.pts, date: this.localState.date }))
     if (differenceRes instanceof Api.updates.Difference) {
+      texts.log('Received difference')
       this.localState = {
         ...this.localState,
         ...differenceRes.state,
@@ -328,7 +329,7 @@ export default class TelegramAPI implements PlatformAPI {
       differenceRes.newMessages?.forEach(msg => { if (msg instanceof Api.Message) this.emitMessage(msg) })
       differenceRes.otherUpdates.flat().forEach(update => this.updateHandler(update))
     } else if (differenceRes instanceof Api.updates.DifferenceSlice) {
-      texts.log('DifferenceSlice')
+      texts.log('Received difference slice')
       this.localState = {
         ...this.localState,
         ...differenceRes.intermediateState,
@@ -336,7 +337,9 @@ export default class TelegramAPI implements PlatformAPI {
       differenceRes.newMessages?.forEach(msg => { if (msg instanceof Api.Message) this.emitMessage(msg) })
       differenceRes.otherUpdates.flat().forEach(update => this.updateHandler(update))
     } else if (differenceRes instanceof Api.updates.DifferenceTooLong) {
-      await this.deltaUpdates(differenceRes.difference)
+      texts.log('Received difference too long')
+      this.localState.pts = differenceRes.difference
+      await this.deltaUpdates()
     } else if (differenceRes instanceof Api.updates.DifferenceEmpty) {
       // nothing to do here
     }
@@ -349,6 +352,7 @@ export default class TelegramAPI implements PlatformAPI {
       const ignore = { _: false }
       this.localState.updateMutex.runExclusive(async () => {
         if ('pts' in update && !update.className.includes('Channel')) {
+          if ('date' in update) this.localState.date = update.date
           // common sequence
           const ptsCount = 'ptsCount' in update ? update.ptsCount : 1
           texts.log(`localPts = ${this.localState.pts} remotePts = ${update.pts} ptsCount = ${ptsCount}`)
@@ -360,14 +364,14 @@ export default class TelegramAPI implements PlatformAPI {
             texts.log('Missing updates')
             // we need to interrupt this if an update arrives
             this.localState.deltaTimeout = setTimeout(async () => {
-              await this.deltaUpdates(update.pts)
+              await this.deltaUpdates()
             }, 500)
             ignore._ = true
           } else {
             this.localState.pts += ptsCount
             texts.log('Updates in sync')
           }
-        }
+        } // channel sequence
       })
 
       if (ignore._) return
@@ -396,6 +400,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.localState = { pts: state.pts, date: state.date, updateMutex: new Mutex() }
     this.client.addEventHandler(this.onUpdateNewMessage, new NewMessage({}))
     this.client.addEventHandler(this.updateHandler)
+    this.updateWatchdog()
   }
 
   private emitDeleteThread(threadID: string) {
@@ -552,7 +557,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    clearTimeout(this.reconnectTimeout)
+    clearTimeout(this.localState.deltaTimeout)
+    clearTimeout(this.localState.watchdogTimeout)
     await this.client?.destroy()
   }
 
@@ -988,24 +994,11 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.getMe()
   }
 
-  private reconnectTimeout: NodeJS.Timeout
 
-  // private reconnect = async () => {
-  //   texts.log('[telegram] reconnect()')
-  //   clearTimeout(this.reconnectTimeout)
-  //   if (this.client?.connected && await hasInternetConnection()) return
-
-  //   if (this.client?.connected) {
-  //     await this.client.disconnect()
-  //   }
-  //   try {
-  //     await this.client.connect()
-  //   } finally {
-  //     this.reconnectTimeout = setTimeout(() => this.reconnect(), 5_000)
-  //   }
-  // }
-
-  // reconnectRealtime = async () => {
-  //   await this.reconnect()
-  // }
+  private updateWatchdog = async () => {
+    clearTimeout(this.localState.watchdogTimeout)
+    const current = Date.now() / 1000
+    if (current > UPDATES_WATCHDOG_INTERVAL / 1000) { this.localState.updateMutex.runExclusive(async () => this.deltaUpdates()) }
+    this.localState.watchdogTimeout = setTimeout(() => this.updateWatchdog(), UPDATES_WATCHDOG_INTERVAL)
+  }
 }
