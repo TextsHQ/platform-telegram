@@ -363,9 +363,7 @@ export default class TelegramAPI implements PlatformAPI {
           } else if (this.localState.pts + ptsCount < update.pts) {
             texts.log('Missing updates')
             // we need to interrupt this if an update arrives
-            this.localState.deltaTimeout = setTimeout(async () => {
-              await this.deltaUpdates()
-            }, 500)
+            this.localState.deltaTimeout = setTimeout(this.deltaUpdates, 500)
             ignore = true
           } else {
             this.localState.pts += ptsCount
