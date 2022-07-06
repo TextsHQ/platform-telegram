@@ -557,8 +557,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    clearTimeout(this.localState.deltaTimeout)
-    clearTimeout(this.localState.watchdogTimeout)
+    clearTimeout(this.localState?.deltaTimeout)
+    clearTimeout(this.localState?.watchdogTimeout)
     await this.client?.destroy()
   }
 
