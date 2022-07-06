@@ -349,7 +349,7 @@ export default class TelegramAPI implements PlatformAPI {
     const updates = 'updates' in update ? update.updates : [update]
     clearTimeout(this.localState.deltaTimeout)
     updates.forEach(async () => {
-      const ignore = { _: false }
+      let ignore = false
       this.localState.updateMutex.runExclusive(async () => {
         if ('pts' in update && !update.className.includes('Channel')) {
           if ('date' in update) this.localState.date = update.date
@@ -359,14 +359,14 @@ export default class TelegramAPI implements PlatformAPI {
           if ((this.localState.pts + ptsCount) > update.pts) {
             texts.log('Update already applied')
             this.localState.pts += (this.localState.pts + ptsCount)
-            ignore._ = true
+            ignore = true
           } else if (this.localState.pts + ptsCount < update.pts) {
             texts.log('Missing updates')
             // we need to interrupt this if an update arrives
             this.localState.deltaTimeout = setTimeout(async () => {
               await this.deltaUpdates()
             }, 500)
-            ignore._ = true
+            ignore = true
           } else {
             this.localState.pts += ptsCount
             texts.log('Updates in sync')
@@ -374,7 +374,7 @@ export default class TelegramAPI implements PlatformAPI {
         } // channel sequence
       })
 
-      if (ignore._) return
+      if (ignore) return
 
       if (update instanceof Api.UpdateChat
         || update instanceof Api.UpdateChannel
