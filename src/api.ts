@@ -350,7 +350,7 @@ export default class TelegramAPI implements PlatformAPI {
     clearTimeout(this.localState.deltaTimeout)
     updates.forEach(async () => {
       let ignore = false
-      this.localState.updateMutex.runExclusive(async () => {
+      await this.localState.updateMutex.runExclusive(async () => {
         if ('pts' in update && !update.className.includes('Channel')) {
           if ('date' in update) this.localState.date = update.date
           // common sequence
