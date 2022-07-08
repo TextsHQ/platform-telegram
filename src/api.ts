@@ -49,7 +49,6 @@ interface LocalState {
   pts: number
   date: number
   updateMutex: Mutex
-  deltaTimeout?: NodeJS.Timeout
   watchdogTimeout?: NodeJS.Timeout
 }
 
@@ -347,29 +346,41 @@ export default class TelegramAPI implements PlatformAPI {
 
   private updateHandler = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
     const updates = 'updates' in update ? update.updates : [update]
-    clearTimeout(this.localState.deltaTimeout)
-    updates.forEach(async () => {
+    bluebird.map(updates, async () => {
       let ignore = false
       await this.localState.updateMutex.runExclusive(async () => {
-        if ('pts' in update && !update.className.includes('Channel')) {
-          if ('date' in update) this.localState.date = update.date
-          // common sequence
-          const ptsCount = 'ptsCount' in update ? update.ptsCount : 1
-          texts.log(`localPts = ${this.localState.pts} remotePts = ${update.pts} ptsCount = ${ptsCount}`)
-          if ((this.localState.pts + ptsCount) > update.pts) {
-            texts.log('Update already applied')
-            this.localState.pts += (this.localState.pts + ptsCount)
-            ignore = true
-          } else if (this.localState.pts + ptsCount < update.pts) {
-            texts.log('Missing updates')
-            // we need to interrupt this if an update arrives
-            this.localState.deltaTimeout = setTimeout(this.deltaUpdates, 500)
-            ignore = true
-          } else {
-            this.localState.pts += ptsCount
-            texts.log('Updates in sync')
-          }
-        } // channel sequence
+        // common sequence
+        switch (update.className) {
+          case 'UpdateNewMessage':
+          case 'UpdateReadMessagesContents':
+          case 'UpdateEditMessage':
+          case 'UpdateDeleteMessages':
+          case 'UpdateReadHistoryInbox':
+          case 'UpdateReadHistoryOutbox':
+          case 'UpdateWebPage':
+          case 'UpdatePinnedMessages':
+          case 'UpdateFolderPeers':
+            texts.log(`localPts = ${this.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
+            if ((this.localState.pts + update.ptsCount) > update.pts) {
+              texts.log('Update already applied')
+              this.localState.pts += (this.localState.pts + update.ptsCount)
+              ignore = true
+            } else if (this.localState.pts + update.ptsCount < update.pts) {
+              texts.log('Missing updates')
+              // we need to interrupt this if an update arrives
+              await bluebird.delay(500)
+              await this.differenceUpdates()
+              ignore = true
+            } else {
+              this.localState.pts += update.ptsCount
+              texts.log('Updates in sync')
+            }
+            break
+          case 'UpdatesTooLong':
+            break
+          default:
+            break
+        }
       })
 
       if (ignore) return
