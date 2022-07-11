@@ -344,7 +344,7 @@ export default class TelegramAPI implements PlatformAPI {
       await this.differenceUpdates()
     } else if (differenceRes instanceof Api.updates.DifferenceTooLong) {
       texts.log('Received difference too long')
-      this.localState.pts = differenceRes.difference
+      this.localState.pts = differenceRes.pts
       await this.differenceUpdates()
     } else if (differenceRes instanceof Api.updates.DifferenceEmpty) {
       // nothing to do here
