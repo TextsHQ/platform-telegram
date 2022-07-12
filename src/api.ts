@@ -354,26 +354,27 @@ export default class TelegramAPI implements PlatformAPI {
   private shortUpdateHandler = async (updateShort: Api.UpdateShortMessage | Api.UpdateShortChatMessage | Api.UpdateShort | Api.UpdateShortSentMessage) => {
     let updateLong: Api.TypeUpdate | Api.TypeUpdates
     this.localState.date = updateShort.date
+    const getCommon = (update: Api.UpdateShortMessage | Api.UpdateShortChatMessage): ConstructorParameters<typeof Api.Message>['0'] => ({
+      out: update.out,
+      mentioned: update.mentioned,
+      mediaUnread: update.mediaUnread,
+      silent: update.silent,
+      id: update.id,
+      message: update.message,
+      date: update.date,
+      fwdFrom: update.fwdFrom,
+      viaBotId: update.viaBotId,
+      replyTo: update.replyTo,
+      entities: update.entities,
+      ttlPeriod: update.ttlPeriod,
+    })
     // https://github.com/gram-js/gramjs/blob/master/gramjs/events/NewMessage.ts
     if (updateShort instanceof Api.UpdateShortMessage) {
       updateLong = new Api.UpdateNewMessage({
         message: new Api.Message({
-          out: updateShort.out,
-          mentioned: updateShort.mentioned,
-          mediaUnread: updateShort.mediaUnread,
-          silent: updateShort.silent,
-          id: updateShort.id,
+          ...getCommon(updateShort),
           peerId: new Api.PeerUser({ userId: updateShort.userId }),
-          fromId: new Api.PeerUser({
-            userId: updateShort.out ? (await this.getMe()).id : updateShort.userId,
-          }),
-          message: updateShort.message,
-          date: updateShort.date,
-          fwdFrom: updateShort.fwdFrom,
-          viaBotId: updateShort.viaBotId,
-          replyTo: updateShort.replyTo,
-          entities: updateShort.entities,
-          ttlPeriod: updateShort.ttlPeriod,
+          fromId: new Api.PeerUser({ userId: updateShort.out ? (await this.getMe()).id : updateShort.userId }),
         }),
         pts: updateShort.pts,
         ptsCount: updateShort.ptsCount,
@@ -381,22 +382,9 @@ export default class TelegramAPI implements PlatformAPI {
     } else if (updateShort instanceof Api.UpdateShortChatMessage) {
       updateLong = new Api.UpdateNewChannelMessage({
         message: new Api.Message({
-          out: updateShort.out,
-          mentioned: updateShort.mentioned,
-          mediaUnread: updateShort.mediaUnread,
-          silent: updateShort.silent,
-          id: updateShort.id,
+          ...getCommon(updateShort),
           peerId: new Api.PeerChat({ chatId: updateShort.chatId }),
-          fromId: new Api.PeerUser({
-            userId: updateShort.out ? ((await this.getMe()).id) : updateShort.fromId,
-          }),
-          message: updateShort.message,
-          date: updateShort.date,
-          fwdFrom: updateShort.fwdFrom,
-          viaBotId: updateShort.viaBotId,
-          replyTo: updateShort.replyTo,
-          entities: updateShort.entities,
-          ttlPeriod: updateShort.ttlPeriod,
+          fromId: new Api.PeerUser({ userId: updateShort.out ? (await this.getMe()).id : updateShort.fromId }),
         }),
         pts: updateShort.pts,
         ptsCount: updateShort.ptsCount,
