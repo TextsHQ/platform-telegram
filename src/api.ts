@@ -8,7 +8,6 @@ import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
 import { TelegramClient } from 'telegram'
-import { NewMessage, NewMessageEvent } from 'telegram/events'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
@@ -17,8 +16,8 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
-import { Semaphore } from 'async-mutex'
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES } from './constants'
+import { Mutex, Semaphore } from 'async-mutex'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL } from './constants'
 import { REACTIONS, AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -43,6 +42,14 @@ interface LoginInfo {
   phoneNumber?: string
   phoneCodeHash?: string
   phoneCode?: string
+}
+
+interface LocalState {
+  pts: number
+  date: number
+  updateMutex: Mutex
+  cancelDifference?: boolean
+  watchdogTimeout?: NodeJS.Timeout
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -78,6 +85,8 @@ export default class TelegramAPI implements PlatformAPI {
   private messageChatIdMap = new Map<number, string>()
 
   private dialogIdToParticipantIds = new Map<string, Set<string>>()
+
+  private localState: LocalState
 
   private me: Api.User
 
@@ -121,6 +130,13 @@ export default class TelegramAPI implements PlatformAPI {
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
     this.loginEventCallback(this.authState)
+  }
+
+  private selfUser: Api.User
+
+  getMe = async () => {
+    if (!this.selfUser) this.selfUser = (await this.client.getMe(false)) as Api.User
+    return this.selfUser
   }
 
   getUser = async (ids: { userID?: string } | { username?: string } | { phoneNumber?: string } | { email?: string }) => {
@@ -206,7 +222,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.messageChatIdMap.set(message.id, message.chatId.toString())
   }
 
-  private emitMessage = (message: Api.Message) => {
+  private emitMessage = (message: Api.Message | Api.MessageService) => {
     const threadID = getPeerId(message.peerId)
     const readOutboxMaxId = this.dialogs.get(threadID)?.dialog.readOutboxMaxId
     const mappedMessage = this.mapper.mapMessage(message, readOutboxMaxId)
@@ -224,11 +240,6 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private onUpdateNewMessage = async (newMessageEvent: NewMessageEvent) => {
-    const { message } = newMessageEvent
-    this.emitMessage(message)
-  }
-
   private mapThread = async (dialog: Dialog) => {
     const participants = dialog.isUser
       // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
@@ -240,10 +251,13 @@ export default class TelegramAPI implements PlatformAPI {
     this.dialogs.set(thread.id, dialog)
 
     const participantsPromise = participants.length
-      ? Promise.resolve(() => {})
+      ? Promise.resolve(() => { })
       : Promise.resolve(setTimeout(() => this.emitParticipants(dialog), 500))
-
     return { thread, participantsPromise }
+  }
+
+  private onUpdateNewMessage = async (update: Api.UpdateNewMessage | Api.UpdateNewChannelMessage) => {
+    if (update.message instanceof Api.Message || update.message instanceof Api.MessageService) this.emitMessage(update.message)
   }
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
@@ -309,9 +323,157 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private registerUpdateListeners() {
-    this.client.addEventHandler(this.onUpdateNewMessage, new NewMessage({}))
-    this.client.addEventHandler(async (update: Api.TypeUpdate | Api.TypeUpdates) => {
+  private async differenceUpdates(): Promise<void> {
+    const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: this.localState.pts, date: this.localState.date }))
+    if (differenceRes instanceof Api.updates.Difference) {
+      texts.log('Received difference')
+      this.localState = {
+        ...this.localState,
+        ...differenceRes.state,
+      }
+      differenceRes.newMessages?.forEach(msg => { if (msg instanceof Api.Message) this.emitMessage(msg) })
+    } else if (differenceRes instanceof Api.updates.DifferenceSlice) {
+      await Promise.all(differenceRes.otherUpdates.flat().map(otherUpdate => this.updateHandler(otherUpdate)))
+      texts.log('Received difference slice')
+      this.localState = {
+        ...this.localState,
+        ...differenceRes.intermediateState,
+      }
+      differenceRes.newMessages?.forEach(msg => { if (msg instanceof Api.Message) this.emitMessage(msg) })
+      await Promise.all(differenceRes.otherUpdates.flat().map(otherUpdate => this.updateHandler(otherUpdate)))
+      await this.differenceUpdates()
+    } else if (differenceRes instanceof Api.updates.DifferenceTooLong) {
+      texts.log('Received difference too long')
+      this.localState.pts = differenceRes.pts
+      await this.differenceUpdates()
+    } else if (differenceRes instanceof Api.updates.DifferenceEmpty) {
+      // nothing to do here
+    }
+  }
+
+  private shortUpdateHandler = async (updateShort: Api.UpdateShortMessage | Api.UpdateShortChatMessage | Api.UpdateShort | Api.UpdateShortSentMessage) => {
+    let updateLong: Api.TypeUpdate | Api.TypeUpdates
+    this.localState.date = updateShort.date
+    // https://github.com/gram-js/gramjs/blob/master/gramjs/events/NewMessage.ts
+    if (updateShort instanceof Api.UpdateShortMessage) {
+      updateLong = new Api.UpdateNewMessage({
+        message: new Api.Message({
+          out: updateShort.out,
+          mentioned: updateShort.mentioned,
+          mediaUnread: updateShort.mediaUnread,
+          silent: updateShort.silent,
+          id: updateShort.id,
+          peerId: new Api.PeerUser({ userId: updateShort.userId }),
+          fromId: new Api.PeerUser({
+            userId: updateShort.out ? (await this.getMe()).id : updateShort.userId,
+          }),
+          message: updateShort.message,
+          date: updateShort.date,
+          fwdFrom: updateShort.fwdFrom,
+          viaBotId: updateShort.viaBotId,
+          replyTo: updateShort.replyTo,
+          entities: updateShort.entities,
+          ttlPeriod: updateShort.ttlPeriod,
+        }),
+        pts: updateShort.pts,
+        ptsCount: updateShort.ptsCount,
+      })
+    } else if (updateShort instanceof Api.UpdateShortChatMessage) {
+      updateLong = new Api.UpdateNewChannelMessage({
+        message: new Api.Message({
+          out: updateShort.out,
+          mentioned: updateShort.mentioned,
+          mediaUnread: updateShort.mediaUnread,
+          silent: updateShort.silent,
+          id: updateShort.id,
+          peerId: new Api.PeerChat({ chatId: updateShort.chatId }),
+          fromId: new Api.PeerUser({
+            userId: updateShort.out ? ((await this.getMe()).id) : updateShort.fromId,
+          }),
+          message: updateShort.message,
+          date: updateShort.date,
+          fwdFrom: updateShort.fwdFrom,
+          viaBotId: updateShort.viaBotId,
+          replyTo: updateShort.replyTo,
+          entities: updateShort.entities,
+          ttlPeriod: updateShort.ttlPeriod,
+        }),
+        pts: updateShort.pts,
+        ptsCount: updateShort.ptsCount,
+      })
+    } else if (updateShort instanceof Api.UpdateShort) {
+      updateLong = updateShort.update
+    } else {
+      this.localState.pts += updateShort.pts
+    }
+    if (updateLong) return this.updateHandler(updateLong)
+  }
+
+  private updateHandler = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
+    const updates = 'updates' in update ? update.updates : update instanceof Api.UpdateShort ? [update.update] : [update]
+    this.localState.cancelDifference = true
+    bluebird.map(updates, async () => {
+      let ignore = false
+      await this.localState.updateMutex.runExclusive(async () => {
+        this.localState.cancelDifference = false
+        // common sequence
+        switch (update.className) {
+          case 'UpdateNewMessage':
+          case 'UpdateReadMessagesContents':
+          case 'UpdateEditMessage':
+          case 'UpdateDeleteMessages':
+          case 'UpdateReadHistoryInbox':
+          case 'UpdateReadHistoryOutbox':
+          case 'UpdateWebPage':
+          case 'UpdatePinnedMessages':
+          case 'UpdateFolderPeers':
+            texts.log(`localPts = ${this.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
+            if ((this.localState.pts + update.ptsCount) > update.pts) {
+              texts.log('Update already applied')
+              this.localState.pts += (this.localState.pts + update.ptsCount)
+              ignore = true
+            } else if (this.localState.pts + update.ptsCount < update.pts) {
+              texts.log('Missing updates')
+              // we need to interrupt this if an update arrives
+              await bluebird.delay(500)
+              if (!this.localState.cancelDifference) await this.differenceUpdates()
+              this.localState.cancelDifference = false
+              ignore = true
+            } else {
+              this.localState.pts += update.ptsCount
+              texts.log('Updates in sync')
+            }
+            break
+          case 'UpdatesTooLong':
+          {
+            texts.log('Need to sync from server state')
+            const state = await this.client.invoke(new Api.updates.GetState())
+            this.localState.date = state.date
+            this.localState.pts = state.pts
+            await this.differenceUpdates()
+            ignore = true
+            break
+          }
+          default:
+            break
+        }
+
+        // convert short
+        if (
+          update instanceof Api.UpdateShortMessage
+          || update instanceof Api.UpdateShortChatMessage
+          || update instanceof Api.UpdateShortSentMessage
+          || update instanceof Api.UpdateShort) {
+          texts.log('Received short update')
+          await this.shortUpdateHandler(update)
+          ignore = true
+        }
+      })
+
+      if (ignore) return
+      if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
+        return this.onUpdateNewMessage(update)
+      }
       if (update instanceof Api.UpdateChat
         || update instanceof Api.UpdateChannel
         || update instanceof Api.UpdateChatParticipants) return this.onUpdateChatChannel(update)
@@ -328,7 +490,14 @@ export default class TelegramAPI implements PlatformAPI {
       }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
-    })
+    }, { concurrency: 1 })
+  }
+
+  private async registerUpdateListeners() {
+    const state = await this.client.invoke(new Api.updates.GetState())
+    this.localState = { pts: state.pts, date: state.date, updateMutex: new Mutex() }
+    this.client.addEventHandler(this.updateHandler)
+    await this.updateWatchdog()
   }
 
   private emitDeleteThread(threadID: string) {
@@ -431,7 +600,7 @@ export default class TelegramAPI implements PlatformAPI {
     const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
       || (msg.action && 'users' in msg.action))
     // @ts-expect-error
-    Object.values(groupBy(withUserId, 'chatId')).forEach(m => this.emitParticipantFromMessages(String(m => m[0].chatId), m.map(m => m.fromId.chatId)))
+    Object.values(groupBy(withUserId, 'chatId')).forEach(msg => this.emitParticipantFromMessages(String((m: { chatId: any }[]) => m[0].chatId), msg.map(m => m.fromId.chatId)))
   }
 
   private emitParticipants = async (dialog: Dialog) => {
@@ -485,7 +654,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    clearTimeout(this.reconnectTimeout)
+    clearTimeout(this.localState?.watchdogTimeout)
     await this.client?.destroy()
   }
 
@@ -872,10 +1041,9 @@ export default class TelegramAPI implements PlatformAPI {
         res = await this.client.invoke(new Api.channels.InviteToChannel({ channel: inputEntity.channelId, users: [participantID] }))
       }
       if (res && res.className === 'Updates') {
-        const newMessageUpdates = res.updates.filter(u => u.className === 'UpdateNewMessage')
         // texts.log(stringifyCircular(newMessageUpdates, 2))
         // @ts-expect-error
-        if (newMessageUpdates?.length) newMessageUpdates.forEach(this.onUpdateNewMessage)
+        await this.updateHandler(res.updates)
       }
     } catch (err) {
       texts.Sentry.captureException(err)
@@ -916,24 +1084,15 @@ export default class TelegramAPI implements PlatformAPI {
     if (!result) throw new Error('Could not unregister for push notifications')
   }
 
-  private reconnectTimeout: NodeJS.Timeout
+  reconnectRealtime = async () => {
+    // start receiving updates again
+    await this.client.getMe()
+  }
 
-  // private reconnect = async () => {
-  //   texts.log('[telegram] reconnect()')
-  //   clearTimeout(this.reconnectTimeout)
-  //   if (this.client?.connected && await hasInternetConnection()) return
-
-  //   if (this.client?.connected) {
-  //     await this.client.disconnect()
-  //   }
-  //   try {
-  //     await this.client.connect()
-  //   } finally {
-  //     this.reconnectTimeout = setTimeout(() => this.reconnect(), 5_000)
-  //   }
-  // }
-
-  // reconnectRealtime = async () => {
-  //   await this.reconnect()
-  // }
+  private updateWatchdog = async () => {
+    clearTimeout(this.localState.watchdogTimeout)
+    const current = Date.now() / 1000
+    if (current > UPDATES_WATCHDOG_INTERVAL / 1000) { this.localState.updateMutex.runExclusive(async () => this.differenceUpdates()) }
+    this.localState.watchdogTimeout = setTimeout(() => this.updateWatchdog(), UPDATES_WATCHDOG_INTERVAL)
+  }
 }
