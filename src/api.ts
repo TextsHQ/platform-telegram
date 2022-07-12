@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, User } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
@@ -16,13 +16,12 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
-import { Mutex } from 'async-mutex'
+import { Mutex, Semaphore } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL } from './constants'
 import { REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
-import { AuthState, TelegramState } from './State'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -43,6 +42,36 @@ interface LoginInfo {
   phoneNumber?: string
   phoneCodeHash?: string
   phoneCode?: string
+}
+
+interface LocalState {
+  pts: number
+  date: number
+  updateMutex: Mutex
+  cancelDifference?: boolean
+  watchdogTimeout?: NodeJS.Timeout
+}
+
+export enum AuthState {
+  PHONE_INPUT,
+  CODE_INPUT,
+  PASSWORD_INPUT,
+  READY,
+}
+
+interface TelegramState {
+  authState?: AuthState
+  dbSession?: DbSession
+  localState?: LocalState
+  me?: Api.User
+  meMapped?: User
+  sessionName?: string
+  dialogs: Map<string, Dialog>
+  messageMediaStore: Map<number, Api.TypeMessageMedia>
+  messageChatIdMap: Map<number, string>
+  dialogIdToParticipantIds: Map<string, Set<string>>
+  downloadMediaSemaphore: Semaphore
+  profilePhotoSemaphore: Semaphore
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -71,7 +100,14 @@ export default class TelegramAPI implements PlatformAPI {
 
   private loginInfo: LoginInfo = {}
 
-  private state: TelegramState = new TelegramState()
+  private state: TelegramState = {
+    dialogs: new Map<string, Dialog>(),
+    messageMediaStore: new Map<number, Api.TypeMessageMedia>(),
+    messageChatIdMap: new Map<number, string>(),
+    dialogIdToParticipantIds: new Map<string, Set<string>>(),
+    downloadMediaSemaphore: new Semaphore(5),
+    profilePhotoSemaphore: new Semaphore(5),
+  }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
@@ -319,7 +355,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private shortUpdateHandler = async (updateShort: Api.UpdateShortMessage | Api.UpdateShortChatMessage | Api.UpdateShort | Api.UpdateShortSentMessage) => {
+  private shortUpdateHandler = (updateShort: Api.UpdateShortMessage | Api.UpdateShortChatMessage | Api.UpdateShort | Api.UpdateShortSentMessage) => {
     let updateLong: Api.TypeUpdate | Api.TypeUpdates
     this.state.localState.date = updateShort.date
     const getCommon = (update: Api.UpdateShortMessage | Api.UpdateShortChatMessage): ConstructorParameters<typeof Api.Message>['0'] => ({
@@ -421,7 +457,7 @@ export default class TelegramAPI implements PlatformAPI {
           || update instanceof Api.UpdateShortSentMessage
           || update instanceof Api.UpdateShort) {
           texts.log('Received short update')
-          await this.shortUpdateHandler(update)
+          this.shortUpdateHandler(update)
           ignore = true
         }
       })
@@ -610,7 +646,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    this.state.dispose()
+    clearTimeout(this.state.localState?.watchdogTimeout)
     await this.client?.destroy()
   }
 
