@@ -2,8 +2,7 @@ import React, { FormEvent } from 'react'
 import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
 import type { AuthProps } from '@textshq/platform-sdk'
-
-import { AuthState } from './common-constants'
+import { AuthState } from './State'
 
 const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
   const [loading, setLoading] = React.useState(false)

@@ -17,10 +17,3 @@ export const REACTIONS: Record<string, SupportedReaction> = {
   poo: { title: 'Pile of Poo', render: '💩' },
   vomiting: { title: 'Face Vomiting', render: '🤮' },
 }
-
-export enum AuthState {
-  PHONE_INPUT,
-  CODE_INPUT,
-  PASSWORD_INPUT,
-  READY,
-}
