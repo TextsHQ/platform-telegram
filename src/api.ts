@@ -18,7 +18,7 @@ import type { SendMessageParams } from 'telegram/client/messages'
 
 import { Mutex, Semaphore } from 'async-mutex'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL } from './constants'
-import { REACTIONS } from './common-constants'
+import { AuthState, REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
@@ -50,13 +50,6 @@ interface LocalState {
   updateMutex: Mutex
   cancelDifference?: boolean
   watchdogTimeout?: NodeJS.Timeout
-}
-
-export enum AuthState {
-  PHONE_INPUT,
-  CODE_INPUT,
-  PASSWORD_INPUT,
-  READY,
 }
 
 interface TelegramState {
