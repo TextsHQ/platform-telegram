@@ -39,6 +39,7 @@ async function getMessageContent(msgContent: MessageContent) {
 }
 
 interface LoginInfo {
+  authState?: AuthState
   phoneNumber?: string
   phoneCodeHash?: string
   phoneCode?: string
@@ -53,12 +54,7 @@ interface LocalState {
 }
 
 interface TelegramState {
-  authState?: AuthState
-  dbSession?: DbSession
-  localState?: LocalState
-  me?: Api.User
-  meMapped?: User
-  sessionName?: string
+  localState: LocalState
   dialogs: Map<string, Dialog>
   messageMediaStore: Map<number, Api.TypeMessageMedia>
   messageChatIdMap: Map<number, string>
@@ -83,17 +79,24 @@ const LOGIN_ERROR_MAP = {
 
 const MEDIA_SIZE_MAX_SIZE_BYTES_BI = BigInteger(MEDIA_SIZE_MAX_SIZE_BYTES)
 export default class TelegramAPI implements PlatformAPI {
+  private mapper: TelegramMapper
+
   private client: TelegramClient
 
   private accountInfo: AccountInfo
 
   private loginEventCallback: LoginEventCallback
 
-  private mapper: TelegramMapper
-
   private loginInfo: LoginInfo = {}
 
+  private me: Api.User
+
+  private dbSession: DbSession
+
+  private dbFileName: string
+
   private state: TelegramState = {
+    localState: undefined,
     dialogs: new Map<string, Dialog>(),
     messageMediaStore: new Map<number, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
@@ -104,14 +107,14 @@ export default class TelegramAPI implements PlatformAPI {
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
-    this.state.sessionName = session as string || randomBytes(8).toString('hex')
+    this.dbFileName = session as string || randomBytes(8).toString('hex')
 
-    const dbPath = path.join(accountInfo.dataDirPath, this.state.sessionName + '.sqlite')
-    this.state.dbSession = new DbSession({ dbPath })
+    const dbPath = path.join(accountInfo.dataDirPath, this.dbFileName + '.sqlite')
+    this.dbSession = new DbSession({ dbPath })
 
-    await this.state.dbSession.init()
+    await this.dbSession.init()
 
-    this.client = new TelegramClient(this.state.dbSession, API_ID, API_HASH, {
+    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
       retryDelay: 5000,
       autoReconnect: true,
       connectionRetries: Infinity,
@@ -121,7 +124,7 @@ export default class TelegramAPI implements PlatformAPI {
     // this.client.setLogLevel(LogLevel.DEBUG)
     await this.client.connect()
 
-    this.state.authState = AuthState.PHONE_INPUT
+    this.loginInfo.authState = AuthState.PHONE_INPUT
 
     if (session) await this.afterLogin()
   }
@@ -133,7 +136,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
-    this.loginEventCallback(this.state.authState)
+    this.loginEventCallback(this.loginInfo.authState)
   }
 
   getUser = async (ids: { userID?: string } | { username?: string } | { phoneNumber?: string } | { email?: string }) => {
@@ -149,7 +152,7 @@ export default class TelegramAPI implements PlatformAPI {
   login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
     texts.log('CREDS_CUSTOM', JSON.stringify(creds.custom, null, 4))
     try {
-      switch (this.state.authState) {
+      switch (this.loginInfo.authState) {
         case AuthState.PHONE_INPUT: {
           this.loginInfo.phoneNumber = creds.custom.phoneNumber
           const res = await this.client.invoke(new Api.auth.SendCode({
@@ -164,7 +167,7 @@ export default class TelegramAPI implements PlatformAPI {
           }))
           texts.log('telegram.login: PHONE_INPUT', JSON.stringify(res))
           this.loginInfo.phoneCodeHash = res.phoneCodeHash
-          this.state.authState = AuthState.CODE_INPUT
+          this.loginInfo.authState = AuthState.CODE_INPUT
           break
         }
         case AuthState.CODE_INPUT: {
@@ -176,7 +179,7 @@ export default class TelegramAPI implements PlatformAPI {
             phoneCode: this.loginInfo.phoneCode,
           }))
           texts.log('telegram.login: CODE_INPUT', JSON.stringify(res))
-          this.state.authState = AuthState.READY
+          this.loginInfo.authState = AuthState.READY
           break
         }
         case AuthState.PASSWORD_INPUT: {
@@ -185,22 +188,22 @@ export default class TelegramAPI implements PlatformAPI {
           const passwordSrpResult = await this.client.invoke(new Api.account.GetPassword())
           const passwordSrpCheck = await computePasswordSrpCheck(passwordSrpResult, password)
           await this.client.invoke(new Api.auth.CheckPassword({ password: passwordSrpCheck }))
-          this.state.authState = AuthState.READY
+          this.loginInfo.authState = AuthState.READY
           break
         }
         case AuthState.READY: {
           texts.log('telegram.login: READY')
-          this.state.dbSession.save()
+          this.dbSession.save()
           await this.afterLogin()
           return { type: 'success' }
         }
         default: {
-          texts.log(`telegram.login: auth state is ${this.state.authState}`)
+          texts.log(`telegram.login: auth state is ${this.loginInfo.authState}`)
           return { type: 'error' }
         }
       }
     } catch (err) {
-      if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') this.state.authState = AuthState.PASSWORD_INPUT
+      if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') this.loginInfo.authState = AuthState.PASSWORD_INPUT
       else {
         texts.log('telegram.login err', err, stringifyCircular(err, 2))
         texts.Sentry.captureException(err)
@@ -208,7 +211,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
     }
 
-    this.loginEventCallback(this.state.authState)
+    this.loginEventCallback(this.loginInfo.authState)
     return { type: 'wait' }
   }
 
@@ -371,7 +374,7 @@ export default class TelegramAPI implements PlatformAPI {
         message: new Api.Message({
           ...getCommon(updateShort),
           peerId: new Api.PeerUser({ userId: updateShort.userId }),
-          fromId: new Api.PeerUser({ userId: updateShort.out ? this.state.me.id : updateShort.userId }),
+          fromId: new Api.PeerUser({ userId: updateShort.out ? this.me.id : updateShort.userId }),
         }),
         pts: updateShort.pts,
         ptsCount: updateShort.ptsCount,
@@ -381,7 +384,7 @@ export default class TelegramAPI implements PlatformAPI {
         message: new Api.Message({
           ...getCommon(updateShort),
           peerId: new Api.PeerChat({ chatId: updateShort.chatId }),
-          fromId: new Api.PeerUser({ userId: updateShort.out ? this.state.me.id : updateShort.fromId }),
+          fromId: new Api.PeerUser({ userId: updateShort.out ? this.me.id : updateShort.fromId }),
         }),
         pts: updateShort.pts,
         ptsCount: updateShort.ptsCount,
@@ -520,13 +523,12 @@ export default class TelegramAPI implements PlatformAPI {
     // await this.emptyAssets()
     await this.createAssetsDir()
     try {
-      this.state.me ||= await this.client.getMe() as Api.User
+      this.me ||= await this.client.getMe() as Api.User
     } catch (err) {
       if (err.code === 401 && err.errorMessage === 'AUTH_KEY_UNREGISTERED') throw new ReAuthError()
       else throw err
     }
-    this.mapper = new TelegramMapper(this.accountInfo.accountID, this.state.me)
-    this.state.meMapped = this.mapper.mapUser(this.state.me)
+    this.mapper = new TelegramMapper(this.accountInfo.accountID, this.me)
     this.registerUpdateListeners()
   }
 
@@ -645,8 +647,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   getCurrentUser = (): CurrentUser => {
     const user: CurrentUser = {
-      ...this.state.meMapped,
-      displayText: (this.state.me.username ? '@' + this.state.me.username : '') || ('+' + this.state.me.phone),
+      ...this.mapper.mapUser(this.me),
+      displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phone),
     }
     return user
   }
@@ -655,7 +657,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.onServerEvent = onServerEvent
   }
 
-  serializeSession = () => this.state.sessionName
+  serializeSession = () => this.dbFileName
 
   searchUsers = async (query: string) => {
     const res = await this.client.invoke(new Api.contacts.Search({ q: query }))
