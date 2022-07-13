@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, User } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
@@ -238,7 +238,7 @@ export default class TelegramAPI implements PlatformAPI {
   private mapThread = async (dialog: Dialog) => {
     const participants = dialog.isUser
       // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
-      ? [...await this.client.getParticipants(dialog.id, {})].map(this.mapper.mapUser)
+      ? [...await this.client.getParticipants(dialog.id, {})].map(u => this.mapper.mapParticipant(u))
       : []
 
     const thread = this.mapper.mapThread(dialog, participants)
@@ -574,7 +574,8 @@ export default class TelegramAPI implements PlatformAPI {
   private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
     const inputEntities = await Promise.all(userIds.filter(Boolean).map(id => this.client.getInputEntity(id)))
     const users = await Promise.all(inputEntities.filter(e => e instanceof Api.InputPeerUser).map(ef => this.client.getEntity(ef)))
-    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapUser(entity) : undefined)).filter(Boolean)
+    const chatFull = await this.getFullChat(this.state.dialogs.get(dialogId))
+    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapParticipant(entity, chatFull?.fullChat) : undefined)).filter(Boolean)
     this.upsertParticipants(dialogId, mapped)
   }
 
@@ -606,8 +607,16 @@ export default class TelegramAPI implements PlatformAPI {
     })()
 
     if (!members) return
-    const mappedMembers = await Promise.all(members.map(m => this.mapper.mapUser(m)))
+    const chatFull = await this.getFullChat(dialog)
+    const mappedMembers = await Promise.all(members.map(m => this.mapper.mapParticipant(m, chatFull?.fullChat)))
     this.upsertParticipants(dialogId, mappedMembers)
+  }
+
+  private getFullChat = async (dialog: Dialog) => {
+    if (!dialog) return
+    if (dialog.entity instanceof Api.Chat) {
+      return this.client.invoke(new Api.messages.GetFullChat({ chatId: dialog.entity?.id }))
+    }
   }
 
   private createAssetsDir = async () => {
@@ -1065,6 +1074,16 @@ export default class TelegramAPI implements PlatformAPI {
         },
       }])
     }
+  }
+
+  changeParticipantRole = async (threadID: string, participantID: string, role: string) => {
+    const input = await this.client.getInputEntity(threadID)
+    if (!(input instanceof Api.InputPeerChat)) return
+    await this.client.invoke(new Api.messages.EditChatAdmin({
+      chatId: input.chatId,
+      isAdmin: role === 'admin',
+      userId: BigInteger(participantID),
+    }))
   }
 
   private updateWatchdog = async () => {
