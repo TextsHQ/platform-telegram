@@ -27,11 +27,6 @@ type LoginEventCallback = (authState: AuthState) => void
 
 const { IS_DEV } = texts
 
-if (IS_DEV) {
-  // eslint-disable-next-line import/no-extraneous-dependencies, global-require
-  require('source-map-support').install()
-}
-
 async function getMessageContent(msgContent: MessageContent) {
   const { fileBuffer, fileName, filePath } = msgContent
   const buffer = filePath ? await fsp.readFile(filePath) : fileBuffer
