@@ -255,9 +255,9 @@ export default class TelegramAPI implements PlatformAPI {
     if (update.message instanceof Api.Message || update.message instanceof Api.MessageService) this.emitMessage(update.message)
   }
 
-  private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel | Api.UpdateChatParticipants) => {
+  private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel) => {
     let markedId: string
-    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) } else { markedId = getMarkedId({ chatId: update.participants.chatId }) }
+    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
@@ -277,11 +277,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
-    const id = update instanceof Api.UpdateChatParticipant ? getMarkedId({ chatId: update.chatId }) : getMarkedId({ channelId: update.channelId })
-    if (update.prevParticipant) {
+    const id = 'chatId' in update ? getMarkedId({ chatId: update.chatId }) : getMarkedId({ channelId: update.channelId })
+    if ('prevParticipant' in update) {
       this.emitDeleteThread(id)
     }
-    if (update.newParticipant) this.emitParticipantFromMessages(id, [update.userId])
   }
 
   private onUpdateDeleteMessages(update: Api.UpdateDeleteMessages | Api.UpdateDeleteChannelMessages | Api.UpdateDeleteScheduledMessages) {
@@ -454,13 +453,10 @@ export default class TelegramAPI implements PlatformAPI {
       })
 
       if (ignore) return
-      if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) {
-        return this.onUpdateNewMessage(update)
-      }
+      if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) return this.onUpdateNewMessage(update)
       if (update instanceof Api.UpdateChat
-        || update instanceof Api.UpdateChannel
-        || update instanceof Api.UpdateChatParticipants) return this.onUpdateChatChannel(update)
-      if (update instanceof Api.ChatParticipant || update instanceof Api.UpdateChannelParticipant) return this.onUpdateChatChannelParticipant(update)
+        || update instanceof Api.UpdateChannel) return this.onUpdateChatChannel(update)
+      if (update instanceof Api.UpdateChatParticipant || update instanceof Api.UpdateChannelParticipant) { return this.onUpdateChatChannelParticipant(update) }
       if (update instanceof Api.UpdateDeleteMessages
         || update instanceof Api.UpdateDeleteChannelMessages
         || update instanceof Api.UpdateDeleteScheduledMessages) return this.onUpdateDeleteMessages(update)
