@@ -936,13 +936,22 @@ export default class TelegramAPI implements PlatformAPI {
   removeParticipant = async (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, true)
 
   registerForPushNotifications = async (type: 'apple' | 'web', token: string) => {
+    let apnsToken = token
+    let secret = Buffer.from('')
+    if (type === 'apple') {
+      const appleToken = JSON.parse(token) as { token: string, secret: string }
+
+      apnsToken = appleToken.token
+      secret = Buffer.from(appleToken.secret, 'base64')
+    }
+
     const result = await this.client.invoke(new Api.account.RegisterDevice({
-      token,
+      token: apnsToken,
       // https://core.telegram.org/api/push-updates#subscribing-to-notifications
       tokenType: type === 'apple' ? 1 : 10,
       appSandbox: IS_DEV,
       noMuted: true,
-      secret: Buffer.from(''),
+      secret,
       otherUids: [],
     }))
     if (!result) throw new Error('Could not register for push notifications')
