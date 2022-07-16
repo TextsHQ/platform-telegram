@@ -467,9 +467,17 @@ export default class TelegramAPI implements PlatformAPI {
       if (update instanceof Api.UpdateReadMessagesContents
         || update instanceof Api.UpdateChannelReadMessagesContents) return this.onUpdateReadMessagesContents(update)
 
-      if (update instanceof Api.UpdateReadHistoryOutbox) {
-        const dialog = this.state.dialogs.get(getPeerId(update.peer))
-        if (dialog) dialog.dialog.readOutboxMaxId = update.maxId
+      if (update instanceof Api.UpdateReadHistoryInbox || update instanceof Api.UpdateReadChannelInbox) {
+        // messages we sent received were read
+        const dialog = this.state.dialogs.get(('peer' in update) ? getPeerId(update.peer) : getMarkedId({ channelId: update.channelId }))
+        if (dialog) dialog.dialog.readInboxMaxId = update.maxId
+      }
+
+      if (update instanceof Api.UpdateReadHistoryOutbox || update instanceof Api.UpdateReadChannelDiscussionOutbox) {
+        // mesages we sent were read
+        const dialog = this.state.dialogs.get(('peer' in update) ? getPeerId(update.peer) : getMarkedId({ channelId: update.channelId }))
+        const maxId = 'maxId' in update ? update.maxId : update.topMsgId
+        if (dialog) dialog.dialog.readOutboxMaxId = maxId
       }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
