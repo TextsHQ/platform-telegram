@@ -40,6 +40,7 @@ const info: PlatformInfo = {
     Attribute.SUPPORTS_PRESENCE,
     Attribute.SUBSCRIBE_TO_ONLINE_OFFLINE_ACTIVITY,
     Attribute.SUPPORTS_MESSAGE_EXPIRY,
+    Attribute.SUPPORTS_GROUP_PARTICIPANT_ROLE_CHANGE,
   ]),
   attachments: {
     supportsCaption: true,

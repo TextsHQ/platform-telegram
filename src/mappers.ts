@@ -37,7 +37,7 @@ function getUnmarkedId(unmarked: UnmarkedId) {
 }
 
 export default class TelegramMapper {
-  constructor(private readonly accountID: string, private readonly me: Api.User) {}
+  constructor(private readonly accountID: string, private readonly me: Api.User) { }
 
   static* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {
     if (interactionInfo?.views) yield `${interactionInfo!.views.toLocaleString()} ${interactionInfo!.views === 1 ? 'view' : 'views'}`
@@ -704,6 +704,21 @@ export default class TelegramMapper {
     return mapped
   }
 
+  mapParticipant = (user: Api.User, chatFull?: Api.TypeChatFull): Participant => {
+    const participant: Participant = this.mapUser(user)
+    let isAdmin = false
+    if (chatFull instanceof Api.ChatFull) {
+      const participantInfo = chatFull.participants instanceof Api.ChatParticipants ? chatFull.participants?.participants?.find(p => user.id.equals(p.userId)) : undefined
+      if (participantInfo) {
+        isAdmin = participantInfo instanceof Api.ChatParticipantCreator || participantInfo instanceof Api.ChatParticipantAdmin
+      }
+    }
+    return {
+      ...participant,
+      isAdmin,
+    }
+  }
+
   mapMuteUntil = (seconds: number) => {
     if (seconds >= MUTED_FOREVER_CONSTANT) return 'forever'
     if (seconds === 0) return
@@ -724,6 +739,7 @@ export default class TelegramMapper {
     const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
     const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(photo.photoId, dialog.id)
     const isReadOnly = !this.hasWritePermissions(dialog.entity)
+
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
       id: getPeerId(dialog.id),
