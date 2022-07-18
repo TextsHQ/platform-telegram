@@ -463,9 +463,17 @@ export default class TelegramAPI implements PlatformAPI {
       if (update instanceof Api.UpdateReadMessagesContents
         || update instanceof Api.UpdateChannelReadMessagesContents) return this.onUpdateReadMessagesContents(update)
 
-      if (update instanceof Api.UpdateReadHistoryOutbox) {
-        const dialog = this.state.dialogs.get(getPeerId(update.peer))
-        if (dialog) dialog.dialog.readOutboxMaxId = update.maxId
+      if (update instanceof Api.UpdateReadHistoryInbox || update instanceof Api.UpdateReadChannelInbox) {
+        // messages we sent received were read
+        const dialog = this.state.dialogs.get(('peer' in update) ? getPeerId(update.peer) : getMarkedId({ channelId: update.channelId }))
+        if (dialog) dialog.dialog.readInboxMaxId = update.maxId
+      }
+
+      if (update instanceof Api.UpdateReadHistoryOutbox || update instanceof Api.UpdateReadChannelDiscussionOutbox) {
+        // mesages we sent were read
+        const dialog = this.state.dialogs.get(('peer' in update) ? getPeerId(update.peer) : getMarkedId({ channelId: update.channelId }))
+        const maxId = 'maxId' in update ? update.maxId : update.topMsgId
+        if (dialog) dialog.dialog.readOutboxMaxId = maxId
       }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
@@ -940,14 +948,23 @@ export default class TelegramAPI implements PlatformAPI {
 
   removeParticipant = async (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, true)
 
-  registerForPushNotifications = async (type: 'apple' | 'web', token: string) => {
+  registerForPushNotifications = async (type: 'apple' | 'web', json: string) => {
+    const { token, secret } = type === 'web'
+      ? { token: json, secret: Buffer.from('') }
+      : (() => {
+        const parsed = JSON.parse(json) as { token: string, secret: string }
+        return {
+          token: parsed.token,
+          secret: Buffer.from(parsed.secret, 'base64'),
+        }
+      })()
     const result = await this.client.invoke(new Api.account.RegisterDevice({
       token,
       // https://core.telegram.org/api/push-updates#subscribing-to-notifications
       tokenType: type === 'apple' ? 1 : 10,
       appSandbox: IS_DEV,
       noMuted: true,
-      secret: Buffer.from(''),
+      secret,
       otherUids: [],
     }))
     if (!result) throw new Error('Could not register for push notifications')

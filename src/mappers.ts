@@ -818,8 +818,8 @@ export default class TelegramMapper {
         ],
       }]
     }
-    if (update instanceof Api.UpdateReadHistoryInbox) {
-      const threadID = getPeerId(update.peer)
+    if (update instanceof Api.UpdateReadHistoryInbox || update instanceof Api.UpdateReadChannelInbox) {
+      const threadID = 'peer' in update ? getPeerId(update.peer) : getMarkedId({ channelId: update.channelId })
       return [{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
@@ -833,8 +833,8 @@ export default class TelegramMapper {
         ],
       }]
     }
-    if (update instanceof Api.UpdateReadHistoryOutbox) {
-      const threadID = getPeerId(update.peer)
+    if (update instanceof Api.UpdateReadHistoryOutbox || update instanceof Api.UpdateReadChannelOutbox) {
+      const threadID = 'peer' in update ? getPeerId(update.peer) : getMarkedId({ channelId: update.channelId })
       const messageID = String(update.maxId)
       return [{
         type: ServerEventType.STATE_SYNC,
