@@ -712,10 +712,10 @@ export default class TelegramMapper {
     return mapped
   }
 
-  mapParticipant = (user: Api.User, adminIds?: number[]): Participant => {
+  mapParticipant = (user: Api.User, adminIds?: Set<number>): Participant => {
     const participant: Participant = this.mapUser(user)
     let isAdmin = false
-    if (adminIds?.find(id => user?.id?.equals(id))) {
+    if (adminIds?.has(user?.id?.toJSNumber())) {
       isAdmin = true
     }
     return {

@@ -56,7 +56,7 @@ interface TelegramState {
   messageMediaStore: Map<number, Api.TypeMessageMedia>
   messageChatIdMap: Map<number, string>
   dialogIdToParticipantIds: Map<string, Set<string>>
-  dialogToDialogAdminIds: Map<string, number[]>
+  dialogToDialogAdminIds: Map<string, Set<number>>
   downloadMediaSemaphore: Semaphore
   profilePhotoSemaphore: Semaphore
 }
@@ -99,7 +99,7 @@ export default class TelegramAPI implements PlatformAPI {
     messageMediaStore: new Map<number, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
-    dialogToDialogAdminIds: new Map<string, number[]>(),
+    dialogToDialogAdminIds: new Map<string, Set<number>>(),
     downloadMediaSemaphore: new Semaphore(10),
     profilePhotoSemaphore: new Semaphore(10),
   }
@@ -583,8 +583,8 @@ export default class TelegramAPI implements PlatformAPI {
   private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
     const inputEntities = await Promise.all(userIds.filter(Boolean).map(id => this.client.getInputEntity(id)))
     const users = await Promise.all(inputEntities.filter(e => e instanceof Api.InputPeerUser).map(ef => this.client.getEntity(ef)))
-    const admins = await this.getDialogAdmins(dialogId)
-    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapParticipant(entity, admins) : undefined)).filter(Boolean)
+    const { adminIds } = await this.getDialogAdmins(dialogId)
+    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapParticipant(entity, adminIds) : undefined)).filter(Boolean)
     this.upsertParticipants(dialogId, mapped)
   }
 
@@ -599,13 +599,12 @@ export default class TelegramAPI implements PlatformAPI {
     if (!dialog.id) return
     const dialogId = String(dialog.id)
     const limit = 1024
-    const admins = await this.getDialogAdmins(dialogId)
+    const { adminIds, admins } = await this.getDialogAdmins(dialogId)
     const members = await (async () => {
       try {
         // skip the useless call altogether
-        if (dialog.isChannel && !(admins.find(id => this.me?.id?.equals(id)))) return admins
-        const res = await this.client.getParticipants(dialogId, { limit })
-        return res
+        if (dialog.isChannel && !(adminIds.has(this.me?.id.toJSNumber()))) return admins ?? []
+        return this.client.getParticipants(dialogId, { limit })
       } catch (e) {
         // texts.log('Error emitParticipants', e)
         return []
@@ -613,16 +612,17 @@ export default class TelegramAPI implements PlatformAPI {
     })()
 
     if (!members || !members.length) return
-    const mappedMembers = await Promise.all(members.map(m => this.mapper.mapParticipant(m, admins)))
+    const mappedMembers = await Promise.all(members.map(m => this.mapper.mapParticipant(m, adminIds)))
     this.upsertParticipants(dialogId, mappedMembers)
   }
 
   private async getDialogAdmins(dialogId: string) {
+    let admins: Api.User[]
     if (!this.state.dialogToDialogAdminIds.has(dialogId)) {
-      const admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
-      this.state.dialogToDialogAdminIds.set(dialogId, admins.map(a => a.id.toJSNumber()))
+      admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
+      this.state.dialogToDialogAdminIds.set(dialogId, new Set(admins.map(a => a.id.toJSNumber())))
     }
-    return this.state.dialogToDialogAdminIds.get(dialogId)
+    return { adminIds: this.state.dialogToDialogAdminIds.get(dialogId), admins }
   }
 
   private createAssetsDir = async () => {
@@ -1022,7 +1022,7 @@ export default class TelegramAPI implements PlatformAPI {
       default:
         break
     }
-    if (buffer) {
+    if (buffer?.length) {
       await fsp.writeFile(filePath, buffer)
       return
     }
