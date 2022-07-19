@@ -22,7 +22,8 @@ import { AuthState, REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
-import type { Stream } from 'stream'
+import { DebugClient } from './DebugClient'
+import type { EntityLike } from 'telegram/define'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -55,6 +56,7 @@ interface TelegramState {
   messageMediaStore: Map<number, Api.TypeMessageMedia>
   messageChatIdMap: Map<number, string>
   dialogIdToParticipantIds: Map<string, Set<string>>
+  dialogToDialogAdminIds: Map<string, number[]>
   downloadMediaSemaphore: Semaphore
   profilePhotoSemaphore: Semaphore
 }
@@ -97,6 +99,7 @@ export default class TelegramAPI implements PlatformAPI {
     messageMediaStore: new Map<number, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
+    dialogToDialogAdminIds: new Map<string, number[]>(),
     downloadMediaSemaphore: new Semaphore(10),
     profilePhotoSemaphore: new Semaphore(10),
   }
@@ -525,6 +528,7 @@ export default class TelegramAPI implements PlatformAPI {
     try {
       this.me ||= await this.client.getMe() as Api.User
     } catch (err) {
+      texts.log(JSON.stringify(err, null, 2))
       if (err.code === 401 && err.errorMessage === 'AUTH_KEY_UNREGISTERED') throw new ReAuthError()
       else throw err
     }
@@ -579,8 +583,8 @@ export default class TelegramAPI implements PlatformAPI {
   private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
     const inputEntities = await Promise.all(userIds.filter(Boolean).map(id => this.client.getInputEntity(id)))
     const users = await Promise.all(inputEntities.filter(e => e instanceof Api.InputPeerUser).map(ef => this.client.getEntity(ef)))
-    const chatFull = await this.getFullChat(this.state.dialogs.get(dialogId))
-    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapParticipant(entity, chatFull?.fullChat) : undefined)).filter(Boolean)
+    const admins = await this.getDialogAdmins(dialogId)
+    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapParticipant(entity, admins) : undefined)).filter(Boolean)
     this.upsertParticipants(dialogId, mapped)
   }
 
@@ -595,33 +599,30 @@ export default class TelegramAPI implements PlatformAPI {
     if (!dialog.id) return
     const dialogId = String(dialog.id)
     const limit = 1024
+    const admins = await this.getDialogAdmins(dialogId)
     const members = await (async () => {
       try {
-        const res = await this.client.getParticipants(dialogId, { showTotal: true, limit })
+        // skip the useless call altogether
+        if (dialog.isChannel && !(admins.find(id => this.me?.id?.equals(id)))) return admins
+        const res = await this.client.getParticipants(dialogId, { limit })
         return res
       } catch (e) {
         // texts.log('Error emitParticipants', e)
-        if (e.code === 400) {
-          // only channel admins can request users
-          // texts.log(`Admin required for this channel: ${dialog.name}`)
-          return []
-        }
-        // texts.log(`emitParticipants(): ${stringifyCircular(e, 2)}`)
         return []
       }
     })()
 
-    if (!members) return
-    const chatFull = await this.getFullChat(dialog)
-    const mappedMembers = await Promise.all(members.map(m => this.mapper.mapParticipant(m, chatFull?.fullChat)))
+    if (!members || !members.length) return
+    const mappedMembers = await Promise.all(members.map(m => this.mapper.mapParticipant(m, admins)))
     this.upsertParticipants(dialogId, mappedMembers)
   }
 
-  private getFullChat = async (dialog: Dialog) => {
-    if (!dialog) return
-    if (dialog.entity instanceof Api.Chat) {
-      return this.client.invoke(new Api.messages.GetFullChat({ chatId: dialog.entity?.id }))
+  private async getDialogAdmins(dialogId: string) {
+    if (!this.state.dialogToDialogAdminIds.has(dialogId)) {
+      const admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
+      this.state.dialogToDialogAdminIds.set(dialogId, admins.map(a => a.id.toJSNumber()))
     }
+    return this.state.dialogToDialogAdminIds.get(dialogId)
   }
 
   private createAssetsDir = async () => {

@@ -9,17 +9,17 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 export class DebugClient extends TelegramClient {
   async getParticipants(entity: EntityLike, params: IterParticipantsParams): Promise<TotalList<Api.User>> {
     texts.log('getParticipants')
-    // const err = new Error()
-    // texts.log(err.stack)
+    const err = new Error()
+    texts.log(err.stack)
     return super.getParticipants(entity, params)
   }
 
-  getDialogs(params: IterDialogsParams): Promise<TotalList<Dialog>> {
+  override getDialogs(params: IterDialogsParams): Promise<TotalList<Dialog>> {
     texts.log('getDialogs')
     return super.getDialogs(params)
   }
 
-  iterDialogs(iterDialogsParams: IterDialogsParams): _DialogsIter {
+  override iterDialogs(iterDialogsParams: IterDialogsParams): _DialogsIter {
     texts.log('iterDialogs')
     return super.iterDialogs(iterDialogsParams)
   }

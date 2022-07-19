@@ -712,14 +712,11 @@ export default class TelegramMapper {
     return mapped
   }
 
-  mapParticipant = (user: Api.User, chatFull?: Api.TypeChatFull): Participant => {
+  mapParticipant = (user: Api.User, adminIds?: number[]): Participant => {
     const participant: Participant = this.mapUser(user)
     let isAdmin = false
-    if (chatFull instanceof Api.ChatFull) {
-      const participantInfo = chatFull.participants instanceof Api.ChatParticipants ? chatFull.participants?.participants?.find(p => user.id.equals(p.userId)) : undefined
-      if (participantInfo) {
-        isAdmin = participantInfo instanceof Api.ChatParticipantCreator || participantInfo instanceof Api.ChatParticipantAdmin
-      }
+    if (adminIds?.find(id => user?.id?.equals(id))) {
+      isAdmin = true
     }
     return {
       ...participant,
