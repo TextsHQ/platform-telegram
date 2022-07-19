@@ -1055,6 +1055,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (size) {
         return url.pathToFileURL(filePath).href
       }
+      assert.fail('File is 0 byets')
     } catch (e) {
       await this.downloadAsset(filePath, type, assetId, entityId)
     }
