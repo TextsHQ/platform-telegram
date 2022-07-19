@@ -617,9 +617,12 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async getDialogAdmins(dialogId: string) {
-    let admins: Api.User[]
+    let admins: Api.User[] = []
     if (!this.state.dialogToDialogAdminIds.has(dialogId)) {
-      admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
+      try {
+        admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
+      // eslint-disable-next-line no-empty
+      } catch {}
       this.state.dialogToDialogAdminIds.set(dialogId, new Set(admins.map(a => a.id.toJSNumber())))
     }
     return { adminIds: this.state.dialogToDialogAdminIds.get(dialogId), admins }
