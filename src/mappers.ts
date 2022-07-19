@@ -410,16 +410,23 @@ export default class TelegramMapper {
           // new animated stickers are webm
           pushSticker(msg.video, msg.id)
         } else {
-          const { video } = msg
-          const sizeAttribute = video.attributes.find(a => a instanceof Api.DocumentAttributeVideo)
           mapped.attachments ||= []
+          const { video } = msg
+          const documentAttribute = video.attributes.find(a => a instanceof Api.DocumentAttributeVideo)
+          let size = documentAttribute && 'w' in documentAttribute ? { width: documentAttribute.w, height: documentAttribute.h } : undefined
+          if (documentAttribute && 'duration' in documentAttribute && !documentAttribute.duration && size?.height === 1 && size?.width === 1) {
+            // Telegram will send videos twice
+            // 1st time doesn't have a duration or w/h - presumably this is to "loading" preview
+            // need too ignore height
+            size = undefined
+          }
           mapped.attachments.push({
             id: String(video.id),
             srcURL: this.getMediaUrl(video.id, msg.id, video.mimeType),
             type: MessageAttachmentType.VIDEO,
             fileName: video.accessHash.toString(),
             mimeType: video.mimeType,
-            size: sizeAttribute && 'w' in sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined,
+            size,
             fileSize: video.size?.toJSNumber(),
           })
         }
@@ -666,6 +673,7 @@ export default class TelegramMapper {
     }
     if (msg.media) {
       mapMessageMedia()
+      if (!mapped.attachments?.length) return undefined
     }
 
     if (msg instanceof Api.MessageService) {
@@ -741,7 +749,7 @@ export default class TelegramMapper {
     const isReadOnly = !this.hasWritePermissions(dialog.entity)
 
     const t: Thread = {
-      _original: stringifyCircular(dialog.dialog),
+      _original: stringifyCircular(dialog),
       id: getPeerId(dialog.id),
       type: isSingle ? 'single' : isChannel ? 'channel' : 'group',
       // isPinned: dialog.pinned,

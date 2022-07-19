@@ -22,6 +22,7 @@ import { AuthState, REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
+import type { Stream } from 'stream'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -96,8 +97,8 @@ export default class TelegramAPI implements PlatformAPI {
     messageMediaStore: new Map<number, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
-    downloadMediaSemaphore: new Semaphore(5),
-    profilePhotoSemaphore: new Semaphore(5),
+    downloadMediaSemaphore: new Semaphore(10),
+    profilePhotoSemaphore: new Semaphore(10),
   }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
@@ -427,15 +428,15 @@ export default class TelegramAPI implements PlatformAPI {
             }
             break
           case 'UpdatesTooLong':
-          {
-            texts.log('Need to sync from server state')
-            const state = await this.client.invoke(new Api.updates.GetState())
-            this.state.localState.date = state.date
-            this.state.localState.pts = state.pts
-            await this.differenceUpdates()
-            ignore = true
-            break
-          }
+            {
+              texts.log('Need to sync from server state')
+              const state = await this.client.invoke(new Api.updates.GetState())
+              this.state.localState.date = state.date
+              this.state.localState.pts = state.pts
+              await this.differenceUpdates()
+              ignore = true
+              break
+            }
           default:
             break
         }
@@ -988,46 +989,47 @@ export default class TelegramAPI implements PlatformAPI {
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
+    let buffer: string | Buffer
     switch (type) {
       case 'media': {
         const media = this.state.messageMediaStore.get(+entityId)
         if (!media) throw Error('message media not found')
-        if (media.className === 'MessageMediaDocument' && media.document.className === 'Document') {
-          texts.log(`Will attempt to download document ${media.document?.id}`)
-          if (media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES_BI) {
-            // give a chance for smaller files to take a spot in the semaphore first
-            texts.log(`File is larger than ${MEDIA_SIZE_MAX_SIZE_BYTES / (1024 * 1024)} megabytes, delaying loading`)
-            await bluebird.delay(400)
-            texts.log(`Downloading document ${media.document?.id}`)
-          }
+        if (media.className === 'MessageMediaDocument' && media.document.className === 'Document' && media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES_BI) {
+          // don't use semaphore for large files
+          buffer = await this.client.downloadMedia(media, { outputFile: filePath })
         }
-        await this.state.downloadMediaSemaphore.runExclusive(value => {
-          texts.log(`downloadMediaSemaphore: ${value}`)
-          return this.client.downloadMedia(media, { outputFile: filePath })
-        })
+        else {
+          await this.state.downloadMediaSemaphore.runExclusive(async value => {
+            texts.log(`downloadMediaSemaphore: ${value}`)
+            buffer = await this.client.downloadMedia(media, { outputFile: filePath })
+          })
+        }
         this.state.messageMediaStore.delete(+entityId)
         return
       }
       case 'photos': {
         if (this.state.dialogs.has(entityId)) {
           texts.log(`Downloading profile photo for chat ${this.state.dialogs.get(entityId)?.name}`)
-        } else {
-          await bluebird.delay(400)
         }
-        const buffer = await this.state.profilePhotoSemaphore.runExclusive(value => {
+        buffer = await this.state.profilePhotoSemaphore.runExclusive(value => {
           texts.log(`profilePhotoSemaphore: ${value}`)
           return this.client.downloadProfilePhoto(entityId, {})
         }) as Buffer
-        await fsp.writeFile(filePath, buffer)
-        return
+
+        break
       }
       default:
         break
+    }
+    if (buffer) {
+      await fsp.writeFile(filePath, buffer)
+      return
     }
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
 
   getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, entityId: string, extra?: string) => {
+    // texts.log(type, assetId, extension, entityId, extra)
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
@@ -1039,13 +1041,22 @@ export default class TelegramAPI implements PlatformAPI {
       if (type === 'photos') {
         const oldPath = this.getAssetPath(type, entityId, extension)
         if (await fileExists(oldPath)) {
+          texts.log('Renaming')
           await fsp.rename(oldPath, filePath).catch(console.log)
           return url.pathToFileURL(filePath).href
         }
       }
     }
 
-    if (!await fileExists(filePath)) await this.downloadAsset(filePath, type, assetId, entityId)
+    try {
+      // non existing/0 bytes
+      const size = (await fsp.stat(filePath))?.size
+      if (size) {
+        return url.pathToFileURL(filePath).href
+      }
+    } catch (e) {
+      await this.downloadAsset(filePath, type, assetId, entityId)
+    }
     return url.pathToFileURL(filePath).href
   }
 
