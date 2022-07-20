@@ -23,7 +23,6 @@ import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { DebugClient } from './DebugClient'
-import type { EntityLike } from 'telegram/define'
 
 type LoginEventCallback = (authState: AuthState) => void
 
@@ -430,16 +429,15 @@ export default class TelegramAPI implements PlatformAPI {
               texts.log('Updates in sync')
             }
             break
-          case 'UpdatesTooLong':
-            {
-              texts.log('Need to sync from server state')
-              const state = await this.client.invoke(new Api.updates.GetState())
-              this.state.localState.date = state.date
-              this.state.localState.pts = state.pts
-              await this.differenceUpdates()
-              ignore = true
-              break
-            }
+          case 'UpdatesTooLong': {
+            texts.log('Need to sync from server state')
+            const state = await this.client.invoke(new Api.updates.GetState())
+            this.state.localState.date = state.date
+            this.state.localState.pts = state.pts
+            await this.differenceUpdates()
+            ignore = true
+            break
+          }
           default:
             break
         }
@@ -528,7 +526,7 @@ export default class TelegramAPI implements PlatformAPI {
     try {
       this.me ||= await this.client.getMe() as Api.User
     } catch (err) {
-      texts.log(JSON.stringify(err, null, 2))
+      texts.error(JSON.stringify(err, null, 2))
       if (err.code === 401 && err.errorMessage === 'AUTH_KEY_UNREGISTERED') throw new ReAuthError()
       else throw err
     }
@@ -621,8 +619,9 @@ export default class TelegramAPI implements PlatformAPI {
     if (!this.state.dialogToDialogAdminIds.has(dialogId)) {
       try {
         admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
-      // eslint-disable-next-line no-empty
-      } catch {}
+      } catch {
+        // swallow
+      }
       this.state.dialogToDialogAdminIds.set(dialogId, new Set(admins.map(a => a.id.toJSNumber())))
     }
     return { adminIds: this.state.dialogToDialogAdminIds.get(dialogId), admins }
@@ -993,19 +992,17 @@ export default class TelegramAPI implements PlatformAPI {
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
-    let buffer: string | Buffer
     switch (type) {
       case 'media': {
         const media = this.state.messageMediaStore.get(+entityId)
         if (!media) throw Error('message media not found')
         if (media.className === 'MessageMediaDocument' && media.document.className === 'Document' && media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES_BI) {
           // don't use semaphore for large files
-          buffer = await this.client.downloadMedia(media, { outputFile: filePath })
-        }
-        else {
+          await this.client.downloadMedia(media, { outputFile: filePath })
+        } else {
           await this.state.downloadMediaSemaphore.runExclusive(async value => {
             texts.log(`downloadMediaSemaphore: ${value}`)
-            buffer = await this.client.downloadMedia(media, { outputFile: filePath })
+            await this.client.downloadMedia(media, { outputFile: filePath })
           })
         }
         this.state.messageMediaStore.delete(+entityId)
@@ -1015,19 +1012,15 @@ export default class TelegramAPI implements PlatformAPI {
         if (this.state.dialogs.has(entityId)) {
           texts.log(`Downloading profile photo for chat ${this.state.dialogs.get(entityId)?.name}`)
         }
-        buffer = await this.state.profilePhotoSemaphore.runExclusive(value => {
+        const buffer = await this.state.profilePhotoSemaphore.runExclusive(value => {
           texts.log(`profilePhotoSemaphore: ${value}`)
-          return this.client.downloadProfilePhoto(entityId, {})
-        }) as Buffer
-
+          return this.client.downloadProfilePhoto(entityId, {}) as Promise<Buffer>
+        })
+        await fsp.writeFile(filePath, buffer)
         break
       }
       default:
         break
-    }
-    if (buffer?.length) {
-      await fsp.writeFile(filePath, buffer)
-      return
     }
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
@@ -1045,23 +1038,13 @@ export default class TelegramAPI implements PlatformAPI {
       if (type === 'photos') {
         const oldPath = this.getAssetPath(type, entityId, extension)
         if (await fileExists(oldPath)) {
-          texts.log('Renaming')
           await fsp.rename(oldPath, filePath).catch(console.log)
           return url.pathToFileURL(filePath).href
         }
       }
     }
 
-    try {
-      // non existing/0 bytes
-      const size = (await fsp.stat(filePath))?.size
-      if (size) {
-        return url.pathToFileURL(filePath).href
-      }
-      assert.fail('File is 0 byets')
-    } catch (e) {
-      await this.downloadAsset(filePath, type, assetId, entityId)
-    }
+    if (!await fileExists(filePath)) await this.downloadAsset(filePath, type, assetId, entityId)
     return url.pathToFileURL(filePath).href
   }
 
