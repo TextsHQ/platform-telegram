@@ -593,6 +593,8 @@ export default class TelegramAPI implements PlatformAPI {
     Object.values(groupBy(withUserId, 'chatId')).forEach(msg => this.emitParticipantFromMessages(String((m: { chatId: any }[]) => m[0].chatId), msg.map(m => m.fromId.chatId)))
   }
 
+
+
   private emitParticipants = async (dialog: Dialog) => {
     if (!dialog.id) return
     const dialogId = String(dialog.id)
@@ -601,7 +603,7 @@ export default class TelegramAPI implements PlatformAPI {
     const members = await (async () => {
       try {
         // skip the useless call altogether
-        if (dialog.isChannel && !(adminIds.has(this.me?.id.toJSNumber()))) return admins ?? []
+        if (dialog.isChannel && !dialog.isGroup && !(adminIds.has(this.me?.id.toJSNumber()))) return admins ?? []
         return this.client.getParticipants(dialogId, { limit })
       } catch (e) {
         // texts.log('Error emitParticipants', e)
