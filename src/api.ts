@@ -1012,24 +1012,28 @@ export default class TelegramAPI implements PlatformAPI {
 
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
     const downloadClient = this.mediaSession.connected ? this.mediaSession : this.client
-    if (!this.mediaSession.connected) texts.log('Media session not connection')
+    if (!this.mediaSession.connected) texts.log('Media session not connected')
+    let buffer
     switch (type) {
       case 'media': {
         const media = this.state.messageMediaStore.get(+entityId)
         if (!media) throw Error('message media not found')
-        if (media.className === 'MessageMediaDocument' && media.document.className === 'Document' && media.document?.size >= MEDIA_SIZE_MAX_SIZE_BYTES_BI) {
-        console.log(filePath)
-        await downloadClient.downloadMedia(media, { outputFile: filePath })
+        buffer = await downloadClient.downloadMedia(media)
         this.state.messageMediaStore.delete(+entityId)
-        return
+        break
       }
       case 'photos': {
-        const buffer = await downloadClient.downloadProfilePhoto(entityId, {})
-        await fsp.writeFile(filePath, buffer)
-        return
+        buffer = await downloadClient.downloadProfilePhoto(entityId, {})
+        break
       }
       default:
         break
+    }
+    if (buffer?.length) {
+      await fsp.writeFile(filePath, buffer)
+      return buffer
+    } else {
+      texts.log('Buffer was zero bytes for', filePath)
     }
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
@@ -1053,7 +1057,11 @@ export default class TelegramAPI implements PlatformAPI {
       }
     }
 
-    if (!await fileExists(filePath)) await this.downloadAsset(filePath, type, assetId, entityId)
+    if (!await fileExists(filePath)) {
+      try {
+        await this.downloadAsset(filePath, type, assetId, entityId)
+      } catch (e) { texts.error('Error downloading media', e) }
+    }
     return url.pathToFileURL(filePath).href
   }
 
