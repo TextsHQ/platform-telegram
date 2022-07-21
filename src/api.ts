@@ -28,6 +28,28 @@ type LoginEventCallback = (authState: AuthState) => void
 
 const { IS_DEV } = texts
 
+interface PaginatedProxy<T> extends Paginated<T> {
+  _items: any
+}
+
+function getPaginatedProxy<T>(method: Function) {
+  const proxied: PaginatedProxy<T> = {
+    _items: [],
+    get items() {
+      if (!this.done && !this._items.length) {
+        method()
+        this.done = true
+      }
+      return this._items
+    },
+    set items(value) {
+      this._items = value
+    },
+    hasMore: false,
+  }
+  return proxied
+}
+
 async function getMessageContent(msgContent: MessageContent) {
   const { fileBuffer, fileName, filePath } = msgContent
   const buffer = filePath ? await fsp.readFile(filePath) : fileBuffer
@@ -239,19 +261,13 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    const participants = dialog.isUser
-      // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
+    const thread = this.mapper.mapThread(dialog, dialog.isUser
       ? [...await this.client.getParticipants(dialog.id, {})].map(u => this.mapper.mapParticipant(u))
-      : []
-
-    const thread = this.mapper.mapThread(dialog, participants)
+      : [])
     if (dialog.message) this.storeMessage(dialog.message)
     this.state.dialogs.set(thread.id, dialog)
-
-    const participantsPromise = participants.length
-      ? Promise.resolve(() => { })
-      : Promise.resolve(setTimeout(() => this.emitParticipants(dialog), 500))
-    return { thread, participantsPromise }
+    if (thread.participants.items.length === 0) thread.participants = getPaginatedProxy(thread.participants, () => this.emitParticipants(dialog))
+    return thread
   }
 
   private onUpdateNewMessage = async (update: Api.UpdateNewMessage | Api.UpdateNewChannelMessage) => {
@@ -264,8 +280,7 @@ export default class TelegramAPI implements PlatformAPI {
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
-        const { thread, participantsPromise } = await this.mapThread(dialog)
-        await participantsPromise
+        const thread = await this.mapThread(dialog)
         const event: ServerEvent = {
           type: ServerEventType.STATE_SYNC,
           mutationType: 'upsert',
@@ -593,9 +608,6 @@ export default class TelegramAPI implements PlatformAPI {
     Object.values(groupBy(withUserId, 'chatId')).forEach(msg => this.emitParticipantFromMessages(String((m: { chatId: any }[]) => m[0].chatId), msg.map(m => m.fromId.chatId)))
   }
 
-
-
-  private emitParticipants = async (dialog: Dialog) => {
     if (!dialog.id) return
     const dialogId = String(dialog.id)
     const limit = 1024
@@ -748,9 +760,7 @@ export default class TelegramAPI implements PlatformAPI {
   getThread = async (threadID: string) => {
     const dialogThread = this.state.dialogs.get(threadID)
     if (!dialogThread) return
-    const { thread, participantsPromise } = await this.mapThread(dialogThread)
-    await participantsPromise
-    return thread
+    return this.mapThread(dialogThread)
   }
 
   getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
@@ -761,10 +771,7 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 20
     let lastDate = 0
 
-    const mapped: Promise<{
-      thread: Thread
-      participantsPromise: Promise<any>
-    }>[] = []
+    const mapped: Promise<Thread>[] = []
 
     for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
       if (!dialog?.id) continue
@@ -776,7 +783,7 @@ export default class TelegramAPI implements PlatformAPI {
     await Promise.all(threads.map(t => t.participantsPromise))
 
     return {
-      items: threads.map(t => t.thread),
+      items: threads,
       oldestCursor: lastDate.toString() ?? '*',
       hasMore: lastDate !== 0,
     }
@@ -812,14 +819,17 @@ export default class TelegramAPI implements PlatformAPI {
     const replies = await this.getMessageReplies(BigInteger(threadID), messages)
     replies.forEach(this.storeMessage)
     messages.push(...replies)
-
-    setTimeout(() => this.emitParticipantsFromMessageAction(messages.filter(m => m.action)), 100)
-
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
-    return {
-      items: this.mapper.mapMessages(messages, readOutboxMaxId),
+    const mapped = this.mapper.mapMessages(messages, readOutboxMaxId)
+    const actions = messages.filter(m => m.action)
+    const paginated = {
+      items: mapped,
       hasMore: messages.length !== 0,
     }
+    if (actions) {
+      return getPaginatedProxy(paginated, () => this.emitParticipantsFromMessageAction(actions))
+    }
+    return paginated
   }
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
