@@ -1029,7 +1029,7 @@ export default class TelegramAPI implements PlatformAPI {
           return this.client.downloadProfilePhoto(entityId, {}) as Promise<Buffer>
         })
         await fsp.writeFile(filePath, buffer)
-        break
+        return
       }
       default:
         break
