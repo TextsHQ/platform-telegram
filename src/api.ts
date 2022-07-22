@@ -4,7 +4,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap } from '@textshq/platform-sdk'
-import _, { groupBy, debounce } from 'lodash'
+import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
 import { TelegramClient } from 'telegram'
@@ -18,6 +18,7 @@ import type { SendMessageParams } from 'telegram/client/messages'
 
 import { Mutex } from 'async-mutex'
 import { MemorySession } from 'telegram/sessions'
+import type { TelegramClientParams } from 'telegram/client/telegramBaseClient'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL } from './constants'
 import { AuthState, REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -114,6 +115,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private dbFileName: string
 
+  clientParams: TelegramClientParams
+
   private state: TelegramState = {
     localState: undefined,
     dialogs: new Map<string, Dialog>(),
@@ -131,12 +134,14 @@ export default class TelegramAPI implements PlatformAPI {
     this.dbSession = new DbSession({ dbPath })
     await this.dbSession.init()
 
-    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
+    this.clientParams = {
       retryDelay: 5000,
       autoReconnect: true,
       connectionRetries: Infinity,
       useWSS: true,
-    })
+    }
+
+    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, this.clientParams)
 
     await this.client.connect()
 
@@ -257,6 +262,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
+    // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
     const thread = this.mapper.mapThread(dialog, dialog.isUser
       ? [...await this.client.getParticipants(dialog.id, {})].map(u => this.mapper.mapParticipant(u))
       : [])
@@ -546,12 +552,7 @@ export default class TelegramAPI implements PlatformAPI {
     const mediaSession = new MemorySession()
     mediaSession.setAuthKey(this.dbSession.getAuthKey())
     mediaSession.setDC(this.dbSession.dcId, this.dbSession.serverAddress, this.dbSession.port)
-    this.mediaSession = new TelegramClient(mediaSession, API_ID, API_HASH, {
-      retryDelay: 5000,
-      autoReconnect: true,
-      connectionRetries: Infinity,
-      useWSS: true,
-    })
+    this.mediaSession = new TelegramClient(mediaSession, API_ID, API_HASH, this.clientParams)
     await this.mediaSession.connect()
   }
 
@@ -1014,27 +1015,32 @@ export default class TelegramAPI implements PlatformAPI {
     const downloadClient = this.mediaSession.connected ? this.mediaSession : this.client
     if (!this.mediaSession.connected) texts.log('Media session not connected')
     let buffer
-    switch (type) {
-      case 'media': {
-        const media = this.state.messageMediaStore.get(+entityId)
-        if (!media) throw Error('message media not found')
-        buffer = await downloadClient.downloadMedia(media)
-        this.state.messageMediaStore.delete(+entityId)
-        break
+    const maxAttempts = 2
+    let currentAttempt = 0
+    do {
+      switch (type) {
+        case 'media': {
+          const media = this.state.messageMediaStore.get(+entityId)
+          if (!media) throw Error('message media not found')
+          buffer = await downloadClient.downloadMedia(media)
+          this.state.messageMediaStore.delete(+entityId)
+          break
+        }
+        case 'photos': {
+          buffer = await downloadClient.downloadProfilePhoto(entityId, {})
+          break
+        }
+        default:
+          break
       }
-      case 'photos': {
-        buffer = await downloadClient.downloadProfilePhoto(entityId, {})
-        break
+      if (buffer?.length) {
+        await fsp.writeFile(filePath, buffer)
+        return buffer
       }
-      default:
-        break
-    }
-    if (buffer?.length) {
-      await fsp.writeFile(filePath, buffer)
-      return buffer
-    } else {
-      texts.log('Buffer was zero bytes for', filePath)
-    }
+      texts.log(`${currentAttempt + 1}/${maxAttempts} Buffer was zero bytes for ${filePath}`)
+      currentAttempt++
+    } while (currentAttempt !== maxAttempts)
+
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
 
@@ -1060,7 +1066,10 @@ export default class TelegramAPI implements PlatformAPI {
     if (!await fileExists(filePath)) {
       try {
         await this.downloadAsset(filePath, type, assetId, entityId)
-      } catch (e) { texts.error('Error downloading media', e) }
+      } catch (err) {
+        texts.error('Error downloading media', err)
+        texts.Sentry.captureException(err)
+      }
     }
     return url.pathToFileURL(filePath).href
   }
