@@ -538,7 +538,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    await this.emptyAssets()
+    // await this.emptyAssets()
     await this.createAssetsDir()
     try {
       this.me ||= await this.client.getMe() as Api.User
