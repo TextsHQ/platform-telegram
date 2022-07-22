@@ -12,3 +12,5 @@ export const MUTED_FOREVER_CONSTANT = 2147483647 // max int32
 export const MEDIA_SIZE_MAX_SIZE_BYTES = 5 * 1024 * 1024 // 5 megabytes
 
 export const UPDATES_WATCHDOG_INTERVAL = 15 * 60 * 1000 // 15 mins
+
+export const MAX_DOWNLOAD_ATTEMPTS = 2

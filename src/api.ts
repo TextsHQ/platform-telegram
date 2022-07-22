@@ -19,7 +19,7 @@ import type { SendMessageParams } from 'telegram/client/messages'
 import { Mutex } from 'async-mutex'
 import { MemorySession } from 'telegram/sessions'
 import type { TelegramClientParams } from 'telegram/client/telegramBaseClient'
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL } from './constants'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState, REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -538,7 +538,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    // await this.emptyAssets()
+    await this.emptyAssets()
     await this.createAssetsDir()
     try {
       this.me ||= await this.client.getMe() as Api.User
@@ -1014,32 +1014,21 @@ export default class TelegramAPI implements PlatformAPI {
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
     const downloadClient = this.mediaSession.connected ? this.mediaSession : this.client
     if (!this.mediaSession.connected) texts.log('Media session not connected')
-    let buffer
-    const maxAttempts = 2
-    let currentAttempt = 0
-    do {
-      switch (type) {
-        case 'media': {
-          const media = this.state.messageMediaStore.get(+entityId)
-          if (!media) throw Error('message media not found')
-          buffer = await downloadClient.downloadMedia(media)
-          this.state.messageMediaStore.delete(+entityId)
-          break
-        }
-        case 'photos': {
-          buffer = await downloadClient.downloadProfilePhoto(entityId, {})
-          break
-        }
-        default:
-          break
+    switch (type) {
+      case 'media': {
+        const media = this.state.messageMediaStore.get(+entityId)
+        if (!media) throw Error('message media not found')
+        await downloadClient.downloadMedia(media, { outputFile: filePath })
+        this.state.messageMediaStore.delete(+entityId)
+        return
       }
-      if (buffer?.length) {
-        await fsp.writeFile(filePath, buffer)
-        return buffer
+      case 'photos': {
+        await downloadClient.downloadProfilePhoto(entityId, { outputFile: filePath })
+        return
       }
-      texts.log(`${currentAttempt + 1}/${maxAttempts} Buffer was zero bytes for ${filePath}`)
-      currentAttempt++
-    } while (currentAttempt !== maxAttempts)
+      default:
+        break
+    }
 
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
@@ -1063,15 +1052,22 @@ export default class TelegramAPI implements PlatformAPI {
       }
     }
 
-    if (!await fileExists(filePath)) {
+    for (let attempt = 0; attempt !== MAX_DOWNLOAD_ATTEMPTS; attempt++) {
       try {
+        if (await fileExists(filePath)) {
+          const file = await fsp.stat(filePath)
+          if (file.size !== 0) {
+            return url.pathToFileURL(filePath).href
+          }
+          texts.error('File was zero bytes', filePath)
+        }
+        texts.log(`Download attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
         await this.downloadAsset(filePath, type, assetId, entityId)
       } catch (err) {
-        texts.error('Error downloading media', err)
+        texts.error('Eror downloading media', err.message)
         texts.Sentry.captureException(err)
       }
     }
-    return url.pathToFileURL(filePath).href
   }
 
   handleDeepLink = async (link: string) => {
