@@ -1056,15 +1056,14 @@ export default class TelegramAPI implements PlatformAPI {
       try {
         if (await fileExists(filePath)) {
           const file = await fsp.stat(filePath)
-          if (file.size !== 0) {
-            return url.pathToFileURL(filePath).href
-          }
+          if (file.size > 0) return url.pathToFileURL(filePath).href
           texts.error('File was zero bytes', filePath)
+          texts.Sentry.captureMessage('[Telegram] File was zero bytes')
         }
         texts.log(`Download attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
         await this.downloadAsset(filePath, type, assetId, entityId)
       } catch (err) {
-        texts.error('Eror downloading media', err.message)
+        texts.error('Error downloading media', err.message)
         texts.Sentry.captureException(err)
       }
     }
