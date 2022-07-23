@@ -741,8 +741,7 @@ export default class TelegramMapper {
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
     const isChannel = dialog.dialog.peer instanceof Api.PeerChannel
     const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
-    const hasPhoto = photo instanceof Api.UserProfilePhoto || photo instanceof Api.ChatPhoto
-    const imgFile = isSingle || !hasPhoto ? undefined : this.getProfilePhotoUrl(photo.photoId, dialog.id)
+    const imgURL = photo instanceof Api.ChatPhoto ? this.getProfilePhotoUrl(photo.photoId, dialog.id) : undefined
     const isReadOnly = !this.hasWritePermissions(dialog.entity)
 
     const t: Thread = {
@@ -756,7 +755,7 @@ export default class TelegramMapper {
       isReadOnly,
       lastReadMessageID: String(dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId),
       mutedUntil: this.mapMuteUntil(dialog.dialog.notifySettings.muteUntil ?? 0),
-      imgURL: imgFile,
+      imgURL,
       title: dialog.title,
       participants: {
         hasMore: false,
