@@ -28,29 +28,6 @@ import { DbSession } from './dbSession'
 type LoginEventCallback = (authState: AuthState) => void
 const { IS_DEV } = texts
 
-interface PaginatedProxy<T> extends Paginated<T> {
-  _items: any
-}
-
-function getPaginatedProxy<T>(oldPaginated: Paginated<T>, method: Function) {
-  const proxied: PaginatedProxy<T> = {
-    ...oldPaginated,
-    _items: oldPaginated.items,
-    get items() {
-      if (!this.done && !this._items.length) {
-        method()
-        this.done = true
-      }
-      return this._items
-    },
-    set items(value) {
-      this._items = value
-    },
-    hasMore: false,
-  }
-  return proxied
-}
-
 async function getMessageContent(msgContent: MessageContent) {
   const { fileBuffer, fileName, filePath } = msgContent
   const buffer = filePath ? await fsp.readFile(filePath) : fileBuffer
@@ -262,13 +239,14 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
     const thread = this.mapper.mapThread(dialog, dialog.isUser
+      // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
       ? [...await this.client.getParticipants(dialog.id, {})].map(u => this.mapper.mapParticipant(u))
       : [])
     if (dialog.message) this.storeMessage(dialog.message)
     this.state.dialogs.set(thread.id, dialog)
-    if (thread.participants.items.length === 0) thread.participants = getPaginatedProxy(thread.participants, () => this.emitParticipants(dialog))
+    // TODO: fix hack
+    if (thread.participants.items.length === 0) setTimeout(() => this.emitParticipants(dialog), 500)
     return thread
   }
 
@@ -828,16 +806,14 @@ export default class TelegramAPI implements PlatformAPI {
     replies.forEach(this.storeMessage)
     messages.push(...replies)
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
-    const mapped = this.mapper.mapMessages(messages, readOutboxMaxId)
+    const items = this.mapper.mapMessages(messages, readOutboxMaxId)
     const actions = messages.filter(m => m.action)
-    const paginated = {
-      items: mapped,
+    // TODO: fix hack
+    setTimeout(() => this.emitParticipantsFromMessageAction(actions), 100)
+    return {
+      items,
       hasMore: messages.length !== 0,
     }
-    if (actions) {
-      return getPaginatedProxy(paginated, () => this.emitParticipantsFromMessageAction(actions))
-    }
-    return paginated
   }
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
