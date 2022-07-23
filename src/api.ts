@@ -7,25 +7,24 @@ import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Mes
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import bluebird, { Promise } from 'bluebird'
+import { Mutex } from 'async-mutex'
 import { TelegramClient } from 'telegram'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
+import { MemorySession } from 'telegram/sessions'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-
-import { Mutex } from 'async-mutex'
-import { MemorySession } from 'telegram/sessions'
 import type { TelegramClientParams } from 'telegram/client/telegramBaseClient'
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MEDIA_SIZE_MAX_SIZE_BYTES, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
+
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState, REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 
-type LoginEventCallback = (authState: AuthState) => void
 const { IS_DEV } = texts
 
 async function getMessageContent(msgContent: MessageContent) {
@@ -33,6 +32,8 @@ async function getMessageContent(msgContent: MessageContent) {
   const buffer = filePath ? await fsp.readFile(filePath) : fileBuffer
   return buffer && new CustomFile(fileName, buffer.byteLength, filePath, buffer)
 }
+
+type LoginEventCallback = (authState: AuthState) => void
 
 interface LoginInfo {
   authState?: AuthState
@@ -72,7 +73,6 @@ const LOGIN_ERROR_MAP = {
   PHONE_PASSWORD_PROTECTED: 'Phone is password protected.',
 }
 
-const MEDIA_SIZE_MAX_SIZE_BYTES_BI = BigInteger(MEDIA_SIZE_MAX_SIZE_BYTES)
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
 
@@ -92,7 +92,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private dbFileName: string
 
-  clientParams: TelegramClientParams
+  private clientParams: TelegramClientParams
 
   private state: TelegramState = {
     localState: undefined,
