@@ -826,10 +826,12 @@ export default class TelegramAPI implements PlatformAPI {
       file,
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
+    // refetch to make sure msg.media is correctly present
     const fullMessage = await this.client.getMessages(threadID, { ids: res.id })
     const sentMessage = fullMessage.length ? fullMessage[0] : res
     this.storeMessage(sentMessage)
-    return [this.mapper.mapMessage(sentMessage, undefined)]
+    const mapped = this.mapper.mapMessage(sentMessage, undefined)
+    return mapped ? [mapped] : false
   }
 
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {

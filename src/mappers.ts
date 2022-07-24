@@ -673,7 +673,6 @@ export default class TelegramMapper {
     }
     if (msg.media) {
       mapMessageMedia()
-      if (!mapped.attachments?.length) return undefined
     }
 
     if (msg instanceof Api.MessageService) {
