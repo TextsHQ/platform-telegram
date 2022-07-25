@@ -687,8 +687,7 @@ export default class TelegramAPI implements PlatformAPI {
       return thread
     }
     if (!title) throw Error('title required')
-    await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
-
+    await this.updateHandler(await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title })))
     return true
   }
 
@@ -854,11 +853,11 @@ export default class TelegramAPI implements PlatformAPI {
     }[type]
     if (!action) return
     if (action instanceof Api.account.UpdateStatus) {
-      this.client.invoke(action)
+      await this.client.invoke(action)
     } else {
       const peer = await this.client.getInputEntity(threadID)
       if (!peer || this.state.dialogs.get(threadID)?.isChannel) return
-      this.client.invoke(new Api.messages.SetTyping({ peer, action }))
+      await this.client.invoke(new Api.messages.SetTyping({ peer, action }))
     }
   }
 
@@ -877,65 +876,57 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   archiveThread = async (threadID: string, archived: boolean) => {
-    const res = await this.client.invoke(new Api.folders.EditPeerFolders({
+    const updates = await this.client.invoke(new Api.folders.EditPeerFolders({
       folderPeers: [new Api.InputFolderPeer({
         folderId: Number(archived), // 1 is archived folder, 0 is non archived
         peer: await this.client.getInputEntity(threadID),
       })],
     }))
-    if ('updates' in res && res.updates.length === 0) {
+    await this.updateHandler(updates)
+    if ('updates' in updates && updates.updates.length === 0) {
       this.onEvent([{
         type: ServerEventType.TOAST,
         toast: {
-          text: 'Can\'t archive this thread.',
+          text: "Can't archive this thread.",
         },
       }])
     }
   }
 
-  addReaction = async (threadID: string, messageID: string, reactionKey: string) => {
-    await this.client.invoke(new Api.messages.SendReaction({
+  addReaction = async (threadID: string, messageID: string, reactionKey: string) =>
+    this.updateHandler(await this.client.invoke(new Api.messages.SendReaction({
       msgId: Number(messageID),
       peer: threadID,
       reaction: REACTIONS[reactionKey].render,
-    }))
-  }
+    })))
 
-  removeReaction = async (threadID: string, messageID: string) => {
-    await this.client.invoke(new Api.messages.SendReaction({
+  removeReaction = async (threadID: string, messageID: string) =>
+    this.updateHandler(await this.client.invoke(new Api.messages.SendReaction({
       msgId: Number(messageID),
       peer: threadID,
       reaction: '',
-    }))
-  }
+    })))
 
   private modifyParticipant = async (threadID: string, participantID: string, remove: boolean) => {
     const inputEntity = await this.client.getInputEntity(threadID)
     try {
-      let res: Api.TypeUpdates // the server will send the same updates to us shortly
+      let updates: Api.TypeUpdates
       if (inputEntity instanceof Api.InputPeerChat) {
-        res = remove
+        updates = remove
           ? await this.client.invoke(new Api.messages.DeleteChatUser({ chatId: inputEntity.chatId, userId: participantID }))
           : await this.client.invoke(new Api.messages.AddChatUser({ chatId: inputEntity.chatId, userId: participantID }))
-        texts.log(stringifyCircular(res, 2))
       } else if (inputEntity instanceof Api.InputPeerChannel) {
-        // unsure if supported in Texts but call works
-        res = await this.client.invoke(new Api.channels.InviteToChannel({ channel: inputEntity.channelId, users: [participantID] }))
+        updates = await this.client.invoke(new Api.channels.InviteToChannel({ channel: inputEntity.channelId, users: [participantID] }))
       }
-      if (res && res.className === 'Updates') {
-        // texts.log(stringifyCircular(newMessageUpdates, 2))
-        // @ts-expect-error
-        await this.updateHandler(res.updates)
-      }
+      if (updates) await this.updateHandler(updates)
     } catch (err) {
-      texts.Sentry.captureException(err)
       if (err.code === 400) {
         this.onEvent([{
           type: ServerEventType.TOAST,
           toast: { text: 'You do not have enough permissions to invite a user.' },
         }])
       } else {
-        texts.log(stringifyCircular(err, 2))
+        throw err
       }
     }
   }

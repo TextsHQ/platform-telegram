@@ -779,7 +779,6 @@ export default class TelegramMapper {
       .filter(Boolean)
 
   mapUpdate = (update: Api.TypeUpdate | Api.TypeUpdates): ServerEvent[] => {
-    texts.log(update.className)
     if (update instanceof Api.UpdateNotifySettings) {
       if (!('peer' in update.peer)) {
         texts.log('Unknown updateNotifySettings', stringifyCircular(update, 2))
@@ -917,8 +916,7 @@ export default class TelegramMapper {
         ],
       }]
     }
-    texts.log('Unmapped update', update.className/* , stringifyCircular(update) */)
-
+    texts.log('[Telegram] unmapped update', update.className/* , stringifyCircular(update) */)
     return []
   }
 }
