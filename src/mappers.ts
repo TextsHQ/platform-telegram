@@ -300,7 +300,11 @@ export default class TelegramMapper {
       img: undefined,
       imgSize: undefined,
     }
-    if (photo instanceof Api.Photo) link.img = this.getMediaUrl(photo.id, messageId, 'image/png')
+    if (photo instanceof Api.Photo) {
+      link.img = this.getMediaUrl(photo.id, messageId, 'image/png')
+      const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize)
+      link.imgSize = photoSize && 'w' in photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
+    }
     return link
   }
 
