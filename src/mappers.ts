@@ -748,7 +748,7 @@ export default class TelegramMapper {
     const isReadOnly = !this.hasWritePermissions(dialog.entity)
 
     const t: Thread = {
-      _original: stringifyCircular(dialog),
+      _original: stringifyCircular(dialog.dialog),
       id: getPeerId(dialog.id),
       type: isSingle ? 'single' : isChannel ? 'channel' : 'group',
       // isPinned: dialog.pinned,
