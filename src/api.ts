@@ -495,14 +495,6 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private emitRefreshThread(threadID: string) {
-    const event: ServerEvent = {
-      type: ServerEventType.THREAD_MESSAGES_REFRESH,
-      threadID,
-    }
-    this.onEvent([event])
-  }
-
   private emptyAssets = async () => {
     // for perfomance testing
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
@@ -640,9 +632,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private waitForClientConnected = async () => {
-    while (!this.client.connected) {
-      await bluebird.delay(50)
-    }
+    while (!this.client.connected) await bluebird.delay(50)
   }
 
   logout = async () => {
@@ -706,24 +696,28 @@ export default class TelegramAPI implements PlatformAPI {
     if ('mutedUntil' in updates) {
       const inputPeer = await this.client.getInputEntity(threadID)
       await this.client.invoke(new Api.account.UpdateNotifySettings({
-        peer: new Api.InputNotifyPeer({
-          peer: inputPeer,
-        }),
-        settings: new Api.InputPeerNotifySettings({
-          muteUntil: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0,
-        }),
+        peer: new Api.InputNotifyPeer({ peer: inputPeer }),
+        settings: new Api.InputPeerNotifySettings({ muteUntil: updates.mutedUntil === 'forever' ? MUTED_FOREVER_CONSTANT : 0 }),
       }))
     }
-
+    if ('title' in updates) {
+      const dialog = this.state.dialogs.get(threadID)
+      if (!dialog) throw Error('could not find dialog')
+      const chatId = resolveId(BigInteger(threadID))[0]
+      if (dialog.isChannel) {
+        await this.updateHandler(await this.client.invoke(new Api.channels.EditTitle({ channel: chatId, title: updates.title })))
+      } else {
+        await this.updateHandler(await this.client.invoke(new Api.messages.EditChatTitle({ chatId, title: updates.title })))
+      }
+    }
     if (typeof updates.messageExpirySeconds !== 'undefined') {
       const inputPeer = await this.client.getEntity(threadID)
-      await this.client.invoke(
+      await this.updateHandler(await this.client.invoke(
         new Api.messages.SetHistoryTTL({
           peer: inputPeer,
           period: updates.messageExpirySeconds,
         }),
-      )
-      this.emitRefreshThread(threadID)
+      ))
     }
   }
 
