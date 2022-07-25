@@ -3,10 +3,10 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
+import { setTimeout as setTimeoutAsync } from 'timers/promises'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
-import bluebird, { Promise } from 'bluebird'
 import { Mutex } from 'async-mutex'
 import { TelegramClient } from 'telegram'
 import { Api } from 'telegram/tl'
@@ -256,7 +256,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel) => {
     let markedId: string
-    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
+    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else
+    if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
@@ -271,7 +272,6 @@ export default class TelegramAPI implements PlatformAPI {
         this.onEvent([event])
       }
     }
-    return false
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
@@ -389,10 +389,10 @@ export default class TelegramAPI implements PlatformAPI {
     if (updateLong) return this.updateHandler(updateLong)
   }
 
-  private updateHandler = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
-    const updates = 'updates' in update ? update.updates : update instanceof Api.UpdateShort ? [update.update] : [update]
+  private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
+    const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
     this.state.localState.cancelDifference = true
-    bluebird.map(updates, async () => {
+    for (const update of updates) {
       let ignore = false
       await this.state.localState.updateMutex.runExclusive(async () => {
         this.state.localState.cancelDifference = false
@@ -415,7 +415,7 @@ export default class TelegramAPI implements PlatformAPI {
             } else if (this.state.localState.pts + update.ptsCount < update.pts) {
               texts.log('Missing updates')
               // we need to interrupt this if an update arrives
-              await bluebird.delay(500)
+              await setTimeoutAsync(500)
               if (!this.state.localState.cancelDifference) await this.differenceUpdates()
               this.state.localState.cancelDifference = false
               ignore = true
@@ -474,7 +474,7 @@ export default class TelegramAPI implements PlatformAPI {
       }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
-    }, { concurrency: 1 })
+    }
   }
 
   private async registerUpdateListeners() {
@@ -632,7 +632,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private waitForClientConnected = async () => {
-    while (!this.client.connected) await bluebird.delay(50)
+    while (!this.client.connected) await setTimeoutAsync(50)
   }
 
   logout = async () => {
