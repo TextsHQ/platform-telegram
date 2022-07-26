@@ -759,7 +759,7 @@ export default class TelegramMapper {
       lastReadMessageID: String(dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId),
       mutedUntil: TelegramMapper.mapMuteUntil(dialog.dialog.notifySettings.muteUntil ?? 0),
       imgURL,
-      title: dialog.title,
+      title: isSingle ? undefined : dialog.title,
       participants: {
         hasMore: false,
         items: participants,
@@ -897,6 +897,21 @@ export default class TelegramMapper {
           {
             id: threadID,
             messageExpirySeconds: update.ttlPeriod,
+          },
+        ],
+      }]
+    }
+    if (update instanceof Api.UpdateUserName) {
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'participant',
+        objectIDs: { threadID: String(update.userId) },
+        entries: [
+          {
+            id: String(update.userId),
+            username: update.username,
+            fullName: [update.firstName, update.lastName].filter(Boolean).join(' '),
           },
         ],
       }]
