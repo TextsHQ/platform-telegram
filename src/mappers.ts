@@ -44,6 +44,8 @@ export default class TelegramMapper {
     if (interactionInfo?.forwards) yield `${interactionInfo!.forwards.toLocaleString()} ${interactionInfo!.forwards === 1 ? 'forward' : 'forwards'}`
   }
 
+  static mapTextFooter = (interactionInfo: Api.MessageInteractionCounters) => [...TelegramMapper.getTextFooter(interactionInfo)].join(' · ')
+
   static transformOffset(text: string, entities: TextEntity[]) {
     const arr = Array.from(text)
     let strCursor = 0
@@ -307,8 +309,6 @@ export default class TelegramMapper {
     }
     return link
   }
-
-  mapTextFooter = (interactionInfo: Api.MessageInteractionCounters) => [...TelegramMapper.getTextFooter(interactionInfo)].join(' · ')
 
   mapMessageUpdateText(messageID: string, newContent: Api.Message) {
     if ('text' in newContent) {
@@ -727,13 +727,13 @@ export default class TelegramMapper {
     }
   }
 
-  mapMuteUntil = (seconds: number) => {
+  static mapMuteUntil = (seconds: number) => {
     if (seconds >= MUTED_FOREVER_CONSTANT) return 'forever'
     if (seconds === 0) return
     return addSeconds(new Date(), seconds)
   }
 
-  private hasWritePermissions = (entity: Entity) => {
+  private static hasWritePermissions = (entity: Entity) => {
     // signle and group chats (entity instanceof Api.User || entity instanceof Api.Chat) can always be written to
     if (entity instanceof Api.Channel && (!entity.adminRights && !entity.bannedRights && !entity.defaultBannedRights)) return false
     return true
@@ -745,7 +745,7 @@ export default class TelegramMapper {
     const isChannel = dialog.dialog.peer instanceof Api.PeerChannel
     const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
     const imgURL = photo instanceof Api.ChatPhoto ? this.getProfilePhotoUrl(photo.photoId, dialog.id) : undefined
-    const isReadOnly = !this.hasWritePermissions(dialog.entity)
+    const isReadOnly = !TelegramMapper.hasWritePermissions(dialog.entity)
 
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
@@ -757,7 +757,7 @@ export default class TelegramMapper {
       isUnread: dialog.unreadCount !== 0,
       isReadOnly,
       lastReadMessageID: String(dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId),
-      mutedUntil: this.mapMuteUntil(dialog.dialog.notifySettings.muteUntil ?? 0),
+      mutedUntil: TelegramMapper.mapMuteUntil(dialog.dialog.notifySettings.muteUntil ?? 0),
       imgURL,
       title: dialog.title,
       participants: {
@@ -792,7 +792,7 @@ export default class TelegramMapper {
         objectName: 'thread',
         entries: [{
           id: getPeerId(update.peer.peer),
-          mutedUntil: mutedForever || this.mapMuteUntil(update.notifySettings.muteUntil),
+          mutedUntil: mutedForever || TelegramMapper.mapMuteUntil(update.notifySettings.muteUntil),
         }],
       }]
     }

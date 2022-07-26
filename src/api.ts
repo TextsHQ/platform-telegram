@@ -13,7 +13,6 @@ import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
-import { MemorySession } from 'telegram/sessions'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
@@ -992,7 +991,7 @@ export default class TelegramAPI implements PlatformAPI {
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
 
-  getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, entityId: string, extra?: string) => {
+  getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, entityId: string/* , extra?: string */) => {
     // texts.log(type, assetId, extension, entityId, extra)
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
