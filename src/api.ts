@@ -91,7 +91,19 @@ export default class TelegramAPI implements PlatformAPI {
 
   private dbFileName: string
 
-  private clientParams: TelegramClientParams
+  private clientParams: TelegramClientParams = {
+    retryDelay: 5000,
+    autoReconnect: true,
+    connectionRetries: Infinity,
+    useWSS: true,
+    appVersion: texts.constants.APP_VERSION,
+    deviceModel: 'Texts on ' + {
+      ios: 'iOS',
+      darwin: 'macOS',
+      win32: 'Windows',
+      linux: 'Linux',
+    }[process.platform as NodeJS.Platform | 'ios'],
+  }
 
   private state: TelegramState = {
     localState: undefined,
@@ -109,13 +121,6 @@ export default class TelegramAPI implements PlatformAPI {
     const dbPath = path.join(accountInfo.dataDirPath, this.dbFileName + '.sqlite')
     this.dbSession = new DbSession({ dbPath })
     await this.dbSession.init()
-
-    this.clientParams = {
-      retryDelay: 5000,
-      autoReconnect: true,
-      connectionRetries: Infinity,
-      useWSS: true,
-    }
 
     this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, this.clientParams)
 
