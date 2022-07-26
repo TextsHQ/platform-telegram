@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -323,6 +323,37 @@ export default class TelegramMapper {
     }
   }
 
+  mapReactions = (reactions: Api.MessageReactions) => {
+    if (!reactions.recentReactions && !reactions.results) return
+    // hack, use messages.getMessageReactionsList API call instead
+    const subtractCounts: Record<string, number> = {}
+    const mappedReactions = reactions.recentReactions?.map<MessageReaction>(r => {
+      const participantID = getPeerId(r.peerId)
+      const reactionKey = r.reaction.replace('❤', '❤️')
+      subtractCounts[reactionKey] = (subtractCounts[reactionKey] ?? 0) + 1
+      return {
+        id: participantID + reactionKey,
+        participantID,
+        emoji: true,
+        reactionKey,
+      }
+    }) ?? []
+    const mappedReactionResults = reactions.results?.flatMap(r => {
+      const reactionKey = r.reaction.replace('❤', '❤️')
+      const reactionResult = range(r.count - (subtractCounts[reactionKey] ?? 0)).map<MessageReaction>(index => ({
+        // hack since we don't have access to id
+        id: `${index}${reactionKey}`,
+        participantID: `${index}`,
+        emoji: true,
+        reactionKey,
+      }))
+      // chosen = Whether the current user sent this reaction
+      if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = String(this.me.id) }
+      return reactionResult
+    }) ?? []
+    return [...mappedReactions, ...mappedReactionResults]
+  }
+
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
     const isSender = msg.senderId?.equals(this.me.id)
     const isThreadSender = !isSender && (msg instanceof Api.MessageService || !msg.senderId || msg.senderId.equals(msg.chatId))
@@ -340,32 +371,6 @@ export default class TelegramMapper {
       expiresInSeconds: msg.ttlPeriod,
     }
     if (readOutboxMaxId) mapped.seen = msg.id <= readOutboxMaxId
-
-    const setReactions = (reactions: Api.MessageReactions) => {
-      if (reactions.recentReactions || reactions.results) {
-        const mappedReactions: MessageReaction[] = reactions.recentReactions?.map(r => (
-          {
-            id: getPeerId(r.peerId),
-            participantID: getPeerId(r.peerId),
-            emoji: true,
-            reactionKey: r.reaction.replace('❤', '❤️'),
-          })) ?? []
-        const mappedReactionResults: MessageReaction[] = reactions.results?.flatMap(r => {
-          const reactionResult = range(r.count).map(c =>
-          // we don't really have access to id here
-            ({
-              id: `${c}${r.reaction}`,
-              participantID: `${c}`,
-              emoji: true,
-              reactionKey: r.reaction.replace('❤', '❤️'),
-            }))
-          if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = String(this.me.id) }
-          return reactionResult
-        }) ?? []
-
-        mapped.reactions = mappedReactionResults.length ? mappedReactionResults : mappedReactions
-      }
-    }
 
     const setFormattedText = (msgText: string, msgEntities: Api.TypeMessageEntity[]) => {
       mapped.text = msgText
@@ -673,7 +678,7 @@ export default class TelegramMapper {
       mapped.text = msg.message
     }
     if (msg.reactions) {
-      setReactions(msg.reactions)
+      mapped.reactions = this.mapReactions(msg.reactions)
     }
     if (msg.media) {
       mapMessageMedia()
@@ -933,5 +938,18 @@ export default class TelegramMapper {
     }
     texts.log('[Telegram] unmapped update', update.className/* , stringifyCircular(update) */)
     return []
+  }
+
+  mapUpdateMessageReactions(update: Api.UpdateMessageReactions, threadID: string): StateSyncEvent {
+    return {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'update',
+      objectName: 'message',
+      objectIDs: { threadID },
+      entries: [{
+        id: String(update.msgId),
+        reactions: this.mapReactions(update.reactions),
+      }],
+    }
   }
 }

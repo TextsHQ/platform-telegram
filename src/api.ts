@@ -292,19 +292,16 @@ export default class TelegramAPI implements PlatformAPI {
     update.messages.forEach(m => {
       this.state.messageChatIdMap.delete(m)
     })
-    this.onEvent([
-      {
-        type: ServerEventType.STATE_SYNC,
-        objectIDs: { threadID },
-        mutationType: 'delete',
-        objectName: 'message',
-        entries: update.messages.map(msgId => msgId.toString()),
-      },
-    ])
+    this.onEvent([{
+      type: ServerEventType.STATE_SYNC,
+      objectIDs: { threadID },
+      mutationType: 'delete',
+      objectName: 'message',
+      entries: update.messages.map(msgId => msgId.toString()),
+    }])
   }
 
   private onUpdateReadMessagesContents = async (update: Api.UpdateReadMessagesContents | Api.UpdateChannelReadMessagesContents) => {
-    const messageID = String(update.messages[0])
     const res = await this.client.getMessages(undefined, { ids: update.messages })
     if (res.length === 0) return
     const threadID = getMarkedId({ chatId: res[0].chatId })
@@ -314,7 +311,7 @@ export default class TelegramAPI implements PlatformAPI {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
       objectName: 'message',
-      objectIDs: { threadID, messageID },
+      objectIDs: { threadID },
       entries,
     }])
   }
@@ -475,6 +472,10 @@ export default class TelegramAPI implements PlatformAPI {
         const dialog = this.state.dialogs.get(('peer' in update) ? getPeerId(update.peer) : getMarkedId({ channelId: update.channelId }))
         const maxId = 'maxId' in update ? update.maxId : update.topMsgId
         if (dialog) dialog.dialog.readOutboxMaxId = maxId
+      }
+      if (update instanceof Api.UpdateMessageReactions) {
+        const threadID = this.state.messageChatIdMap.get(update.msgId)
+        return this.onEvent([this.mapper.mapUpdateMessageReactions(update, threadID)])
       }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
