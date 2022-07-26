@@ -936,6 +936,7 @@ export default class TelegramMapper {
         ],
       }]
     }
+    texts.Sentry.captureMessage(`[Telegram] unmapped update: ${update.className}`)
     texts.log('[Telegram] unmapped update', update.className/* , stringifyCircular(update) */)
     return []
   }
