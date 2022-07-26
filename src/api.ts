@@ -700,11 +700,10 @@ export default class TelegramAPI implements PlatformAPI {
       const dialog = this.state.dialogs.get(threadID)
       if (!dialog) throw Error('could not find dialog')
       const chatId = resolveId(BigInteger(threadID))[0]
-      if (dialog.isChannel) {
-        await this.updateHandler(await this.client.invoke(new Api.channels.EditTitle({ channel: chatId, title: updates.title })))
-      } else {
-        await this.updateHandler(await this.client.invoke(new Api.messages.EditChatTitle({ chatId, title: updates.title })))
-      }
+      const tgUpdates = await this.client.invoke(dialog.isChannel
+        ? new Api.channels.EditTitle({ channel: chatId, title: updates.title })
+        : new Api.messages.EditChatTitle({ chatId, title: updates.title }))
+      await this.updateHandler(tgUpdates)
     }
     if (typeof updates.messageExpirySeconds !== 'undefined') {
       const inputPeer = await this.client.getEntity(threadID)
