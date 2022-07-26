@@ -78,7 +78,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private client: TelegramClient
 
-  private mediaSession: TelegramClient
+  private mediaClient: TelegramClient
 
   private accountInfo: AccountInfo
 
@@ -519,11 +519,8 @@ export default class TelegramAPI implements PlatformAPI {
     }
     this.mapper = new TelegramMapper(this.accountInfo.accountID, this.me)
     this.registerUpdateListeners()
-    const mediaSession = new MemorySession()
-    mediaSession.setAuthKey(this.dbSession.getAuthKey())
-    mediaSession.setDC(this.dbSession.dcId, this.dbSession.serverAddress, this.dbSession.port)
-    this.mediaSession = new TelegramClient(mediaSession, API_ID, API_HASH, this.clientParams)
-    await this.mediaSession.connect()
+    this.mediaClient = new TelegramClient(this.dbSession, API_ID, API_HASH, this.clientParams)
+    await this.mediaClient.connect()
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -645,7 +642,7 @@ export default class TelegramAPI implements PlatformAPI {
   dispose = async () => {
     clearTimeout(this.state.localState?.watchdogTimeout)
     await this.client?.destroy()
-    await this.mediaSession?.destroy()
+    await this.mediaClient?.destroy()
   }
 
   getCurrentUser = (): CurrentUser => {
@@ -975,8 +972,8 @@ export default class TelegramAPI implements PlatformAPI {
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
-    const downloadClient = this.mediaSession.connected ? this.mediaSession : this.client
-    if (!this.mediaSession.connected) texts.log('Media session not connected')
+    const downloadClient = this.mediaClient.connected ? this.mediaClient : this.client
+    if (!this.mediaClient.connected) texts.log('Media session not connected')
     switch (type) {
       case 'media': {
         const media = this.state.messageMediaStore.get(+entityId)
