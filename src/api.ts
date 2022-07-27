@@ -393,7 +393,7 @@ export default class TelegramAPI implements PlatformAPI {
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
     const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
     this.state.localState.cancelDifference = true
-    for (const update of updates) {
+    const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
       let ignore = false
       await this.state.localState.updateMutex.runExclusive(async () => {
         this.state.localState.cancelDifference = false
@@ -407,14 +407,15 @@ export default class TelegramAPI implements PlatformAPI {
           case 'UpdateReadHistoryOutbox':
           case 'UpdateWebPage':
           case 'UpdatePinnedMessages':
-          case 'UpdateFolderPeers':
-            texts.log(`localPts = ${this.state.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
-            if ((this.state.localState.pts + update.ptsCount) > update.pts) {
-              texts.log('Update already applied')
-              this.state.localState.pts += (this.state.localState.pts + update.ptsCount)
+          case 'UpdateFolderPeers': {
+            texts.log(`[Telegram] localPts = ${this.state.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
+            const sum = this.state.localState.pts + update.ptsCount
+            if (sum > update.pts) {
+              texts.log('[Telegram] Update already applied')
+              this.state.localState.pts += sum
               ignore = true
-            } else if (this.state.localState.pts + update.ptsCount < update.pts) {
-              texts.log('Missing updates')
+            } else if (sum < update.pts) {
+              texts.log('[Telegram] Missing updates')
               // we need to interrupt this if an update arrives
               await setTimeoutAsync(500)
               if (!this.state.localState.cancelDifference) await this.differenceUpdates()
@@ -422,11 +423,12 @@ export default class TelegramAPI implements PlatformAPI {
               ignore = true
             } else {
               this.state.localState.pts += update.ptsCount
-              texts.log('Updates in sync')
+              texts.log('[Telegram] Updates in sync')
             }
             break
+          }
           case 'UpdatesTooLong': {
-            texts.log('Need to sync from server state')
+            texts.log('[Telegram] Need to sync from server state')
             const state = await this.client.invoke(new Api.updates.GetState())
             this.state.localState.date = state.date
             this.state.localState.pts = state.pts
@@ -479,6 +481,7 @@ export default class TelegramAPI implements PlatformAPI {
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
     }
+    for (const update of updates) await handleUpdate(update)
   }
 
   private async registerUpdateListeners() {
