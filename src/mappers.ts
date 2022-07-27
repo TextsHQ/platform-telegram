@@ -354,6 +354,15 @@ export default class TelegramMapper {
     return [...mappedReactions, ...mappedReactionResults]
   }
 
+  mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
+    const pollAnswers = poll.answers.map(a => a.text)
+    const isQuiz = poll.quiz
+    const mappedResults = results.results ? `${results.results.map((result, index) => [pollAnswers[index], result.chosen
+      ? '✔️' : '', `— ${(result.voters / (results.totalVoters ?? result.voters)) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+      : 'No results available yet'
+    return `${poll.publicVoters ? 'Anonymous ' : ''}${isQuiz ? 'Quiz' : 'Poll'}\n\n\n` + mappedResults
+  }
+
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
     const isSender = msg.senderId?.equals(this.me.id)
     const isThreadSender = !isSender && (msg instanceof Api.MessageService || !msg.senderId || msg.senderId.equals(msg.chatId))
@@ -517,12 +526,7 @@ export default class TelegramMapper {
         mapped.textHeading = `Dice: ${msg.dice.value}`
       } else if (msg.poll) {
         const { poll } = msg
-        const pollAnswers = poll.poll.answers.map(a => a.text)
-        const isQuiz = poll.poll.quiz
-        const mappedResults = poll.results.results ? `${poll.results.results.map((result, index) => [pollAnswers[index], result.chosen
-          ? '✔️' : '', `— ${(result.voters / (poll.results.totalVoters ?? result.voters)) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
-          : 'No results available yet'
-        mapped.textHeading = `${poll.poll.publicVoters ? 'Anonymous ' : ''}${isQuiz ? 'Quiz' : 'Poll'}\n\n\n` + mappedResults
+        mapped.textHeading = this.mapPoll(poll)
       } else if (msg.media instanceof Api.MessageMediaWebPage) {
         const msgMediaLink = this.mapMessageLink(msg.media.webpage, msg.id)
         mapped.links = msgMediaLink ? [msgMediaLink] : undefined
@@ -934,6 +938,18 @@ export default class TelegramMapper {
             imgURL: this.getProfilePhotoUrl(update.photo.photoId, update.userId),
           },
         ],
+      }]
+    }
+    if (update instanceof Api.UpdateChatParticipantDelete) {
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'participant',
+        objectIDs: { threadID: String(update.chatId) },
+        entries: [{
+          id: String(update.userId),
+          hasExited: true,
+        }],
       }]
     }
     texts.Sentry.captureMessage(`[Telegram] unmapped update: ${update.className}`)

@@ -452,9 +452,8 @@ export default class TelegramAPI implements PlatformAPI {
 
       if (ignore) return
       if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) return this.onUpdateNewMessage(update)
-      if (update instanceof Api.UpdateChat
-        || update instanceof Api.UpdateChannel) return this.onUpdateChatChannel(update)
-      if (update instanceof Api.UpdateChatParticipant || update instanceof Api.UpdateChannelParticipant) { return this.onUpdateChatChannelParticipant(update) }
+      if (update instanceof Api.UpdateChat || update instanceof Api.UpdateChannel) return this.onUpdateChatChannel(update)
+      if (update instanceof Api.UpdateChatParticipant || update instanceof Api.UpdateChannelParticipant) return this.onUpdateChatChannelParticipant(update)
       if (update instanceof Api.UpdateDeleteMessages
         || update instanceof Api.UpdateDeleteChannelMessages
         || update instanceof Api.UpdateDeleteScheduledMessages) return this.onUpdateDeleteMessages(update)
