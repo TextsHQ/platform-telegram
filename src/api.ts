@@ -978,18 +978,17 @@ export default class TelegramAPI implements PlatformAPI {
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
-    const downloadClient = this.mediaClient.connected ? this.mediaClient : this.client
     if (!this.mediaClient.connected) texts.log('Media session not connected')
     switch (type) {
       case 'media': {
         const media = this.state.messageMediaStore.get(+entityId)
         if (!media) throw Error('message media not found')
-        await downloadClient.downloadMedia(media, { outputFile: filePath })
+        await this.mediaClient.downloadMedia(media, { outputFile: filePath })
         this.state.messageMediaStore.delete(+entityId)
         return
       }
       case 'photos': {
-        await downloadClient.downloadProfilePhoto(entityId, { outputFile: filePath })
+        await this.mediaClient.downloadProfilePhoto(entityId, { outputFile: filePath })
         return
       }
       default:

@@ -354,7 +354,7 @@ export default class TelegramMapper {
     return [...mappedReactions, ...mappedReactionResults]
   }
 
-  mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
+  static mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
     const pollAnswers = poll.answers.map(a => a.text)
     const isQuiz = poll.quiz
     const mappedResults = results.results ? `${results.results.map((result, index) => [pollAnswers[index], result.chosen
@@ -526,7 +526,7 @@ export default class TelegramMapper {
         mapped.textHeading = `Dice: ${msg.dice.value}`
       } else if (msg.poll) {
         const { poll } = msg
-        mapped.textHeading = this.mapPoll(poll)
+        mapped.textHeading = TelegramMapper.mapPoll(poll)
       } else if (msg.media instanceof Api.MessageMediaWebPage) {
         const msgMediaLink = this.mapMessageLink(msg.media.webpage, msg.id)
         mapped.links = msgMediaLink ? [msgMediaLink] : undefined
