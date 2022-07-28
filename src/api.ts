@@ -16,7 +16,6 @@ import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-import type { TelegramClientParams } from 'telegram/client/telegramBaseClient'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState, REACTIONS } from './common-constants'
@@ -77,8 +76,6 @@ export default class TelegramAPI implements PlatformAPI {
 
   private client: TelegramClient
 
-  private mediaClient: TelegramClient
-
   private accountInfo: AccountInfo
 
   private loginEventCallback: LoginEventCallback
@@ -90,20 +87,6 @@ export default class TelegramAPI implements PlatformAPI {
   private dbSession: DbSession
 
   private dbFileName: string
-
-  private clientParams: TelegramClientParams = {
-    retryDelay: 5000,
-    autoReconnect: true,
-    connectionRetries: Infinity,
-    useWSS: true,
-    appVersion: texts.constants.APP_VERSION,
-    deviceModel: 'Texts on ' + {
-      ios: 'iOS',
-      darwin: 'macOS',
-      win32: 'Windows',
-      linux: 'Linux',
-    }[process.platform as NodeJS.Platform | 'ios'],
-  }
 
   private state: TelegramState = {
     localState: undefined,
@@ -122,7 +105,19 @@ export default class TelegramAPI implements PlatformAPI {
     this.dbSession = new DbSession({ dbPath })
     await this.dbSession.init()
 
-    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, this.clientParams)
+    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
+      retryDelay: 1_000,
+      autoReconnect: true,
+      connectionRetries: Infinity,
+      useWSS: true,
+      appVersion: texts.constants.APP_VERSION,
+      deviceModel: 'Texts on ' + {
+        ios: 'iOS',
+        darwin: 'macOS',
+        win32: 'Windows',
+        linux: 'Linux',
+      }[process.platform as NodeJS.Platform | 'ios'],
+    })
 
     await this.client.connect()
 
@@ -526,8 +521,6 @@ export default class TelegramAPI implements PlatformAPI {
     }
     this.mapper = new TelegramMapper(this.accountInfo.accountID, this.me)
     this.registerUpdateListeners()
-    this.mediaClient = new TelegramClient(this.dbSession, API_ID, API_HASH, this.clientParams)
-    await this.mediaClient.connect()
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -649,7 +642,6 @@ export default class TelegramAPI implements PlatformAPI {
   dispose = async () => {
     clearTimeout(this.state.localState?.watchdogTimeout)
     await this.client?.destroy()
-    await this.mediaClient?.destroy()
   }
 
   getCurrentUser = (): CurrentUser => {
@@ -978,17 +970,16 @@ export default class TelegramAPI implements PlatformAPI {
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
 
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
-    if (!this.mediaClient.connected) texts.log('Media session not connected')
     switch (type) {
       case 'media': {
         const media = this.state.messageMediaStore.get(+entityId)
         if (!media) throw Error('message media not found')
-        await this.mediaClient.downloadMedia(media, { outputFile: filePath })
+        await this.client.downloadMedia(media, { outputFile: filePath })
         this.state.messageMediaStore.delete(+entityId)
         return
       }
       case 'photos': {
-        await this.mediaClient.downloadProfilePhoto(entityId, { outputFile: filePath })
+        await this.client.downloadProfilePhoto(entityId, { outputFile: filePath })
         return
       }
       default:
