@@ -724,17 +724,10 @@ export default class TelegramMapper {
     return mapped
   }
 
-  mapParticipant = (user: Api.User, adminIds?: Set<number>): Participant => {
-    const participant: Participant = this.mapUser(user)
-    let isAdmin = false
-    if (adminIds?.has(user?.id?.toJSNumber())) {
-      isAdmin = true
-    }
-    return {
-      ...participant,
-      isAdmin,
-    }
-  }
+  mapParticipant = (user: Api.User, adminIds?: Set<string>): Participant => ({
+    ...this.mapUser(user),
+    isAdmin: adminIds?.has(user.id?.toString()),
+  })
 
   static mapMuteUntil = (seconds: number) => {
     if (seconds >= MUTED_FOREVER_CONSTANT) return 'forever'

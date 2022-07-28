@@ -54,7 +54,7 @@ interface TelegramState {
   messageMediaStore: Map<number, Api.TypeMessageMedia>
   messageChatIdMap: Map<number, string>
   dialogIdToParticipantIds: Map<string, Set<string>>
-  dialogToDialogAdminIds: Map<string, Set<number>>
+  dialogToDialogAdminIds: Map<string, Set<string>>
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -94,7 +94,7 @@ export default class TelegramAPI implements PlatformAPI {
     messageMediaStore: new Map<number, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
-    dialogToDialogAdminIds: new Map<string, Set<number>>(),
+    dialogToDialogAdminIds: new Map<string, Set<string>>(),
   }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
@@ -587,10 +587,10 @@ export default class TelegramAPI implements PlatformAPI {
     const dialogId = String(dialog.id)
     const limit = 1024
     const { adminIds, admins } = await this.getDialogAdmins(dialogId)
-    const members = await (async () => {
+    const members = await (() => {
       try {
         // skip the useless call altogether
-        if (dialog.isChannel && !dialog.isGroup && !(adminIds.has(this.me?.id.toJSNumber()))) return admins ?? []
+        if (dialog.isChannel && !dialog.isGroup && !(adminIds.has(this.me?.id.toString()))) return admins ?? []
         return this.client.getParticipants(dialogId, { limit })
       } catch (e) {
         // texts.log('Error emitParticipants', e)
@@ -611,7 +611,7 @@ export default class TelegramAPI implements PlatformAPI {
       } catch {
         // swallow
       }
-      this.state.dialogToDialogAdminIds.set(dialogId, new Set(admins.map(a => a.id.toJSNumber())))
+      this.state.dialogToDialogAdminIds.set(dialogId, new Set(admins.map(a => a.id.toString())))
     }
     return { adminIds: this.state.dialogToDialogAdminIds.get(dialogId), admins }
   }
