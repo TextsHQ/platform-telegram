@@ -357,10 +357,15 @@ export default class TelegramMapper {
   static mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
     const pollAnswers = poll.answers.map(a => a.text)
     const isQuiz = poll.quiz
-    const mappedResults = results.results ? `${results.results.map((result, index) => [pollAnswers[index], result.chosen
-      ? '✔️' : '', `— ${(result.voters / (results.totalVoters ?? result.voters)) * 100}%`, `(${result.voters})`].filter(Boolean).join('\t')).join('\n')}`
+    const mappedResults = results.results
+      ? `${results.results.map((result, index) => [
+        result.chosen ? '✔️' : ' ',
+        `${((result.voters / (results.totalVoters || result.voters || 1)) * 100).toString().padStart(6)}% — `,
+        pollAnswers[index],
+        `(${result.voters})`,
+      ].filter(Boolean).join('\t')).join('\n')}`
       : 'No results available yet'
-    return `${poll.publicVoters ? 'Anonymous ' : ''}${isQuiz ? 'Quiz' : 'Poll'}\n\n\n` + mappedResults
+    return `${poll.publicVoters ? '' : 'Anonymous '}${isQuiz ? 'Quiz' : 'Poll'}\n\n` + mappedResults
   }
 
   mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
@@ -931,6 +936,18 @@ export default class TelegramMapper {
             imgURL: this.getProfilePhotoUrl(update.photo.photoId, update.userId),
           },
         ],
+      }]
+    }
+    if (update instanceof Api.UpdateChatParticipantAdmin) {
+      return [{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'participant',
+        objectIDs: { threadID: String(update.chatId) },
+        entries: [{
+          id: String(update.userId),
+          isAction: update.isAdmin,
+        }],
       }]
     }
     if (update instanceof Api.UpdateChatParticipantDelete) {
