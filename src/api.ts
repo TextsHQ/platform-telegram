@@ -669,16 +669,16 @@ export default class TelegramAPI implements PlatformAPI {
   createThread = async (userIDs: string[], title?: string) => {
     if (userIDs.length === 0) throw Error('userIDs empty')
     if (userIDs.length === 1) {
-      const user = await this.getUser({ userID: userIDs[0] })
+      const userID = userIDs[0]
+      const user = await this.getUser({ userID })
       if (!user) throw Error('user not found')
       const thread: Thread = {
-        id: userIDs[0],
+        id: userID,
         isReadOnly: false,
         isUnread: false,
         type: 'single',
         messages: { hasMore: false, items: [] },
         participants: { hasMore: false, items: [user] },
-        timestamp: new Date(),
       }
       return thread
     }
