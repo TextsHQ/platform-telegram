@@ -2,38 +2,33 @@ import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntit
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
-import { Api } from 'telegram/tl'
 import mime from 'mime-types'
-
+import { Api } from 'telegram/tl'
+import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { Entity } from 'telegram/define'
 
-import { getPeerId } from 'telegram/Utils'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
-interface UnmarkedId {
-  userId?: bigInt.BigInteger
-  chatId?: bigInt.BigInteger
-  channelId?: bigInt.BigInteger
-}
+type UnmarkedId = { userId: bigInt.BigInteger } | { chatId: bigInt.BigInteger } | { channelId: bigInt.BigInteger }
 
 export function getMarkedId(unmarked: UnmarkedId) {
-  if (unmarked.userId) return unmarked.userId.toString()
-  if (unmarked.chatId) {
+  if ('userId' in unmarked) return unmarked.userId.toString()
+  if ('chatId' in unmarked) {
     const str = unmarked.chatId.toString()
     return str.startsWith('-') ? str : `-${str}`
   }
-  if (unmarked.channelId) {
+  if ('channelId' in unmarked) {
     const str = unmarked.channelId.toString()
     return str.startsWith('-100') ? str : `-100${str}`
   }
 }
 function getUnmarkedId(unmarked: UnmarkedId) {
-  if (unmarked.userId) return unmarked.userId.toString()
-  if (unmarked.chatId) return unmarked.chatId.toString()
-  if (unmarked.channelId) return unmarked.channelId.toString()
+  if ('userId' in unmarked) return unmarked.userId.toString()
+  if ('chatId' in unmarked) return unmarked.chatId.toString()
+  if ('channelId' in unmarked) return unmarked.channelId.toString()
 }
 
 export default class TelegramMapper {

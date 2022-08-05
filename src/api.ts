@@ -4,7 +4,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -991,7 +991,7 @@ export default class TelegramAPI implements PlatformAPI {
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
 
-  getAsset = async (_: any, type: 'media' | 'photos', assetId: string, extension: string, entityId: string/* , extra?: string */) => {
+  getAsset = async (_: GetAssetOptions, type: 'media' | 'photos', assetId: string, extension: string, entityId: string/* , extra?: string */) => {
     // texts.log(type, assetId, extension, entityId, extra)
     if (!['media', 'photos'].includes(type)) {
       throw new Error(`Unknown media type ${type}`)
