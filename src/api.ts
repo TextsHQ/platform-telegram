@@ -71,6 +71,24 @@ const LOGIN_ERROR_MAP = {
   PHONE_PASSWORD_PROTECTED: 'Phone is password protected.',
 }
 
+const getMessageFromShort = (update: Api.UpdateShortMessage | Api.UpdateShortChatMessage, peerId: Api.TypePeer, fromId: Api.TypePeer): Api.Message =>
+  new Api.Message(({
+    out: update.out,
+    mentioned: update.mentioned,
+    mediaUnread: update.mediaUnread,
+    silent: update.silent,
+    id: update.id,
+    message: update.message,
+    date: update.date,
+    fwdFrom: update.fwdFrom,
+    viaBotId: update.viaBotId,
+    replyTo: update.replyTo,
+    entities: update.entities,
+    ttlPeriod: update.ttlPeriod,
+    peerId,
+    fromId,
+  }))
+
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
 
@@ -339,50 +357,35 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private shortUpdateHandler = (updateShort: Api.UpdateShortMessage | Api.UpdateShortChatMessage | Api.UpdateShort | Api.UpdateShortSentMessage) => {
-    let updateLong: Api.TypeUpdate | Api.TypeUpdates
+  private convertShortUpdate = (updateShort: Api.UpdateShortMessage | Api.UpdateShortChatMessage | Api.UpdateShort | Api.UpdateShortSentMessage): Api.TypeUpdate => {
     this.state.localState.date = updateShort.date
-    const getCommon = (update: Api.UpdateShortMessage | Api.UpdateShortChatMessage): ConstructorParameters<typeof Api.Message>['0'] => ({
-      out: update.out,
-      mentioned: update.mentioned,
-      mediaUnread: update.mediaUnread,
-      silent: update.silent,
-      id: update.id,
-      message: update.message,
-      date: update.date,
-      fwdFrom: update.fwdFrom,
-      viaBotId: update.viaBotId,
-      replyTo: update.replyTo,
-      entities: update.entities,
-      ttlPeriod: update.ttlPeriod,
-    })
     // https://github.com/gram-js/gramjs/blob/master/gramjs/events/NewMessage.ts
     if (updateShort instanceof Api.UpdateShortMessage) {
-      updateLong = new Api.UpdateNewMessage({
-        message: new Api.Message({
-          ...getCommon(updateShort),
-          peerId: new Api.PeerUser({ userId: updateShort.userId }),
-          fromId: new Api.PeerUser({ userId: updateShort.out ? this.me.id : updateShort.userId }),
-        }),
+      return new Api.UpdateNewMessage({
+        message: getMessageFromShort(
+          updateShort,
+          new Api.PeerUser({ userId: updateShort.userId }),
+          new Api.PeerUser({ userId: updateShort.out ? this.me.id : updateShort.userId }),
+        ),
         pts: updateShort.pts,
         ptsCount: updateShort.ptsCount,
       })
-    } else if (updateShort instanceof Api.UpdateShortChatMessage) {
-      updateLong = new Api.UpdateNewChannelMessage({
-        message: new Api.Message({
-          ...getCommon(updateShort),
-          peerId: new Api.PeerChat({ chatId: updateShort.chatId }),
-          fromId: new Api.PeerUser({ userId: updateShort.out ? this.me.id : updateShort.fromId }),
-        }),
-        pts: updateShort.pts,
-        ptsCount: updateShort.ptsCount,
-      })
-    } else if (updateShort instanceof Api.UpdateShort) {
-      updateLong = updateShort.update
-    } else {
-      this.state.localState.pts += updateShort.pts
     }
-    if (updateLong) return this.updateHandler(updateLong)
+    if (updateShort instanceof Api.UpdateShortChatMessage) {
+      return new Api.UpdateNewChannelMessage({
+        message: getMessageFromShort(
+          updateShort,
+          new Api.PeerChat({ chatId: updateShort.chatId }),
+          new Api.PeerUser({ userId: updateShort.out ? this.me.id : updateShort.fromId }),
+        ),
+        pts: updateShort.pts,
+        ptsCount: updateShort.ptsCount,
+      })
+    }
+    if (updateShort instanceof Api.UpdateShort) {
+      return updateShort.update
+    }
+    this.state.localState.pts += updateShort.pts
   }
 
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
@@ -435,14 +438,13 @@ export default class TelegramAPI implements PlatformAPI {
             break
         }
 
-        // convert short
-        if (
-          update instanceof Api.UpdateShortMessage
+        if (update instanceof Api.UpdateShortMessage
           || update instanceof Api.UpdateShortChatMessage
           || update instanceof Api.UpdateShortSentMessage
           || update instanceof Api.UpdateShort) {
-          texts.log('Received short update')
-          this.shortUpdateHandler(update)
+          texts.log('[Telegram] Received short update')
+          const regularUpdate = this.convertShortUpdate(update)
+          await this.updateHandler(regularUpdate)
           ignore = true
         }
       })
