@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -363,10 +363,12 @@ export default class TelegramMapper {
     return `${poll.publicVoters ? '' : 'Anonymous '}${isQuiz ? 'Quiz' : 'Poll'}\n\n` + mappedResults
   }
 
-  mapMessage(msg: CustomMessage, readOutboxMaxId: number): Message {
-    const isSender = msg.senderId?.equals(this.me.id)
-    const isThreadSender = !isSender && (msg instanceof Api.MessageService || !msg.senderId || msg.senderId.equals(msg.chatId))
-    const senderID = isThreadSender ? '$thread' : String(msg.senderId)
+  mapMessage(msg: CustomMessage | Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
+    const isSender = msg.senderId?.equals(this.me.id) ?? false
+    const isThreadSender = msg.sender?.className.includes('Chat') || msg.sender?.className.includes('Channel')
+    const senderID = isThreadSender
+      ? '$thread' + (msg.senderId === msg.chatId ? '' : `_${msg.senderId}`)
+      : String(msg.senderId)
     const mapped: Message = {
       _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: String(msg.id),
@@ -390,7 +392,7 @@ export default class TelegramMapper {
       const isTgs = sticker.mimeType === 'application/x-tgsticker'
       const animated = isTgs || isWebm
       const sizeAttribute = sticker.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
-      const size = {
+      const size: Size = {
         width: sizeAttribute?.w || 100,
         height: sizeAttribute?.h || 100,
       }
