@@ -444,7 +444,7 @@ export default class TelegramAPI implements PlatformAPI {
           || update instanceof Api.UpdateShort) {
           texts.log('[Telegram] Received short update')
           const regularUpdate = this.convertShortUpdate(update)
-          await this.updateHandler(regularUpdate)
+          this.updateHandler(regularUpdate)
           ignore = true
         }
       })
