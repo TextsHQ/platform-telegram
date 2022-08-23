@@ -396,6 +396,7 @@ export default class TelegramAPI implements PlatformAPI {
       await this.state.localState.updateMutex.runExclusive(async () => {
         this.state.localState.cancelDifference = false
         // common sequence
+        // only these updates contain the sync value common to all dialogs
         switch (update.className) {
           case 'UpdateNewMessage':
           case 'UpdateReadMessagesContents':
@@ -414,7 +415,7 @@ export default class TelegramAPI implements PlatformAPI {
               ignore = true
             } else if (sum < update.pts) {
               texts.log('[Telegram] Missing updates')
-              // we need to interrupt this if an update arrives
+              // we need to interrupt update handling while we resync
               await setTimeoutAsync(500)
               if (!this.state.localState.cancelDifference) await this.differenceUpdates()
               this.state.localState.cancelDifference = false
