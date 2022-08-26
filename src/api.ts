@@ -123,7 +123,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.dbSession = new DbSession({ dbPath })
     await this.dbSession.init()
 
-    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
+    this.client = new CustomClient(this.dbSession, API_ID, API_HASH, {
       retryDelay: 1_000,
       autoReconnect: true,
       connectionRetries: Infinity,
@@ -136,6 +136,9 @@ export default class TelegramAPI implements PlatformAPI {
         linux: 'Linux',
       }[process.platform as NodeJS.Platform | 'ios'],
     })
+
+    // TODO - remove after fix confirmation
+    this.client.floodSleepThreshold = 0
 
     await this.client.connect()
 
