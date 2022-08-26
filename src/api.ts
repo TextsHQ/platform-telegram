@@ -8,7 +8,7 @@ import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Mes
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
-import { TelegramClient } from 'telegram'
+import type { TelegramClient } from 'telegram'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
@@ -22,6 +22,7 @@ import { AuthState, REACTIONS } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
+import { CustomClient } from './CustomClient'
 
 const { IS_DEV } = texts
 
@@ -55,6 +56,7 @@ interface TelegramState {
   messageChatIdMap: Map<number, string>
   dialogIdToParticipantIds: Map<string, Set<string>>
   dialogToDialogAdminIds: Map<string, Set<string>>
+  hasFetchedParticipantsForDialog: Map<string, boolean>
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -113,6 +115,7 @@ export default class TelegramAPI implements PlatformAPI {
     messageChatIdMap: new Map<number, string>(),
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
+    hasFetchedParticipantsForDialog: new Map<string, boolean>(),
   }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
@@ -123,7 +126,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.dbSession = new DbSession({ dbPath })
     await this.dbSession.init()
 
-    this.client = new TelegramClient(this.dbSession, API_ID, API_HASH, {
+    this.client = new CustomClient(this.dbSession, API_ID, API_HASH, {
       retryDelay: 1_000,
       autoReconnect: true,
       connectionRetries: Infinity,
@@ -136,6 +139,9 @@ export default class TelegramAPI implements PlatformAPI {
         linux: 'Linux',
       }[process.platform as NodeJS.Platform | 'ios'],
     })
+
+    // TODO - remove after fix confirmation
+    this.client.floodSleepThreshold = 0
 
     await this.client.connect()
 
@@ -261,9 +267,8 @@ export default class TelegramAPI implements PlatformAPI {
       ? [...await this.client.getParticipants(dialog.id, {})].map(u => this.mapper.mapParticipant(u))
       : [])
     if (dialog.message) this.storeMessage(dialog.message)
+    this.state.hasFetchedParticipantsForDialog.set(thread.id, dialog.isUser)
     this.state.dialogs.set(thread.id, dialog)
-    // TODO: fix hack
-    if (thread.participants.items.length === 0) setTimeout(() => this.emitParticipants(dialog), 500)
     return thread
   }
 
@@ -788,7 +793,7 @@ export default class TelegramAPI implements PlatformAPI {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     const messages: Api.Message[] = []
-    for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
+    for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0, waitTime: 1 })) {
       if (!msg) continue
       this.storeMessage(msg)
       messages.push(msg)
@@ -804,6 +809,18 @@ export default class TelegramAPI implements PlatformAPI {
     return {
       items,
       hasMore: messages.length !== 0,
+    }
+  }
+
+  onThreadSelected = async (threadID: string): Promise<void> => {
+    texts.log('onThreadSelected', threadID)
+    if (!threadID) return
+    if (!this.state.hasFetchedParticipantsForDialog.get(threadID)) {
+      const dialog = this.state.dialogs.get(threadID)
+      texts.log(`Emitting participants for selected thread ${dialog?.title || dialog?.id}`)
+      if (!dialog) return
+      this.emitParticipants(dialog)
+      this.state.hasFetchedParticipantsForDialog.set(threadID, true)
     }
   }
 
