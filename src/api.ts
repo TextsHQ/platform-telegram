@@ -814,6 +814,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   onThreadSelected = async (threadID: string): Promise<void> => {
     texts.log('onThreadSelected', threadID)
+    if (!threadID) return
     if (!this.state.hasFetchedParticipantsForDialog.get(threadID)) {
       const dialog = this.state.dialogs.get(threadID)
       texts.log(`Emitting participants for selected thread ${dialog?.title || dialog?.id}`)
