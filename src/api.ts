@@ -793,7 +793,7 @@ export default class TelegramAPI implements PlatformAPI {
     const { cursor } = pagination || { cursor: null, direction: null }
     const limit = 20
     const messages: Api.Message[] = []
-    for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0 })) {
+    for await (const msg of this.client.iterMessages(threadID, { limit, maxId: +cursor || 0, waitTime: 1 })) {
       if (!msg) continue
       this.storeMessage(msg)
       messages.push(msg)
