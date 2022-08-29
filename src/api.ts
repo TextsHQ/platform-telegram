@@ -583,7 +583,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(dialogId, mapped)
   }
 
-  private emitParticipantsFromMessageAction = async (messages: CustomMessage[]) => {
+  private emitParticipantsFromMessages = async (messages: CustomMessage[]) => {
     const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
       || (msg.action && 'users' in msg.action))
     // @ts-expect-error
@@ -803,9 +803,8 @@ export default class TelegramAPI implements PlatformAPI {
     messages.push(...replies)
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
     const items = this.mapper.mapMessages(messages, readOutboxMaxId)
-    const actions = messages.filter(m => m.action)
     // TODO: fix hack
-    setTimeout(() => this.emitParticipantsFromMessageAction(actions), 100)
+    setTimeout(() => this.emitParticipantsFromMessages(messages), 100)
     return {
       items,
       hasMore: messages.length !== 0,
