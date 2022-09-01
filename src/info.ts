@@ -1,4 +1,4 @@
-import { MessageDeletionMode, PlatformInfo, Attribute, texts } from '@textshq/platform-sdk'
+import { MessageDeletionMode, PlatformInfo, Attribute } from '@textshq/platform-sdk'
 import { REACTIONS } from './common-constants'
 
 const info: PlatformInfo = {
@@ -19,7 +19,6 @@ const info: PlatformInfo = {
 </svg>`,
   loginMode: 'custom',
   // eslint-disable-next-line import/extensions
-  auth: texts.React?.lazy(() => import('./AuthForm')),
   deletionMode: MessageDeletionMode.DELETE_FOR_EVERYONE,
   typingDurationMs: 5_000,
   attributes: new Set([
