@@ -542,6 +542,7 @@ export default class TelegramMapper {
         mapped.links = msgMediaLink ? [msgMediaLink] : undefined
       } else {
         mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
+        texts.Sentry.captureMessage(`Telegram: unsupported media ${msg.media?.className}`)
       }
     }
 
