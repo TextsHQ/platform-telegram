@@ -18,7 +18,7 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
-import { AuthState, REACTIONS } from './common-constants'
+import { AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
@@ -911,14 +911,14 @@ export default class TelegramAPI implements PlatformAPI {
     this.updateHandler(await this.client.invoke(new Api.messages.SendReaction({
       msgId: Number(messageID),
       peer: threadID,
-      reaction: REACTIONS[reactionKey].render,
+      reaction: [new Api.ReactionEmoji({ emoticon: reactionKey })],
     })))
 
   removeReaction = async (threadID: string, messageID: string) =>
     this.updateHandler(await this.client.invoke(new Api.messages.SendReaction({
       msgId: Number(messageID),
       peer: threadID,
-      reaction: '',
+      reaction: [new Api.ReactionEmpty()],
     })))
 
   private modifyParticipant = async (threadID: string, participantID: string, remove: boolean) => {

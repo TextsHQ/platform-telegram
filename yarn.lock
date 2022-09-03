@@ -1660,8 +1660,8 @@ __metadata:
     mime-types: ^2.1.35
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: ^3.2.7
-    telegram: ^2.10.10
-    typescript: ^4.7.4
+    telegram: ^2.11.3
+    typescript: ^4.8.2
     vcard-creator: ^0.5.0
   languageName: unknown
   linkType: soft
@@ -5182,9 +5182,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.10.10":
-  version: 2.10.10
-  resolution: "telegram@npm:2.10.10"
+"telegram@npm:^2.11.3":
+  version: 2.11.5
+  resolution: "telegram@npm:2.11.5"
   dependencies:
     "@cryptography/aes": ^0.1.1
     async-mutex: ^0.3.0
@@ -5206,7 +5206,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 20391f480370129045e92186f18845fca89bce29555aa8db1023bb794fb1ba5ebb9cf22137632e1b8d8cf7f9cf7af3e2dc78d8a6aa6e6259bf1320095dfe23eb
+  checksum: 5161c165d8aa8e22bc7a015724b63887c872ac1ed2896734ced0adfb1f59e85bfb5403946a5ad12b66544e28248de479f3c0ddfdb77b759564322a79cfc254d6
   languageName: node
   linkType: hard
 
@@ -5316,23 +5316,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^4.7.4":
-  version: 4.7.4
-  resolution: "typescript@npm:4.7.4"
+"typescript@npm:^4.8.2":
+  version: 4.8.2
+  resolution: "typescript@npm:4.8.2"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 5750181b1cd7e6482c4195825547e70f944114fb47e58e4aa7553e62f11b3f3173766aef9c281783edfd881f7b8299cf35e3ca8caebe73d8464528c907a164df
+  checksum: 7f5b81d0d558c9067f952c7af52ab7f19c2e70a916817929e4a5b256c93990bf3178eccb1ac8a850bc75df35f6781b6f4cb3370ce20d8b1ded92ed462348f628
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@^4.7.4#~builtin<compat/typescript>":
-  version: 4.7.4
-  resolution: "typescript@patch:typescript@npm%3A4.7.4#~builtin<compat/typescript>::version=4.7.4&hash=7ad353"
+"typescript@patch:typescript@^4.8.2#~builtin<compat/typescript>":
+  version: 4.8.2
+  resolution: "typescript@patch:typescript@npm%3A4.8.2#~builtin<compat/typescript>::version=4.8.2&hash=7ad353"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 9096d8f6c16cb80ef3bf96fcbbd055bf1c4a43bd14f3b7be45a9fbe7ada46ec977f604d5feed3263b4f2aa7d4c7477ce5f9cd87de0d6feedec69a983f3a4f93e
+  checksum: 6f49363af8af2fe480da1d5fa68712644438785208b06690a3cbe5e7365fd652c3a0f1e587bc8684d78fb69de3dde4de185c0bad7bb4f3664ddfc813ce8caad6
   languageName: node
   linkType: hard
 

@@ -324,26 +324,34 @@ export default class TelegramMapper {
     const subtractCounts: Record<string, number> = {}
     const mappedReactions = reactions.recentReactions?.map<MessageReaction>(r => {
       const participantID = getPeerId(r.peerId)
-      const reactionKey = r.reaction.replace('❤', '❤️')
+      const reactionKey = r.reaction instanceof Api.ReactionEmoji
+        ? r.reaction.emoticon.replace('❤', '❤️')
+        : null
+      if (!reactionKey) return
       subtractCounts[reactionKey] = (subtractCounts[reactionKey] ?? 0) + 1
       return {
-        id: participantID + reactionKey,
+        id: participantID,
         participantID,
         emoji: true,
         reactionKey,
       }
-    }) ?? []
+    }).filter(Boolean) ?? []
     const mappedReactionResults = reactions.results?.flatMap(r => {
-      const reactionKey = r.reaction.replace('❤', '❤️')
+      const reactionKey = r.reaction instanceof Api.ReactionEmoji
+        ? r.reaction.emoticon.replace('❤', '❤️')
+        : null
+      if (!reactionKey) return
       const reactionResult = range(r.count - (subtractCounts[reactionKey] ?? 0)).map<MessageReaction>(index => ({
         // hack since we don't have access to id
-        id: `${index}${reactionKey}`,
+        id: `${index}`,
         participantID: `${index}`,
         emoji: true,
         reactionKey,
       }))
       // chosen = Whether the current user sent this reaction
-      if (r.chosen && reactionResult.length) { reactionResult[reactionResult.length - 1].participantID = String(this.me.id) }
+      if (r.chosenOrder != null && reactionResult.length) {
+        reactionResult[reactionResult.length - 1].participantID = String(this.me.id)
+      }
       return reactionResult
     }) ?? []
     return [...mappedReactions, ...mappedReactionResults]
