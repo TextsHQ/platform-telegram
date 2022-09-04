@@ -4,7 +4,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -811,6 +811,14 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
+  getLinkPreview = async (link: string): Promise<MessageLink> => {
+    const res = await this.client.invoke(new Api.messages.GetWebPage({ url: link }))
+    if (!(res instanceof Api.WebPage)) return
+    const mid = res.photo.id.toJSNumber()
+    this.state.messageMediaStore.set(mid, new Api.MessageMediaPhoto({ photo: res.photo }))
+    return this.mapper.mapMessageLink(res, mid)
+  }
+
   onThreadSelected = async (threadID: string): Promise<void> => {
     texts.log('onThreadSelected', threadID)
     if (!threadID) return
@@ -985,8 +993,8 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.getMe()
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', assetId: string | number, extension: string) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${assetId.toString()}.${extension}`)
+  private getAssetPath = (assetType: 'media' | 'photos', assetId: string, extension: string) =>
+    path.join(this.accountInfo.dataDirPath, assetType, `${assetId}.${extension}`)
 
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
     switch (type) {
@@ -1014,18 +1022,6 @@ export default class TelegramAPI implements PlatformAPI {
       throw new Error(`Unknown media type ${type}`)
     }
     const filePath = this.getAssetPath(type, assetId, extension)
-
-    // TODO - remove
-    // eslint-disable-next-line no-lone-blocks
-    {
-      if (type === 'photos') {
-        const oldPath = this.getAssetPath(type, entityId, extension)
-        if (await fileExists(oldPath)) {
-          await fsp.rename(oldPath, filePath).catch(console.log)
-          return url.pathToFileURL(filePath).href
-        }
-      }
-    }
 
     for (let attempt = 0; attempt !== MAX_DOWNLOAD_ATTEMPTS; attempt++) {
       try {

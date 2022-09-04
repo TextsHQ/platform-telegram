@@ -1630,11 +1630,11 @@ __metadata:
 
 "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#main":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=2470f049d59a70fd7a8a433c7b5bb8392eb8b477"
+  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=3b77cd9f1837d68bf7bb59e3791c830044d63c7c"
   dependencies:
     emoji-regex: ^10.1.0
     qrcode.react: ^3.1.0
-  checksum: 57c0b00d53f09c1a4bff70ad34ee8c902bcc252c73564103dfff61cbfdfd3ab5aea6cee0df72cdc08796617a5ac6be2b31730770be7d3e893d8866275223cd22
+  checksum: 4dcd05796475bec2696f085a087a5f9fd0df523d080542c65c5eb5ce7055cf3f77846cfd65ee610ebda4e09e7ea91cfa8b447a9d24172176a3df3b4e18b221ea
   languageName: node
   linkType: hard
 
@@ -1660,7 +1660,7 @@ __metadata:
     mime-types: ^2.1.35
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: ^3.2.7
-    telegram: ^2.11.3
+    telegram: ^2.11.5
     typescript: ^4.8.2
     vcard-creator: ^0.5.0
   languageName: unknown
@@ -5182,7 +5182,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.11.3":
+"telegram@npm:^2.11.5":
   version: 2.11.5
   resolution: "telegram@npm:2.11.5"
   dependencies:
