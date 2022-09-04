@@ -52,7 +52,7 @@ interface LocalState {
 interface TelegramState {
   localState: LocalState
   dialogs: Map<string, Dialog>
-  messageMediaStore: Map<number, Api.TypeMessageMedia>
+  messageMediaStore: Map<string, Api.TypeMessageMedia>
   messageChatIdMap: Map<number, string>
   dialogIdToParticipantIds: Map<string, Set<string>>
   dialogToDialogAdminIds: Map<string, Set<string>>
@@ -111,7 +111,7 @@ export default class TelegramAPI implements PlatformAPI {
   private state: TelegramState = {
     localState: undefined,
     dialogs: new Map<string, Dialog>(),
-    messageMediaStore: new Map<number, Api.TypeMessageMedia>(),
+    messageMediaStore: new Map<string, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
@@ -238,7 +238,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private storeMessage = (message: CustomMessage) => {
     if (message.media) {
-      this.state.messageMediaStore.set(message.id, message.media)
+      this.state.messageMediaStore.set(String(message.id), message.media)
     }
     this.state.messageChatIdMap.set(message.id, message.chatId.toString())
   }
@@ -814,7 +814,7 @@ export default class TelegramAPI implements PlatformAPI {
   getLinkPreview = async (link: string): Promise<MessageLink> => {
     const res = await this.client.invoke(new Api.messages.GetWebPage({ url: link }))
     if (!(res instanceof Api.WebPage)) return
-    const mid = res.photo.id.toJSNumber()
+    const mid = String(res.photo.id)
     this.state.messageMediaStore.set(mid, new Api.MessageMediaPhoto({ photo: res.photo }))
     return this.mapper.mapMessageLink(res, mid)
   }
@@ -999,10 +999,10 @@ export default class TelegramAPI implements PlatformAPI {
   private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
     switch (type) {
       case 'media': {
-        const media = this.state.messageMediaStore.get(+entityId)
+        const media = this.state.messageMediaStore.get(entityId)
         if (!media) throw Error('message media not found')
         await this.client.downloadMedia(media, { outputFile: filePath })
-        this.state.messageMediaStore.delete(+entityId)
+        this.state.messageMediaStore.delete(entityId)
         return
       }
       case 'photos': {

@@ -281,13 +281,13 @@ export default class TelegramMapper {
     }
   }
 
-  getMediaUrl = (id: bigInt.BigInteger, messageId: number, mimeType: string) =>
+  getMediaUrl = (id: bigInt.BigInteger, messageId: string | number, mimeType: string) =>
     `asset://${this.accountID}/media/${String(id)}/${mime.extension(mimeType) || 'bin'}/${messageId}`
 
   getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger, mimeType = 'image/png') =>
     `asset://${this.accountID}/photos/${String(assetId.xor(userId))}/${mime.extension(mimeType) || 'bin'}/${String(userId)}`
 
-  mapMessageLink(webPage: Api.TypeWebPage, messageId: number) {
+  mapMessageLink(webPage: Api.TypeWebPage, messageId: string | number) {
     if (!(webPage instanceof Api.WebPage)) return
     const { url, title, description, photo } = webPage
     const link: MessageLink = {
