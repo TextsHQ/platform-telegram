@@ -4,7 +4,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, User } from '@textshq/platform-sdk'
 import { groupBy, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -23,6 +23,7 @@ import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
+import type { TotalList } from 'telegram/Helpers'
 
 const { IS_DEV } = texts
 
@@ -248,7 +249,7 @@ export default class TelegramAPI implements PlatformAPI {
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
     const mappedMessage = this.mapper.mapMessage(message, readOutboxMaxId)
     if (!mappedMessage) return
-    this.emitParticipantFromMessages(threadID, [message.senderId])
+    // this.emitParticipantFromMessages(threadID, [message.senderId])
     if (!mappedMessage) return
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
@@ -262,9 +263,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    const thread = this.mapper.mapThread(dialog, dialog.isUser
-      // cloning because getParticipants returns a TotalList (a gramjs extension of Array) and TotalList doesn't deserialize correctly when sending to iOS
-      ? [...await this.client.getParticipants(dialog.id, {})].map(u => this.mapper.mapParticipant(u))
+    const thread = this.mapper.mapThread(dialog, dialog.entity instanceof Api.User
+      ? [this.mapper.mapParticipant(dialog.entity)]
       : [])
     if (dialog.message) this.storeMessage(dialog.message)
     this.state.hasFetchedParticipantsForDialog.set(thread.id, dialog.isUser)
@@ -575,33 +575,35 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
-    const inputEntities = await Promise.all(userIds.filter(Boolean).map(id => this.client.getInputEntity(id)))
-    const users = await Promise.all(inputEntities.filter(e => e instanceof Api.InputPeerUser).map(ef => this.client.getEntity(ef)))
-    const { adminIds } = await this.getDialogAdmins(dialogId)
-    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapParticipant(entity, adminIds) : undefined)).filter(Boolean)
-    this.upsertParticipants(dialogId, mapped)
-  }
+  // private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
+  //   const inputEntities = await Promise.all(userIds.filter(Boolean).map(id => this.client.getInputEntity(id)))
+  //   const users = await Promise.all(inputEntities.filter(e => e instanceof Api.InputPeerUser).map(ef => this.client.getEntity(ef)))
+  //   const { adminIds } = await this.getDialogAdmins(dialogId)
+  //   const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapParticipant(entity, adminIds) : undefined)).filter(Boolean)
+  //   this.upsertParticipants(dialogId, mapped)
+  // }
 
-  private emitParticipantsFromMessages = async (messages: CustomMessage[]) => {
-    const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
-      || (msg.action && 'users' in msg.action))
-    // @ts-expect-error
-    Object.values(groupBy(withUserId, 'chatId')).forEach(msg => this.emitParticipantFromMessages(String((m: { chatId: any }[]) => m[0].chatId), msg.map(m => m.fromId.chatId)))
-  }
+  // private emitParticipantsFromMessages = async (messages: CustomMessage[]) => {
+  //   const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
+  //     || (msg.action && 'users' in msg.action))
+  //   Object.values(groupBy(withUserId, 'chatId'))
+  //     // @ts-expect-error
+  //     .forEach(msg => this.emitParticipantFromMessages(String((m: { chatId: any }[]) => m[0].chatId), msg.map(m => m.fromId.chatId)))
+  // }
 
   private emitParticipants = async (dialog: Dialog) => {
     if (!dialog.id) return
     const dialogId = String(dialog.id)
     const limit = 1024
-    const { adminIds, admins } = await this.getDialogAdmins(dialogId)
-    const members = await (() => {
+    // const { adminIds, admins } = await this.getDialogAdmins(dialogId)
+    const adminIds = new Set<string>()
+    const members: TotalList<Api.User> = await (() => {
       try {
         // skip the useless call altogether
-        if (dialog.isChannel && !dialog.isGroup && !(adminIds.has(this.me?.id.toString()))) return admins ?? []
-        return this.client.getParticipants(dialogId, { limit })
-      } catch (e) {
-        // texts.log('Error emitParticipants', e)
+        // if (dialog.isChannel && !dialog.isGroup && !(adminIds.has(this.me?.id.toString()))) return admins ?? []
+        return this.client.getParticipants(dialogId, { offset: 0, limit })
+      } catch (err) {
+        texts.error('emitParticipants', err)
         return []
       }
     })()
@@ -611,18 +613,18 @@ export default class TelegramAPI implements PlatformAPI {
     this.upsertParticipants(dialogId, mappedMembers)
   }
 
-  private async getDialogAdmins(dialogId: string) {
-    let admins: Api.User[] = []
-    if (!this.state.dialogToDialogAdminIds.has(dialogId)) {
-      try {
-        admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
-      } catch {
-        // swallow
-      }
-      this.state.dialogToDialogAdminIds.set(dialogId, new Set(admins.map(a => a.id.toString())))
-    }
-    return { adminIds: this.state.dialogToDialogAdminIds.get(dialogId), admins }
-  }
+  // private async getDialogAdmins(dialogId: string) {
+  //   let admins: Api.User[] = []
+  //   if (!this.state.dialogToDialogAdminIds.has(dialogId)) {
+  //     try {
+  //       admins = await this.client.getParticipants(dialogId, { filter: new Api.ChannelParticipantsAdmins() })
+  //     } catch {
+  //       // swallow
+  //     }
+  //     this.state.dialogToDialogAdminIds.set(dialogId, new Set(admins.map(a => a.id.toString())))
+  //   }
+  //   return { adminIds: this.state.dialogToDialogAdminIds.get(dialogId), admins }
+  // }
 
   private createAssetsDir = async () => {
     const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
@@ -804,7 +806,7 @@ export default class TelegramAPI implements PlatformAPI {
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
     const items = this.mapper.mapMessages(messages, readOutboxMaxId)
     // TODO: fix hack
-    setTimeout(() => this.emitParticipantsFromMessages(messages), 100)
+    // setTimeout(() => this.emitParticipantsFromMessages(messages), 100)
     return {
       items,
       hasMore: messages.length !== 0,
@@ -824,10 +826,10 @@ export default class TelegramAPI implements PlatformAPI {
     if (!threadID) return
     if (!this.state.hasFetchedParticipantsForDialog.get(threadID)) {
       const dialog = this.state.dialogs.get(threadID)
-      texts.log(`Emitting participants for selected thread ${dialog?.title || dialog?.id}`)
       if (!dialog) return
-      this.emitParticipants(dialog)
+      texts.log(`Emitting participants for selected thread ${dialog?.title || dialog?.id}`)
       this.state.hasFetchedParticipantsForDialog.set(threadID, true)
+      this.emitParticipants(dialog)
     }
   }
 
