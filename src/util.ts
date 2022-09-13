@@ -20,3 +20,5 @@ const getCircularReplacer = () => {
 export const stringifyCircular = (value: any, space?: number) => JSON.stringify(value, getCircularReplacer(), space)
 
 export const hasInternetConnection = async () => lookup('texts.com').then(() => true).catch(() => false)
+
+export const sleep = (ms: number) => new Promise(r => { setTimeout(r, ms) })

@@ -5,7 +5,7 @@ import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, User } from '@textshq/platform-sdk'
-import { groupBy, debounce } from 'lodash'
+import { last, debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
 import type { TelegramClient } from 'telegram'
@@ -17,13 +17,13 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
+import type { TotalList } from 'telegram/Helpers'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
-import { fileExists, stringifyCircular } from './util'
+import { fileExists, sleep, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
-import type { TotalList } from 'telegram/Helpers'
 
 const { IS_DEV } = texts
 
@@ -58,6 +58,7 @@ interface TelegramState {
   dialogIdToParticipantIds: Map<string, Set<string>>
   dialogToDialogAdminIds: Map<string, Set<string>>
   hasFetchedParticipantsForDialog: Map<string, boolean>
+  lastGetDialogsCount: number
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -117,6 +118,7 @@ export default class TelegramAPI implements PlatformAPI {
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
     hasFetchedParticipantsForDialog: new Map<string, boolean>(),
+    lastGetDialogsCount: 0,
   }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
@@ -753,23 +755,25 @@ export default class TelegramAPI implements PlatformAPI {
     await this.waitForClientConnected()
 
     const { cursor } = pagination || { cursor: null, direction: null }
-    const limit = 20
-    let lastDate = 0
+    const limit = 100 // server side limit is 100
 
-    const mapped: Promise<Thread>[] = []
+    // sleep if last getDialogs reached server side limit
+    if (this.state.lastGetDialogsCount === limit) await sleep(5_000)
 
-    for await (const dialog of this.client.iterDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })) {
-      if (!dialog?.id) continue
-      mapped.push(this.mapThread(dialog))
-      lastDate = dialog.message?.date ?? lastDate
-    }
+    const dialogs = await this.client.getDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })
+
+    this.state.lastGetDialogsCount = dialogs.length
+
+    const mapped: Promise<Thread>[] = dialogs.filter(dialog => dialog.id).map(this.mapThread)
+
+    const lastDate = last(dialogs.filter(dialog => dialog.message?.date).map(dialog => dialog.message.date))
 
     const threads = await Promise.all(mapped)
 
     return {
       items: threads,
-      oldestCursor: lastDate.toString() ?? '*',
-      hasMore: lastDate !== 0,
+      oldestCursor: lastDate?.toString() ?? '*',
+      hasMore: lastDate !== undefined,
     }
   }
 
