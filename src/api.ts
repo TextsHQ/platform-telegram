@@ -59,6 +59,7 @@ interface TelegramState {
   dialogToDialogAdminIds: Map<string, Set<string>>
   hasFetchedParticipantsForDialog: Map<string, boolean>
   lastGetDialogsCount: number
+  lastGetParticipantsCount: number
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -119,6 +120,7 @@ export default class TelegramAPI implements PlatformAPI {
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
     hasFetchedParticipantsForDialog: new Map<string, boolean>(),
     lastGetDialogsCount: 0,
+    lastGetParticipantsCount: 0,
   }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
@@ -599,6 +601,12 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 1024
     // const { adminIds, admins } = await this.getDialogAdmins(dialogId)
     const adminIds = new Set<string>()
+    // sleep if last getParticipants reached limit
+    if (this.state.lastGetParticipantsCount === limit) {
+      texts.log(`emitParticipants: sleep for dialog ${dialog.title}`)
+      await sleep(5_000)
+    }
+
     const members: TotalList<Api.User> = await (() => {
       try {
         // skip the useless call altogether
@@ -609,7 +617,7 @@ export default class TelegramAPI implements PlatformAPI {
         return []
       }
     })()
-
+    this.state.lastGetParticipantsCount = members.length
     if (!members || !members.length) return
     const mappedMembers = await Promise.all(members.map(m => this.mapper.mapParticipant(m, adminIds)))
     this.upsertParticipants(dialogId, mappedMembers)
