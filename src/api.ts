@@ -21,7 +21,7 @@ import type { TotalList } from 'telegram/Helpers'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
-import { fileExists, sleep, stringifyCircular } from './util'
+import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
 
@@ -604,7 +604,7 @@ export default class TelegramAPI implements PlatformAPI {
     // sleep if last getParticipants reached limit
     if (this.state.lastGetParticipantsCount === limit) {
       texts.log(`emitParticipants: sleep for dialog ${dialog.title}`)
-      await sleep(5_000)
+      await setTimeoutAsync(5_000)
     }
 
     const members: TotalList<Api.User> = await (() => {
@@ -766,7 +766,7 @@ export default class TelegramAPI implements PlatformAPI {
     const limit = 100 // server side limit is 100
 
     // sleep if last getDialogs reached server side limit
-    if (this.state.lastGetDialogsCount === limit) await sleep(5_000)
+    if (this.state.lastGetDialogsCount === limit) await setTimeoutAsync(5_000)
 
     const dialogs = await this.client.getDialogs({ limit, ...(cursor && { offsetDate: Number(cursor) }) })
 
