@@ -17,13 +17,13 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 
+import type { TotalList } from 'telegram/Helpers'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
-import type { TotalList } from 'telegram/Helpers'
 
 const { IS_DEV } = texts
 
@@ -163,7 +163,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getUser = async (ids: { userID?: string } | { username?: string } | { phoneNumber?: string } | { email?: string }) => {
     const user = await (async () => {
-      if ('userID' in ids) { return this.client.getEntity(ids.userID) }
+      if ('userID' in ids) { return this.client.getEntity(await this.client.getInputEntity(ids.userID)) }
       if ('username' in ids) { return this.client.getEntity(ids.username) }
       if ('phoneNumber' in ids) { return this.client.getEntity(ids.phoneNumber) }
       if ('email' in ids) { return this.client.getEntity(ids.email) }
@@ -334,6 +334,36 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
+  private onUpdateChatParticipants = async (update: Api.UpdateChatParticipants) => {
+    if (update.participants instanceof Api.ChatParticipantsForbidden) return
+    const threadID = getMarkedId(update.participants)
+    const updateParticipantsIds = update.participants?.participants?.map(participant => String(participant.userId))
+    const participantIds = this.state.dialogIdToParticipantIds.get(threadID)
+    if (!participantIds) return
+    const currentParticipants = Array.from(participantIds)
+    const participantsLeftIds = currentParticipants.filter(id => !updateParticipantsIds.includes(id))
+    const participantsJoinedIds = updateParticipantsIds.filter(id => !currentParticipants.includes(id))
+    texts.log(participantsJoinedIds)
+    if (participantsJoinedIds.length) {
+      const newParticipantsInfo = await Promise.all(participantsJoinedIds.map(async id => this.client.getEntity(await this.client.getInputEntity(id))))
+      this.upsertParticipants(String(threadID), newParticipantsInfo
+        .filter(user => user instanceof Api.User)
+        .map(u => this.mapper.mapParticipant(u as Api.User)))
+    }
+
+    if (participantsLeftIds.length) {
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'participant',
+        objectIDs: { threadID },
+        entries: participantsLeftIds.map(id => ({ id, hasExited: true })),
+      }])
+    }
+
+    this.dialogToParticipantIdsUpdate(threadID, updateParticipantsIds)
+  }
+
   private async differenceUpdates(): Promise<void> {
     const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: this.state.localState.pts, date: this.state.localState.date }))
     if (differenceRes instanceof Api.updates.Difference) {
@@ -477,6 +507,7 @@ export default class TelegramAPI implements PlatformAPI {
         const maxId = 'maxId' in update ? update.maxId : update.topMsgId
         if (dialog) dialog.dialog.readOutboxMaxId = maxId
       }
+      if (update instanceof Api.UpdateChatParticipants) return this.onUpdateChatParticipants(update)
       if (update instanceof Api.UpdateMessageReactions) {
         const threadID = this.state.messageChatIdMap.get(update.msgId)
         return this.onEvent([this.mapper.mapUpdateMessageReactions(update, threadID)])
