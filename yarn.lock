@@ -1641,7 +1641,7 @@ __metadata:
   dependencies:
     emoji-regex: ^10.1.0
     qrcode.react: ^3.1.0
-  checksum: 693900ecb71ec614921fef603c3c93b5c32d25f1c61d67bee6b4fed4d7209ecde375a01d2aea1abbcbba1cedbcc62877ebecad4c845bfdf1bded318e78a31d24
+  checksum: 4dcd05796475bec2696f085a087a5f9fd0df523d080542c65c5eb5ce7055cf3f77846cfd65ee610ebda4e09e7ea91cfa8b447a9d24172176a3df3b4e18b221ea
   languageName: node
   linkType: hard
 
