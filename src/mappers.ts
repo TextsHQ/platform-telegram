@@ -281,11 +281,14 @@ export default class TelegramMapper {
     }
   }
 
-  getMediaUrl = (id: bigInt.BigInteger, messageId: string | number, mimeType: string) =>
-    `asset://${this.accountID}/media/${String(id)}/${mime.extension(mimeType) || 'bin'}/${messageId}`
+  getCustomEmojiUrl = (id: bigInt.BigInteger) =>
+    `asset://${this.accountID}/emoji/${id}/tgs/${id}.tgs`
 
-  getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger, mimeType = 'image/png') =>
-    `asset://${this.accountID}/photos/${String(assetId.xor(userId))}/${mime.extension(mimeType) || 'bin'}/${String(userId)}`
+  getMediaUrl = (id: bigInt.BigInteger, messageId: string | number, mimeType: string) =>
+    `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${messageId}`
+
+  getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
+    `asset://${this.accountID}/photos/${assetId.xor(userId)}/png/${userId}`
 
   mapMessageLink(webPage: Api.TypeWebPage, messageId: string | number) {
     if (!(webPage instanceof Api.WebPage)) return
@@ -319,14 +322,16 @@ export default class TelegramMapper {
   }
 
   mapReactions = (reactions: Api.MessageReactions) => {
+    function mapReactionKey(reaction: Api.TypeReaction) {
+      if (reaction instanceof Api.ReactionEmoji) return reaction.emoticon.replace('❤', '❤️')
+      if (reaction instanceof Api.ReactionCustomEmoji) return String(reaction.documentId)
+    }
     if (!reactions.recentReactions && !reactions.results) return
     // hack, use messages.getMessageReactionsList API call instead
     const subtractCounts: Record<string, number> = {}
     const mappedReactions = reactions.recentReactions?.map<MessageReaction>(r => {
       const participantID = getPeerId(r.peerId)
-      const reactionKey = r.reaction instanceof Api.ReactionEmoji
-        ? r.reaction.emoticon.replace('❤', '❤️')
-        : null
+      const reactionKey = mapReactionKey(r.reaction)
       if (!reactionKey) return
       subtractCounts[reactionKey] = (subtractCounts[reactionKey] ?? 0) + 1
       return {
@@ -334,12 +339,11 @@ export default class TelegramMapper {
         participantID,
         emoji: true,
         reactionKey,
+        imgURL: r.reaction instanceof Api.ReactionCustomEmoji ? this.getCustomEmojiUrl(r.reaction.documentId) : undefined,
       }
     }) ?? []
     const mappedReactionResults = reactions.results?.flatMap(r => {
-      const reactionKey = r.reaction instanceof Api.ReactionEmoji
-        ? r.reaction.emoticon.replace('❤', '❤️')
-        : null
+      const reactionKey = mapReactionKey(r.reaction)
       if (!reactionKey) return
       const reactionResult = range(r.count - (subtractCounts[reactionKey] ?? 0)).map<MessageReaction>(index => ({
         // hack since we don't have access to id
@@ -347,6 +351,7 @@ export default class TelegramMapper {
         participantID: `${index}`,
         emoji: true,
         reactionKey,
+        imgURL: r.reaction instanceof Api.ReactionCustomEmoji ? this.getCustomEmojiUrl(r.reaction.documentId) : undefined,
       }))
       // chosen = Whether the current user sent this reaction
       if (r.chosenOrder != null && reactionResult.length) {

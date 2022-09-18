@@ -92,6 +92,9 @@ const getMessageFromShort = (update: Api.UpdateShortMessage | Api.UpdateShortCha
     fromId,
   }))
 
+const ASSET_TYPES = ['emoji', 'media', 'photos'] as const
+type AssetType = typeof ASSET_TYPES[number]
+
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
 
@@ -536,11 +539,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emptyAssets = async () => {
     // for perfomance testing
-    const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
-    const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
     try {
-      await fsp.rm(mediaDir, { recursive: true })
-      await fsp.rm(photosDir, { recursive: true })
+      await Promise.all(ASSET_TYPES.map(assetType =>
+        fsp.rm(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
     } catch {
       // ignore
     }
@@ -656,11 +657,8 @@ export default class TelegramAPI implements PlatformAPI {
   // }
 
   private createAssetsDir = async () => {
-    const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
-    const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
-
-    await fsp.mkdir(mediaDir, { recursive: true })
-    await fsp.mkdir(photosDir, { recursive: true })
+    await Promise.all(ASSET_TYPES.map(assetType =>
+      fsp.mkdir(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
   }
 
   private deleteAssetsDir = async () => {
@@ -1024,11 +1022,17 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.getMe()
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', assetId: string, extension: string) =>
+  private getAssetPath = (assetType: AssetType, assetId: string, extension: string) =>
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId}.${extension}`)
 
-  private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
+  private async downloadAsset(filePath: string, type: AssetType, assetId: string, entityId: string) {
     switch (type) {
+      case 'emoji': {
+        const [document] = await this.client.invoke(new Api.messages.GetCustomEmojiDocuments({ documentId: [BigInteger(assetId)] }))
+        if (document instanceof Api.DocumentEmpty) throw Error('custom emoji is doc empty')
+        await this.client.downloadMedia(new Api.MessageMediaDocument({ document }), { outputFile: filePath })
+        return
+      }
       case 'media': {
         const media = this.state.messageMediaStore.get(entityId)
         if (!media) throw Error('message media not found')
@@ -1047,9 +1051,9 @@ export default class TelegramAPI implements PlatformAPI {
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
 
-  getAsset = async (_: GetAssetOptions, type: 'media' | 'photos', assetId: string, extension: string, entityId: string/* , extra?: string */) => {
+  getAsset = async (_: GetAssetOptions, type: AssetType, assetId: string, extension: string, entityId: string/* , extra?: string */) => {
     // texts.log(type, assetId, extension, entityId, extra)
-    if (!['media', 'photos'].includes(type)) {
+    if (!ASSET_TYPES.includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
     const filePath = this.getAssetPath(type, assetId, extension)
