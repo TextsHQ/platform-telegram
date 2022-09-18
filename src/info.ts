@@ -36,7 +36,6 @@ const info: PlatformInfo = {
 </defs>
 </svg>`,
   loginMode: 'custom',
-  // eslint-disable-next-line import/extensions
   deletionMode: MessageDeletionMode.DELETE_FOR_EVERYONE,
   typingDurationMs: 5_000,
   attributes: new Set([

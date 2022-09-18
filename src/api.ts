@@ -241,7 +241,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (message.media) {
       this.state.messageMediaStore.set(String(message.id), message.media)
     }
-    this.state.messageChatIdMap.set(message.id, message.chatId.toString())
+    this.state.messageChatIdMap.set(message.id, String(message.chatId))
   }
 
   private emitMessage = (message: Api.Message | Api.MessageService) => {
@@ -1124,7 +1124,7 @@ export default class TelegramAPI implements PlatformAPI {
   private updateWatchdog = async () => {
     clearTimeout(this.state.localState.watchdogTimeout)
     const current = Date.now() / 1000
-    if (current > UPDATES_WATCHDOG_INTERVAL / 1000) { this.state.localState.updateMutex.runExclusive(async () => this.differenceUpdates()) }
+    if (current > UPDATES_WATCHDOG_INTERVAL / 1000) { this.state.localState.updateMutex.runExclusive(() => this.differenceUpdates()) }
     this.state.localState.watchdogTimeout = setTimeout(() => this.updateWatchdog(), UPDATES_WATCHDOG_INTERVAL)
   }
 }
