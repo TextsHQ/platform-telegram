@@ -337,25 +337,27 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateChatParticipants = async (update: Api.UpdateChatParticipants) => {
     if (update.participants instanceof Api.ChatParticipantsForbidden) return
     const threadID = getMarkedId(update.participants)
-    const updateParticipantsIds = update.participants?.participants?.map(participant => String(participant.userId))
-    const participantIds = this.state.dialogIdToParticipantIds.get(threadID)
-    if (!participantIds) return
+    const updateParticipantsIds = update.participants.participants.map(participant => String(participant.userId))
 
-    const currentParticipants = Array.from(participantIds)
-    const participantsLeftIds = currentParticipants.filter(id => !updateParticipantsIds.includes(id))
-    const participantsJoinedIds = updateParticipantsIds.filter(id => !currentParticipants.includes(id))
+    const currentSet = this.state.dialogIdToParticipantIds.get(threadID)
+    if (!currentSet) return
 
-    if (participantsJoinedIds.length) {
-      const entries = await Promise.all(participantsJoinedIds.map(id => this.getUser({ userID: id })))
+    const currentParticipants = Array.from(currentSet)
+    const removed = currentParticipants.filter(id => !updateParticipantsIds.includes(id))
+    const added = updateParticipantsIds.filter(id => !currentSet.has(id))
+
+    if (added.length) {
+      const entries = await Promise.all(added.map(id => this.getUser({ userID: id })))
       this.upsertParticipants(threadID, entries.filter(Boolean))
     }
-    if (participantsLeftIds.length) {
+    if (removed.length) {
+      removed.forEach(id => currentSet.delete(id))
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
         mutationType: 'update',
         objectName: 'participant',
         objectIDs: { threadID },
-        entries: participantsLeftIds.map(id => ({ id, hasExited: true })),
+        entries: removed.map(id => ({ id, hasExited: true })),
       }])
     }
 
@@ -576,10 +578,12 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  private dialogToParticipantIdsUpdate = (threadID: string, participantIds: string[]) => {
+  private dialogToParticipantIdsUpdate = (threadID: string, participantIds: Iterable<string>) => {
     const set = this.state.dialogIdToParticipantIds.get(threadID)
     if (set) {
-      participantIds.forEach(id => set.add(id))
+      for (const id of participantIds) {
+        set.add(id)
+      }
     } else {
       this.state.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
     }
