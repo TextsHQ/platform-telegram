@@ -8,16 +8,16 @@ import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Mes
 import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
-import type { TelegramClient } from 'telegram'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
+import type { TelegramClient } from 'telegram'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-
 import type { TotalList } from 'telegram/Helpers'
+
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
@@ -163,7 +163,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getUser = async (ids: { userID?: string } | { username?: string } | { phoneNumber?: string } | { email?: string }) => {
     const user = await (async () => {
-      if ('userID' in ids) { return this.client.getEntity(await this.client.getInputEntity(ids.userID)) }
+      if ('userID' in ids) { return this.client.getEntity(ids.userID) }
       if ('username' in ids) { return this.client.getEntity(ids.username) }
       if ('phoneNumber' in ids) { return this.client.getEntity(ids.phoneNumber) }
       if ('email' in ids) { return this.client.getEntity(ids.email) }
