@@ -4,18 +4,19 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, User } from '@textshq/platform-sdk'
-import { groupBy, debounce } from 'lodash'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink } from '@textshq/platform-sdk'
+import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
-import type { TelegramClient } from 'telegram'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
+import type { TelegramClient } from 'telegram'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
+import type { TotalList } from 'telegram/Helpers'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
@@ -23,7 +24,6 @@ import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
-import type { TotalList } from 'telegram/Helpers'
 
 const { IS_DEV } = texts
 
@@ -334,6 +334,34 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
+  private onUpdateChatParticipants = async (update: Api.UpdateChatParticipants) => {
+    if (update.participants instanceof Api.ChatParticipantsForbidden) return
+    const threadID = getMarkedId(update.participants)
+    const updateParticipantsIds = update.participants.participants.map(participant => String(participant.userId))
+
+    const currentSet = this.state.dialogIdToParticipantIds.get(threadID)
+    if (!currentSet) return
+
+    const currentParticipants = Array.from(currentSet)
+    const removed = currentParticipants.filter(id => !updateParticipantsIds.includes(id))
+    const added = updateParticipantsIds.filter(id => !currentSet.has(id))
+
+    if (added.length) {
+      const entries = await Promise.all(added.map(id => this.getUser({ userID: id })))
+      this.upsertParticipants(threadID, entries.filter(Boolean))
+    }
+    if (removed.length) {
+      removed.forEach(id => currentSet.delete(id))
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'participant',
+        objectIDs: { threadID },
+        entries: removed.map(id => ({ id, hasExited: true })),
+      }])
+    }
+  }
+
   private async differenceUpdates(): Promise<void> {
     const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: this.state.localState.pts, date: this.state.localState.date }))
     if (differenceRes instanceof Api.updates.Difference) {
@@ -477,6 +505,7 @@ export default class TelegramAPI implements PlatformAPI {
         const maxId = 'maxId' in update ? update.maxId : update.topMsgId
         if (dialog) dialog.dialog.readOutboxMaxId = maxId
       }
+      if (update instanceof Api.UpdateChatParticipants) return this.onUpdateChatParticipants(update)
       if (update instanceof Api.UpdateMessageReactions) {
         const threadID = this.state.messageChatIdMap.get(update.msgId)
         return this.onEvent([this.mapper.mapUpdateMessageReactions(update, threadID)])
@@ -547,8 +576,18 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  private upsertParticipants(dialogId: string, entries: Participant[]) {
-    const threadID = dialogId
+  private dialogToParticipantIdsUpdate = (threadID: string, participantIds: Iterable<string>) => {
+    const set = this.state.dialogIdToParticipantIds.get(threadID)
+    if (set) {
+      for (const id of participantIds) {
+        set.add(id)
+      }
+    } else {
+      this.state.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
+    }
+  }
+
+  private upsertParticipants(threadID: string, entries: Participant[]) {
     const dialogParticipants = this.state.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
 
@@ -563,16 +602,6 @@ export default class TelegramAPI implements PlatformAPI {
       },
       entries: filteredEntries,
     }])
-  }
-
-  private dialogToParticipantIdsUpdate = (dialogId: string, participantIds: string[]) => {
-    const threadID = dialogId
-    const dialog = this.state.dialogIdToParticipantIds.get(threadID)
-    if (dialog) {
-      participantIds.forEach(id => dialog.add(id))
-    } else {
-      this.state.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
-    }
   }
 
   // private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
