@@ -4,8 +4,8 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, User } from '@textshq/platform-sdk'
-import { groupBy, debounce } from 'lodash'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink } from '@textshq/platform-sdk'
+import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
 import type { TelegramClient } from 'telegram'
@@ -340,17 +340,15 @@ export default class TelegramAPI implements PlatformAPI {
     const updateParticipantsIds = update.participants?.participants?.map(participant => String(participant.userId))
     const participantIds = this.state.dialogIdToParticipantIds.get(threadID)
     if (!participantIds) return
+
     const currentParticipants = Array.from(participantIds)
     const participantsLeftIds = currentParticipants.filter(id => !updateParticipantsIds.includes(id))
     const participantsJoinedIds = updateParticipantsIds.filter(id => !currentParticipants.includes(id))
-    texts.log(participantsJoinedIds)
-    if (participantsJoinedIds.length) {
-      const newParticipantsInfo = await Promise.all(participantsJoinedIds.map(async id => this.client.getEntity(await this.client.getInputEntity(id))))
-      this.upsertParticipants(String(threadID), newParticipantsInfo
-        .filter(user => user instanceof Api.User)
-        .map(u => this.mapper.mapParticipant(u as Api.User)))
-    }
 
+    if (participantsJoinedIds.length) {
+      const entries = await Promise.all(participantsJoinedIds.map(id => this.getUser({ userID: id })))
+      this.upsertParticipants(threadID, entries.filter(Boolean))
+    }
     if (participantsLeftIds.length) {
       this.onEvent([{
         type: ServerEventType.STATE_SYNC,
@@ -578,8 +576,16 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  private upsertParticipants(dialogId: string, entries: Participant[]) {
-    const threadID = dialogId
+  private dialogToParticipantIdsUpdate = (threadID: string, participantIds: string[]) => {
+    const set = this.state.dialogIdToParticipantIds.get(threadID)
+    if (set) {
+      participantIds.forEach(id => set.add(id))
+    } else {
+      this.state.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
+    }
+  }
+
+  private upsertParticipants(threadID: string, entries: Participant[]) {
     const dialogParticipants = this.state.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
 
@@ -594,16 +600,6 @@ export default class TelegramAPI implements PlatformAPI {
       },
       entries: filteredEntries,
     }])
-  }
-
-  private dialogToParticipantIdsUpdate = (dialogId: string, participantIds: string[]) => {
-    const threadID = dialogId
-    const dialog = this.state.dialogIdToParticipantIds.get(threadID)
-    if (dialog) {
-      participantIds.forEach(id => dialog.add(id))
-    } else {
-      this.state.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
-    }
   }
 
   // private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
