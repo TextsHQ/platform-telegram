@@ -360,8 +360,6 @@ export default class TelegramAPI implements PlatformAPI {
         entries: removed.map(id => ({ id, hasExited: true })),
       }])
     }
-
-    this.dialogToParticipantIdsUpdate(threadID, updateParticipantsIds)
   }
 
   private async differenceUpdates(): Promise<void> {
