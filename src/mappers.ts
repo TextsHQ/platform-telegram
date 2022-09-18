@@ -335,7 +335,7 @@ export default class TelegramMapper {
         emoji: true,
         reactionKey,
       }
-    }).filter(Boolean) ?? []
+    }) ?? []
     const mappedReactionResults = reactions.results?.flatMap(r => {
       const reactionKey = r.reaction instanceof Api.ReactionEmoji
         ? r.reaction.emoticon.replace('❤', '❤️')
@@ -354,7 +354,7 @@ export default class TelegramMapper {
       }
       return reactionResult
     }) ?? []
-    return [...mappedReactions, ...mappedReactionResults]
+    return [...mappedReactions, ...mappedReactionResults].filter(Boolean)
   }
 
   static mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
