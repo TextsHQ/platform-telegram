@@ -266,9 +266,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    const thread = this.mapper.mapThread(dialog, dialog.entity instanceof Api.User
+    const participants = dialog.entity instanceof Api.User
       ? [this.mapper.mapParticipant(dialog.entity)]
-      : [])
+      : (dialog.message ? [await this.getUser({ userID: String(dialog.message!.senderId) }).catch(() => undefined)].filter(Boolean) : [])
+    const thread = this.mapper.mapThread(dialog, participants)
     if (dialog.message) this.storeMessage(dialog.message)
     this.state.hasFetchedParticipantsForDialog.set(thread.id, dialog.isUser)
     this.state.dialogs.set(thread.id, dialog)
