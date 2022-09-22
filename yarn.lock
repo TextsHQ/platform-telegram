@@ -1666,8 +1666,8 @@ __metadata:
     lodash: ^4.17.21
     mime-types: ^2.1.35
     react: "https://github.com/TextsHQ/react-global-shim"
-    react-phone-number-input: ^3.2.11
-    telegram: ^2.11.5
+    react-phone-number-input: 3.1.53
+    telegram: ^2.11.7
     typescript: ^4.8.2
     vcard-creator: ^0.5.0
   languageName: unknown
@@ -2393,10 +2393,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"classnames@npm:^2.3.1":
-  version: 2.3.1
-  resolution: "classnames@npm:2.3.1"
-  checksum: 14db8889d56c267a591f08b0834989fe542d47fac659af5a539e110cc4266694e8de86e4e3bbd271157dbd831361310a8293e0167141e80b0f03a0f175c80960
+"classnames@npm:^2.2.5":
+  version: 2.3.2
+  resolution: "classnames@npm:2.3.2"
+  checksum: 2c62199789618d95545c872787137262e741f9db13328e216b093eea91c85ef2bfb152c1f9e63027204e2559a006a92eb74147d46c800a9f96297ae1d9f96f4e
   languageName: node
   linkType: hard
 
@@ -2508,7 +2508,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"country-flag-icons@npm:^1.5.4":
+"country-flag-icons@npm:^1.0.2":
   version: 1.5.5
   resolution: "country-flag-icons@npm:1.5.5"
   checksum: 367f38330a7f0f94836c7859575e1ae75655a04e2104ba060de75827d82bd84413fd7752c9166efa93123eb0d1dd1db1658ef22683511dcfa1c16f2caffe892d
@@ -3710,7 +3710,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"input-format@npm:^0.3.8":
+"input-format@npm:^0.3.7":
   version: 0.3.8
   resolution: "input-format@npm:0.3.8"
   dependencies:
@@ -4014,7 +4014,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"libphonenumber-js@npm:^1.10.13":
+"libphonenumber-js@npm:^1.10.3":
   version: 1.10.13
   resolution: "libphonenumber-js@npm:1.10.13"
   checksum: a1740bbed8faa1adb4ae01dda6a7c16b4fd2917efdd9bafac53fa06d9e4b53dc67543d282f7fd0043649edddc0f03359448a17adb837e534358c7ba92c7dc268
@@ -4643,7 +4643,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prop-types@npm:^15.8.1":
+"prop-types@npm:^15.7.2, prop-types@npm:^15.8.1":
   version: 15.8.1
   resolution: "prop-types@npm:15.8.1"
   dependencies:
@@ -4684,19 +4684,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-phone-number-input@npm:^3.2.11":
-  version: 3.2.11
-  resolution: "react-phone-number-input@npm:3.2.11"
+"react-phone-number-input@npm:3.1.53":
+  version: 3.1.53
+  resolution: "react-phone-number-input@npm:3.1.53"
   dependencies:
-    classnames: ^2.3.1
-    country-flag-icons: ^1.5.4
-    input-format: ^0.3.8
-    libphonenumber-js: ^1.10.13
-    prop-types: ^15.8.1
+    classnames: ^2.2.5
+    country-flag-icons: ^1.0.2
+    input-format: ^0.3.7
+    libphonenumber-js: ^1.10.3
+    prop-types: ^15.7.2
   peerDependencies:
     react: ">=16.8"
     react-dom: ">=16.8"
-  checksum: e3e2c4b0b7eaa92d06efd80d57457cbba646f7399d9e4c7ae6d6563b9fb3560c7a93905cd2e9201569bd056e3edb99abc937ff2701d2851f176e26e60b08dd80
+  checksum: aa739117170d403b1eee98fe34d42aee523f1a1f7cc64bc8e99750170b86dad321665b68e40df6358659e8aeeb012f65bcdeb15aed95ef0a6b75359c67927638
   languageName: node
   linkType: hard
 
@@ -5169,9 +5169,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.11.5":
-  version: 2.11.5
-  resolution: "telegram@npm:2.11.5"
+"telegram@npm:^2.11.7":
+  version: 2.11.7
+  resolution: "telegram@npm:2.11.7"
   dependencies:
     "@cryptography/aes": ^0.1.1
     async-mutex: ^0.3.0
@@ -5193,7 +5193,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 5161c165d8aa8e22bc7a015724b63887c872ac1ed2896734ced0adfb1f59e85bfb5403946a5ad12b66544e28248de479f3c0ddfdb77b759564322a79cfc254d6
+  checksum: 31c3796912d69fbaf8dd66ba2ec47c8fc9589b93940c2ecad1c28efc8c2ce31b4e25b12fd34f1f8d0890291ed7c8686e2222bb2ca833cfd766d105c53b50f2b2
   languageName: node
   linkType: hard
 

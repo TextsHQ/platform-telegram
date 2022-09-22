@@ -4,19 +4,18 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, User } from '@textshq/platform-sdk'
-import { last, debounce } from 'lodash'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink } from '@textshq/platform-sdk'
+import { debounce, last } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
-import type { TelegramClient } from 'telegram'
 import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
+import type { TelegramClient } from 'telegram'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
-
 import type { TotalList } from 'telegram/Helpers'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
@@ -93,6 +92,9 @@ const getMessageFromShort = (update: Api.UpdateShortMessage | Api.UpdateShortCha
     peerId,
     fromId,
   }))
+
+const ASSET_TYPES = ['emoji', 'media', 'photos'] as const
+type AssetType = typeof ASSET_TYPES[number]
 
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
@@ -245,7 +247,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (message.media) {
       this.state.messageMediaStore.set(String(message.id), message.media)
     }
-    this.state.messageChatIdMap.set(message.id, message.chatId.toString())
+    this.state.messageChatIdMap.set(message.id, String(message.chatId))
   }
 
   private emitMessage = (message: Api.Message | Api.MessageService) => {
@@ -267,9 +269,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private mapThread = async (dialog: Dialog) => {
-    const thread = this.mapper.mapThread(dialog, dialog.entity instanceof Api.User
+    const participants = dialog.entity instanceof Api.User
       ? [this.mapper.mapParticipant(dialog.entity)]
-      : [])
+      : (dialog.message ? [await this.getUser({ userID: String(dialog.message!.senderId) }).catch(() => undefined)].filter(Boolean) : [])
+    const thread = this.mapper.mapThread(dialog, participants)
     if (dialog.message) this.storeMessage(dialog.message)
     this.state.hasFetchedParticipantsForDialog.set(thread.id, dialog.isUser)
     this.state.dialogs.set(thread.id, dialog)
@@ -336,6 +339,34 @@ export default class TelegramAPI implements PlatformAPI {
       objectIDs: { threadID },
       entries,
     }])
+  }
+
+  private onUpdateChatParticipants = async (update: Api.UpdateChatParticipants) => {
+    if (update.participants instanceof Api.ChatParticipantsForbidden) return
+    const threadID = getMarkedId(update.participants)
+    const updateParticipantsIds = update.participants.participants.map(participant => String(participant.userId))
+
+    const currentSet = this.state.dialogIdToParticipantIds.get(threadID)
+    if (!currentSet) return
+
+    const currentParticipants = Array.from(currentSet)
+    const removed = currentParticipants.filter(id => !updateParticipantsIds.includes(id))
+    const added = updateParticipantsIds.filter(id => !currentSet.has(id))
+
+    if (added.length) {
+      const entries = await Promise.all(added.map(id => this.getUser({ userID: id })))
+      this.upsertParticipants(threadID, entries.filter(Boolean))
+    }
+    if (removed.length) {
+      removed.forEach(id => currentSet.delete(id))
+      this.onEvent([{
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'participant',
+        objectIDs: { threadID },
+        entries: removed.map(id => ({ id, hasExited: true })),
+      }])
+    }
   }
 
   private async differenceUpdates(): Promise<void> {
@@ -481,6 +512,7 @@ export default class TelegramAPI implements PlatformAPI {
         const maxId = 'maxId' in update ? update.maxId : update.topMsgId
         if (dialog) dialog.dialog.readOutboxMaxId = maxId
       }
+      if (update instanceof Api.UpdateChatParticipants) return this.onUpdateChatParticipants(update)
       if (update instanceof Api.UpdateMessageReactions) {
         const threadID = this.state.messageChatIdMap.get(update.msgId)
         return this.onEvent([this.mapper.mapUpdateMessageReactions(update, threadID)])
@@ -511,11 +543,9 @@ export default class TelegramAPI implements PlatformAPI {
 
   private emptyAssets = async () => {
     // for perfomance testing
-    const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
-    const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
     try {
-      await fsp.rm(mediaDir, { recursive: true })
-      await fsp.rm(photosDir, { recursive: true })
+      await Promise.all(ASSET_TYPES.map(assetType =>
+        fsp.rm(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
     } catch {
       // ignore
     }
@@ -551,8 +581,18 @@ export default class TelegramAPI implements PlatformAPI {
     this.pendingEvents = []
   }, 300)
 
-  private upsertParticipants(dialogId: string, entries: Participant[]) {
-    const threadID = dialogId
+  private dialogToParticipantIdsUpdate = (threadID: string, participantIds: Iterable<string>) => {
+    const set = this.state.dialogIdToParticipantIds.get(threadID)
+    if (set) {
+      for (const id of participantIds) {
+        set.add(id)
+      }
+    } else {
+      this.state.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
+    }
+  }
+
+  private upsertParticipants(threadID: string, entries: Participant[]) {
     const dialogParticipants = this.state.dialogIdToParticipantIds.get(threadID)
     const filteredEntries = dialogParticipants ? entries.filter(e => !dialogParticipants.has(e.id)) : entries
 
@@ -567,16 +607,6 @@ export default class TelegramAPI implements PlatformAPI {
       },
       entries: filteredEntries,
     }])
-  }
-
-  private dialogToParticipantIdsUpdate = (dialogId: string, participantIds: string[]) => {
-    const threadID = dialogId
-    const dialog = this.state.dialogIdToParticipantIds.get(threadID)
-    if (dialog) {
-      participantIds.forEach(id => dialog.add(id))
-    } else {
-      this.state.dialogIdToParticipantIds.set(threadID, new Set(participantIds))
-    }
   }
 
   // private emitParticipantFromMessages = async (dialogId: string, userIds: BigInteger.BigInteger[]) => {
@@ -637,11 +667,8 @@ export default class TelegramAPI implements PlatformAPI {
   // }
 
   private createAssetsDir = async () => {
-    const mediaDir = path.join(this.accountInfo.dataDirPath, 'media')
-    const photosDir = path.join(this.accountInfo.dataDirPath, 'photos')
-
-    await fsp.mkdir(mediaDir, { recursive: true })
-    await fsp.mkdir(photosDir, { recursive: true })
+    await Promise.all(ASSET_TYPES.map(assetType =>
+      fsp.mkdir(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
   }
 
   private deleteAssetsDir = async () => {
@@ -1007,11 +1034,17 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.getMe()
   }
 
-  private getAssetPath = (assetType: 'media' | 'photos', assetId: string, extension: string) =>
+  private getAssetPath = (assetType: AssetType, assetId: string, extension: string) =>
     path.join(this.accountInfo.dataDirPath, assetType, `${assetId}.${extension}`)
 
-  private async downloadAsset(filePath: string, type: 'media' | 'photos', assetId: string, entityId: string) {
+  private async downloadAsset(filePath: string, type: AssetType, assetId: string, entityId: string) {
     switch (type) {
+      case 'emoji': {
+        const [document] = await this.client.invoke(new Api.messages.GetCustomEmojiDocuments({ documentId: [BigInteger(assetId)] }))
+        if (document instanceof Api.DocumentEmpty) throw Error('custom emoji is doc empty')
+        await this.client.downloadMedia(new Api.MessageMediaDocument({ document }), { outputFile: filePath })
+        return
+      }
       case 'media': {
         const media = this.state.messageMediaStore.get(entityId)
         if (!media) throw Error('message media not found')
@@ -1030,9 +1063,9 @@ export default class TelegramAPI implements PlatformAPI {
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
   }
 
-  getAsset = async (_: GetAssetOptions, type: 'media' | 'photos', assetId: string, extension: string, entityId: string/* , extra?: string */) => {
+  getAsset = async (_: GetAssetOptions, type: AssetType, assetId: string, extension: string, entityId: string/* , extra?: string */) => {
     // texts.log(type, assetId, extension, entityId, extra)
-    if (!['media', 'photos'].includes(type)) {
+    if (!ASSET_TYPES.includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
     const filePath = this.getAssetPath(type, assetId, extension)
@@ -1107,7 +1140,7 @@ export default class TelegramAPI implements PlatformAPI {
   private updateWatchdog = async () => {
     clearTimeout(this.state.localState.watchdogTimeout)
     const current = Date.now() / 1000
-    if (current > UPDATES_WATCHDOG_INTERVAL / 1000) { this.state.localState.updateMutex.runExclusive(async () => this.differenceUpdates()) }
+    if (current > UPDATES_WATCHDOG_INTERVAL / 1000) { this.state.localState.updateMutex.runExclusive(() => this.differenceUpdates()) }
     this.state.localState.watchdogTimeout = setTimeout(() => this.updateWatchdog(), UPDATES_WATCHDOG_INTERVAL)
   }
 }
