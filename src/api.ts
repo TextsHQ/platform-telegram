@@ -60,6 +60,7 @@ interface TelegramState {
   dialogToDialogAdminIds: Map<string, Set<string>>
   hasFetchedParticipantsForDialog: Map<string, boolean>
   connectionState: TelegramConnectionState
+  pollIdMessageId: Map<string, number>
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -125,6 +126,7 @@ export default class TelegramAPI implements PlatformAPI {
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
     hasFetchedParticipantsForDialog: new Map<string, boolean>(),
     connectionState: TelegramConnectionState.Disconnected,
+    pollIdMessageId: new Map<string, number>()
   }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
@@ -248,6 +250,9 @@ export default class TelegramAPI implements PlatformAPI {
   private storeMessage = (message: CustomMessage) => {
     if (message.media) {
       this.state.messageMediaStore.set(String(message.id), message.media)
+    }
+    if (message.poll?.poll) {
+      this.state.pollIdMessageId.set(String(message.poll.poll.id), message.id)
     }
     this.state.messageChatIdMap.set(message.id, String(message.chatId))
   }
@@ -533,6 +538,21 @@ export default class TelegramAPI implements PlatformAPI {
       //     this.state.dialogToDraft.set(peerId, update.draft)
       //   }
       // }
+      if (update instanceof Api.UpdateMessagePoll) {
+        const messageID = this.state.pollIdMessageId.get(String(update.pollId))
+        if (!messageID) {
+          texts.log('[Telegram] Missing messageID for poll')
+          return
+        }
+        const threadID = this.state.messageChatIdMap.get(messageID)
+        if (!threadID) {
+          texts.log('[Telegram] Missing threadID for messageID')
+          return
+        }
+        const messageUpdate = TelegramMapper.mapMessagePoll(update, threadID, String(messageID))
+        if (messageUpdate) return this.onEvent([messageUpdate])
+        texts.log('[Telegram] Unable to update poll')
+      }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
     }
@@ -839,6 +859,7 @@ export default class TelegramAPI implements PlatformAPI {
     await this.waitForClientConnected()
     const msg = await this.client.getMessages(threadID, { ids: [+messageID] })
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
+    this.storeMessage(msg[0])
     return this.mapper.mapMessage(msg[0], readOutboxMaxId)
   }
 
