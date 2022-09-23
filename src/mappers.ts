@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size, ConnectionStatus } from '@textshq/platform-sdk'
+import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -13,12 +13,6 @@ import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
 type UnmarkedId = { userId: bigInt.BigInteger } | { chatId: bigInt.BigInteger } | { channelId: bigInt.BigInteger }
-
-export enum TelegramConnectionState {
-  Disconnected = -1,
-  Broken = 0,
-  Connected = 1,
-}
 
 export function getMarkedId(unmarked: UnmarkedId) {
   if ('userId' in unmarked) return unmarked.userId.toString()
@@ -69,18 +63,6 @@ export default class TelegramMapper {
     } catch (error) {
       if (error.code === 'ERR_INVALID_URL') return 'http://' + link
       throw error
-    }
-  }
-
-  static mapConnectionState(state: number): ConnectionStatus {
-    switch (state) {
-      case TelegramConnectionState.Broken:
-      case TelegramConnectionState.Disconnected:
-        return ConnectionStatus.DISCONNECTED
-      case TelegramConnectionState.Connected:
-        return ConnectionStatus.CONNECTED
-      default:
-        return ConnectionStatus.UNKNOWN
     }
   }
 

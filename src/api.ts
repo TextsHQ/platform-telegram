@@ -4,7 +4,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, OnConnStateChangeCallback } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -21,7 +21,7 @@ import { UpdateConnectionState } from 'telegram/network'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
-import TelegramMapper, { getMarkedId, TelegramConnectionState } from './mappers'
+import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
@@ -59,7 +59,7 @@ interface TelegramState {
   dialogIdToParticipantIds: Map<string, Set<string>>
   dialogToDialogAdminIds: Map<string, Set<string>>
   hasFetchedParticipantsForDialog: Map<string, boolean>
-  connectionState: TelegramConnectionState
+  connectionState: ConnectionState
   pollIdMessageId: Map<string, number>
 }
 
@@ -75,6 +75,12 @@ const LOGIN_ERROR_MAP = {
   PHONE_NUMBER_UNOCCUPIED: 'Phone number is not yet being used.',
   PHONE_PASSWORD_FLOOD: "You've tried logging in too many times. Try again after a while.",
   PHONE_PASSWORD_PROTECTED: 'Phone is password protected.',
+}
+
+enum ConnectionState {
+  Disconnected = -1,
+  Broken = 0,
+  Connected = 1,
 }
 
 const getMessageFromShort = (update: Api.UpdateShortMessage | Api.UpdateShortChatMessage, peerId: Api.TypePeer, fromId: Api.TypePeer): Api.Message =>
@@ -105,9 +111,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private accountInfo: AccountInfo
 
-  private loginEventCallback?: LoginEventCallback
-
-  private connectionStateChangeCallback?: OnConnStateChangeCallback
+  private loginEventCallback: LoginEventCallback
 
   private loginInfo: LoginInfo = {}
 
@@ -125,8 +129,8 @@ export default class TelegramAPI implements PlatformAPI {
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
     hasFetchedParticipantsForDialog: new Map<string, boolean>(),
-    connectionState: TelegramConnectionState.Disconnected,
-    pollIdMessageId: new Map<string, number>()
+    connectionState: ConnectionState.Disconnected,
+    pollIdMessageId: new Map<string, number>(),
   }
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
@@ -275,7 +279,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private mapThread = async (dialog: Dialog): Promise<Thread> => {
+  private mapThread = async (dialog: Dialog) => {
     const participants = dialog.entity instanceof Api.User
       ? [this.mapper.mapParticipant(dialog.entity)]
       : (dialog.message ? [await this.getUser({ userID: String(dialog.message!.senderId) }).catch(() => undefined)].filter(Boolean) : [])
@@ -283,9 +287,6 @@ export default class TelegramAPI implements PlatformAPI {
     if (dialog.message) this.storeMessage(dialog.message)
     this.state.hasFetchedParticipantsForDialog.set(thread.id, dialog.isUser)
     this.state.dialogs.set(thread.id, dialog)
-    // if (dialog.dialog?.draft instanceof Api.DraftMessage) {
-    //   this.state.dialogToDraft.set(thread.id, dialog.dialog.draft)
-    // }
     return thread
   }
 
@@ -443,8 +444,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.state.localState.cancelDifference = true
     const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates | UpdateConnectionState) => {
       if (update instanceof UpdateConnectionState) {
-        this.connectionStateChangeCallback({ status: TelegramMapper.mapConnectionState(update.state) })
-        texts.log(`[Telegram] Connection state changed: ${TelegramConnectionState[update.state]}`)
+        texts.log(`[Telegram] Connection state changed: ${ConnectionState[update.state]}`)
         return
       }
       let ignore = false
@@ -538,6 +538,11 @@ export default class TelegramAPI implements PlatformAPI {
       //     this.state.dialogToDraft.set(peerId, update.draft)
       //   }
       // }
+      if (update instanceof UpdateConnectionState) {
+        texts.log(`[Telegram] Connection state changed: ${ConnectionState[update.state]}`)
+        this.state.connectionState = update.state
+        return
+      }
       if (update instanceof Api.UpdateMessagePoll) {
         const messageID = this.state.pollIdMessageId.get(String(update.pollId))
         if (!messageID) {
@@ -600,7 +605,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.mapper = new TelegramMapper(this.accountInfo.accountID, this.me)
     this.registerUpdateListeners()
     // we don't receive the the first one
-    this.state.connectionState = TelegramConnectionState.Connected
+    this.state.connectionState = ConnectionState.Connected
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -708,10 +713,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private waitForClientConnected = async () => {
-    if (this.state.connectionState !== TelegramConnectionState.Connected && this.client.connected) {
-      texts.Sentry.captureMessage(`GramJS connect desync ConnectionState = ${TelegramConnectionState[this.state.connectionState]}`)
+    if (this.state.connectionState !== ConnectionState.Connected && this.client.connected) {
+      texts.Sentry.captureMessage(`GramJS connect desync ConnectionState = ${ConnectionState[this.state.connectionState]}`)
     }
-    while (!this.client.connected || this.state.connectionState !== TelegramConnectionState.Connected) await setTimeoutAsync(50)
+    while (!this.client.connected || this.state.connectionState !== ConnectionState.Connected) await setTimeoutAsync(50)
   }
 
   logout = async () => {
@@ -1170,10 +1175,6 @@ export default class TelegramAPI implements PlatformAPI {
       isAdmin: role === 'admin',
       userId: BigInteger(participantID),
     }))
-  }
-
-  onConnectionStateChange = (onEvent: OnConnStateChangeCallback) => {
-    this.connectionStateChangeCallback = onEvent
   }
 
   private updateWatchdog = async () => {
