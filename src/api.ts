@@ -17,7 +17,6 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 import type { TotalList } from 'telegram/Helpers'
-import { UpdateConnectionState } from 'telegram/network'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
@@ -59,7 +58,6 @@ interface TelegramState {
   dialogIdToParticipantIds: Map<string, Set<string>>
   dialogToDialogAdminIds: Map<string, Set<string>>
   hasFetchedParticipantsForDialog: Map<string, boolean>
-  connectionState: ConnectionState
   pollIdMessageId: Map<string, number>
 }
 
@@ -75,12 +73,6 @@ const LOGIN_ERROR_MAP = {
   PHONE_NUMBER_UNOCCUPIED: 'Phone number is not yet being used.',
   PHONE_PASSWORD_FLOOD: "You've tried logging in too many times. Try again after a while.",
   PHONE_PASSWORD_PROTECTED: 'Phone is password protected.',
-}
-
-enum ConnectionState {
-  Disconnected = -1,
-  Broken = 0,
-  Connected = 1,
 }
 
 const getMessageFromShort = (update: Api.UpdateShortMessage | Api.UpdateShortChatMessage, peerId: Api.TypePeer, fromId: Api.TypePeer): Api.Message =>
@@ -129,7 +121,6 @@ export default class TelegramAPI implements PlatformAPI {
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
     hasFetchedParticipantsForDialog: new Map<string, boolean>(),
-    connectionState: ConnectionState.Disconnected,
     pollIdMessageId: new Map<string, number>(),
   }
 
@@ -442,11 +433,7 @@ export default class TelegramAPI implements PlatformAPI {
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
     const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
     this.state.localState.cancelDifference = true
-    const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates | UpdateConnectionState) => {
-      if (update instanceof UpdateConnectionState) {
-        texts.log(`[Telegram] Connection state changed: ${ConnectionState[update.state]}`)
-        return
-      }
+    const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
       let ignore = false
       await this.state.localState.updateMutex.runExclusive(async () => {
         this.state.localState.cancelDifference = false
@@ -538,11 +525,6 @@ export default class TelegramAPI implements PlatformAPI {
       //     this.state.dialogToDraft.set(peerId, update.draft)
       //   }
       // }
-      if (update instanceof UpdateConnectionState) {
-        texts.log(`[Telegram] Connection state changed: ${ConnectionState[update.state]}`)
-        this.state.connectionState = update.state
-        return
-      }
       if (update instanceof Api.UpdateMessagePoll) {
         const messageID = this.state.pollIdMessageId.get(String(update.pollId))
         if (!messageID) {
@@ -604,8 +586,6 @@ export default class TelegramAPI implements PlatformAPI {
     }
     this.mapper = new TelegramMapper(this.accountInfo.accountID, this.me)
     this.registerUpdateListeners()
-    // we don't receive the the first one
-    this.state.connectionState = ConnectionState.Connected
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -713,10 +693,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private waitForClientConnected = async () => {
-    if (this.state.connectionState !== ConnectionState.Connected && this.client.connected) {
-      texts.Sentry.captureMessage(`GramJS connect desync ConnectionState = ${ConnectionState[this.state.connectionState]}`)
-    }
-    while (!this.client.connected || this.state.connectionState !== ConnectionState.Connected) await setTimeoutAsync(50)
+    while (!this.client.connected) await setTimeoutAsync(50)
   }
 
   logout = async () => {
