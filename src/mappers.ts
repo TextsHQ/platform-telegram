@@ -363,6 +363,7 @@ export default class TelegramMapper {
   }
 
   static mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
+    if (!poll || !results) return
     const pollAnswers = poll.answers.map(a => a.text)
     const isQuiz = poll.quiz
     const mappedResults = results.results
@@ -973,6 +974,7 @@ export default class TelegramMapper {
         }],
       }]
     }
+
     texts.Sentry.captureMessage(`[Telegram] unmapped update: ${update.className || update.constructor?.name}`)
     texts.log('[Telegram] unmapped update', update.className || update.constructor?.name/* , stringifyCircular(update) */)
     return []
@@ -988,6 +990,22 @@ export default class TelegramMapper {
         id: String(update.msgId),
         reactions: this.mapReactions(update.reactions),
       }],
+    }
+  }
+
+  static mapUpdateMessagePoll(update: Api.UpdateMessagePoll, threadID: string, messageID: string): StateSyncEvent {
+    const updatedPollText = TelegramMapper.mapPoll({ poll: update.poll, results: update.results })
+    if (updatedPollText) {
+      return {
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'update',
+        objectName: 'message',
+        objectIDs: { threadID },
+        entries: [{
+          id: messageID,
+          textHeading: updatedPollText,
+        }],
+      }
     }
   }
 }
