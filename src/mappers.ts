@@ -993,7 +993,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapMessagePoll(update: Api.UpdateMessagePoll, threadID: string, messageID: string): StateSyncEvent {
+  static mapUpdateMessagePoll(update: Api.UpdateMessagePoll, threadID: string, messageID: string): StateSyncEvent {
     const updatedPollText = TelegramMapper.mapPoll({ poll: update.poll, results: update.results })
     if (updatedPollText) {
       return {

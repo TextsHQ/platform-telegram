@@ -524,7 +524,7 @@ export default class TelegramAPI implements PlatformAPI {
         if (!messageID) return texts.Sentry.captureMessage('[Telegram] Missing messageID for pollID')
         const threadID = this.state.messageChatIdMap.get(messageID)
         if (!threadID) return texts.Sentry.captureMessage('[Telegram] Missing threadID for messageID')
-        const messageUpdate = TelegramMapper.mapMessagePoll(update, threadID, String(messageID))
+        const messageUpdate = TelegramMapper.mapUpdateMessagePoll(update, threadID, String(messageID))
         if (messageUpdate) return this.onEvent([messageUpdate])
       }
       const events = this.mapper.mapUpdate(update)
