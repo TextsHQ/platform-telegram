@@ -1007,6 +1007,5 @@ export default class TelegramMapper {
         }],
       }
     }
-    texts.log('[Telegram] Unable to update poll')
   }
 }
