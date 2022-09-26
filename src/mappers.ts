@@ -4,6 +4,7 @@ import { range } from 'lodash'
 import VCard from 'vcard-creator'
 import mime from 'mime-types'
 import { Api } from 'telegram/tl'
+import { UpdateConnectionState } from 'telegram/network'
 import { getPeerId } from 'telegram/Utils'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { Dialog } from 'telegram/tl/custom/dialog'
@@ -800,7 +801,7 @@ export default class TelegramMapper {
   mapUpdate = (update: Api.TypeUpdate | Api.TypeUpdates): ServerEvent[] => {
     if (update instanceof Api.UpdateNotifySettings) {
       if (!('peer' in update.peer)) {
-        texts.log('Unknown updateNotifySettings', stringifyCircular(update, 2))
+        texts.Sentry.captureMessage('telegram: unknown updateNotifySettings')
         return []
       }
       const mutedForever = update.notifySettings.silent ? 'forever' : 0
@@ -974,9 +975,10 @@ export default class TelegramMapper {
         }],
       }]
     }
-
-    texts.Sentry.captureMessage(`[Telegram] unmapped update: ${update.className || update.constructor?.name}`)
-    texts.log('[Telegram] unmapped update', update.className || update.constructor?.name/* , stringifyCircular(update) */)
+    if (!(update instanceof Api.UpdateDraftMessage || update instanceof UpdateConnectionState)) {
+      texts.Sentry.captureMessage(`[Telegram] unmapped update: ${update.className || update.constructor?.name}`)
+      texts.log('[Telegram] unmapped update', update.className || update.constructor?.name/* , stringifyCircular(update) */)
+    }
     return []
   }
 
