@@ -680,7 +680,16 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private waitForClientConnected = async () => {
-    while (!this.client.connected) await setTimeoutAsync(50)
+    const start = Date.now()
+    while (!this.client.connected) {
+      await setTimeoutAsync(50)
+      const elapsed = Date.now() - start
+      if (elapsed > 2 * 60_000) {
+        throw Error('timed out waiting for client connection')
+      } else if (elapsed > 10_000) {
+        texts.Sentry.captureMessage('>10s passed waiting for client connection')
+      }
+    }
   }
 
   logout = async () => {
