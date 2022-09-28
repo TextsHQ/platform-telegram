@@ -975,7 +975,11 @@ export default class TelegramMapper {
         }],
       }]
     }
-    if (!(update instanceof Api.UpdateDraftMessage || update instanceof UpdateConnectionState)) {
+    if (!(update instanceof UpdateConnectionState
+      || update instanceof Api.UpdateDraftMessage
+      || update instanceof Api.UpdateGroupCall
+      || update instanceof Api.UpdateGroupCallConnection
+      || update instanceof Api.UpdateGroupCallParticipants)) {
       texts.Sentry.captureMessage(`[Telegram] unmapped update: ${update.className || update.constructor?.name}`)
       texts.log('[Telegram] unmapped update', update.className || update.constructor?.name/* , stringifyCircular(update) */)
     }
