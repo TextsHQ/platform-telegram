@@ -979,7 +979,10 @@ export default class TelegramMapper {
       || update instanceof Api.UpdateDraftMessage
       || update instanceof Api.UpdateGroupCall
       || update instanceof Api.UpdateGroupCallConnection
-      || update instanceof Api.UpdateGroupCallParticipants)) {
+      || update instanceof Api.UpdateGroupCallParticipants
+      || update instanceof Api.UpdatePhoneCall
+      || update instanceof Api.UpdatePhoneCallSignalingData)
+    ) {
       texts.Sentry.captureMessage(`[Telegram] unmapped update: ${update.className || update.constructor?.name}`)
       texts.log('[Telegram] unmapped update', update.className || update.constructor?.name/* , stringifyCircular(update) */)
     }
