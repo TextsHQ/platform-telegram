@@ -992,6 +992,7 @@ export default class TelegramAPI implements PlatformAPI {
           ? await this.client.invoke(new Api.messages.DeleteChatUser({ chatId: inputEntity.chatId, userId: participantID }))
           : await this.client.invoke(new Api.messages.AddChatUser({ chatId: inputEntity.chatId, userId: participantID }))
       } else if (inputEntity instanceof Api.InputPeerChannel) {
+        if (remove) throw Error('not implemented')
         updates = await this.client.invoke(new Api.channels.InviteToChannel({ channel: inputEntity.channelId, users: [participantID] }))
       }
       if (updates) await this.updateHandler(updates)
@@ -1007,9 +1008,9 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  addParticipant = async (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, false)
+  addParticipant = (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, false)
 
-  removeParticipant = async (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, true)
+  removeParticipant = (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, true)
 
   registerForPushNotifications = async (type: 'apple' | 'web', json: string) => {
     const { token, secret } = type === 'web'
