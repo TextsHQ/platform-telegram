@@ -551,11 +551,12 @@ export default class TelegramMapper {
         if (msg.media.geo instanceof Api.GeoPointEmpty) return
         if (mapped.textHeading) mapped.textHeading += '\n'
         else mapped.textHeading = ''
-        mapped.text += msg.media instanceof Api.MessageMediaGeoLive ? '📍 Live Location' : '📍 Location'
+        mapped.textHeading += msg.media instanceof Api.MessageMediaGeoLive ? '📍 Live Location' : '📍 Location'
         mapped.links ||= []
         mapped.links.push({
           url: `https://www.google.com/maps?q=${msg.media.geo.lat},${msg.media.geo.long}`,
-          title: `Lat: ${msg.media.geo.lat} Long: ${msg.media.geo.long}`,
+          title: 'Google Maps',
+          summary: `${msg.media.geo.lat}, ${msg.media.geo.long}`,
         })
       } else {
         mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
