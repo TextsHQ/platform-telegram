@@ -336,9 +336,9 @@ export default class TelegramMapper {
       if (!reactionKey) return
       subtractCounts[reactionKey] = (subtractCounts[reactionKey] ?? 0) + 1
       return {
-        id: participantID,
+        id: participantID + reactionKey,
         participantID,
-        emoji: true,
+        emoji: r.reaction instanceof Api.ReactionEmoji,
         reactionKey,
         imgURL: r.reaction instanceof Api.ReactionCustomEmoji ? this.getCustomEmojiUrl(r.reaction.documentId) : undefined,
       }
@@ -350,7 +350,7 @@ export default class TelegramMapper {
         // hack since we don't have access to id
         id: `${index}`,
         participantID: `${index}`,
-        emoji: true,
+        emoji: r.reaction instanceof Api.ReactionEmoji,
         reactionKey,
         imgURL: r.reaction instanceof Api.ReactionCustomEmoji ? this.getCustomEmojiUrl(r.reaction.documentId) : undefined,
       }))
