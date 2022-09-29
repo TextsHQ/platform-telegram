@@ -547,6 +547,17 @@ export default class TelegramMapper {
       } else if (msg.media instanceof Api.MessageMediaWebPage) {
         const msgMediaLink = this.mapMessageLink(msg.media.webpage, msg.id)
         mapped.links = msgMediaLink ? [msgMediaLink] : undefined
+      } else if (msg.media instanceof Api.MessageMediaGeo || msg.media instanceof Api.MessageMediaGeoLive) {
+        if (msg.media.geo instanceof Api.GeoPointEmpty) return
+        if (mapped.textHeading) mapped.textHeading += '\n'
+        else mapped.textHeading = ''
+        mapped.textHeading += msg.media instanceof Api.MessageMediaGeoLive ? '📍 Live Location' : '📍 Location'
+        mapped.links ||= []
+        mapped.links.push({
+          url: `https://www.google.com/maps?q=${msg.media.geo.lat},${msg.media.geo.long}`,
+          title: 'Google Maps',
+          summary: `${msg.media.geo.lat}, ${msg.media.geo.long}`,
+        })
       } else {
         mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
         texts.Sentry.captureMessage(`Telegram: unsupported media ${msg.media?.className}`)
@@ -710,13 +721,6 @@ export default class TelegramMapper {
       if (!mapMessageService()) return undefined
     }
 
-    if (msg.geo instanceof Api.GeoPoint) {
-      const location = msg.geo
-      if (mapped.textHeading) mapped.textHeading += '\n'
-      else mapped.textHeading = ''
-      mapped.textHeading += '📍 Location'
-      mapped.text = `https://www.google.com/maps?q=${location.lat},${location.long}`
-    }
     if (msg.venue) {
       const { venue } = msg
       mapped.textHeading = '📍 Venue'
