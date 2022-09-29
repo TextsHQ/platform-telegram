@@ -75,7 +75,7 @@ const info: PlatformInfo = {
   },
   reactions: {
     supported: REACTIONS,
-    allowsMultipleReactionsToSingleMessage: true,
+    allowsMultipleReactionsToSingleMessage: false,
   },
   notifications: {
     web: {},
