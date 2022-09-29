@@ -434,7 +434,7 @@ export default class TelegramAPI implements PlatformAPI {
     const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
     this.state.localState.cancelDifference = true
     const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
-      let ignore = false
+      // let ignore = false
       await this.state.localState.updateMutex.runExclusive(async () => {
         this.state.localState.cancelDifference = false
         // common sequence
@@ -454,14 +454,14 @@ export default class TelegramAPI implements PlatformAPI {
             if (sum > update.pts) {
               texts.log('[Telegram] Update already applied')
               this.state.localState.pts += sum
-              ignore = true
+              // ignore = true
             } else if (sum < update.pts) {
               texts.log('[Telegram] Missing updates')
               // we need to interrupt update handling while we resync
               await setTimeoutAsync(500)
               if (!this.state.localState.cancelDifference) await this.differenceUpdates()
               this.state.localState.cancelDifference = false
-              ignore = true
+              // ignore = true
             } else {
               this.state.localState.pts += update.ptsCount
               texts.log('[Telegram] Updates in sync')
@@ -474,7 +474,7 @@ export default class TelegramAPI implements PlatformAPI {
             this.state.localState.date = state.date
             this.state.localState.pts = state.pts
             await this.differenceUpdates()
-            ignore = true
+            // ignore = true
             break
           }
           default:
@@ -488,11 +488,11 @@ export default class TelegramAPI implements PlatformAPI {
           texts.log('[Telegram] Received short update')
           const regularUpdate = this.convertShortUpdate(update)
           this.updateHandler(regularUpdate)
-          ignore = true
+          // ignore = true
         }
       })
 
-      if (ignore) return
+      // if (ignore) return
       if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) return this.onUpdateNewMessage(update)
       if (update instanceof Api.UpdateChat || update instanceof Api.UpdateChannel) return this.onUpdateChatChannel(update)
       if (update instanceof Api.UpdateChatParticipant || update instanceof Api.UpdateChannelParticipant) return this.onUpdateChatChannelParticipant(update)
