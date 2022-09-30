@@ -18,7 +18,7 @@ import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 import type { TotalList } from 'telegram/Helpers'
 
-import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, UPDATES_WATCHDOG_INTERVAL, MAX_DOWNLOAD_ATTEMPTS } from './constants'
+import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId } from './mappers'
 import { fileExists, stringifyCircular } from './util'
@@ -47,7 +47,6 @@ interface LocalState {
   date: number
   updateMutex: Mutex
   cancelDifference?: boolean
-  watchdogTimeout?: NodeJS.Timeout
 }
 
 interface TelegramState {
@@ -114,7 +113,7 @@ export default class TelegramAPI implements PlatformAPI {
   private dbFileName: string
 
   private state: TelegramState = {
-    localState: undefined,
+    localState: { updateMutex: new Mutex(), date: 0, pts: 0 },
     dialogs: new Map<string, Dialog>(),
     messageMediaStore: new Map<string, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
@@ -288,7 +287,7 @@ export default class TelegramAPI implements PlatformAPI {
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel) => {
     let markedId: string
     if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else
-    if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
+      if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
@@ -430,6 +429,13 @@ export default class TelegramAPI implements PlatformAPI {
     this.state.localState.pts += updateShort.ptsCount
   }
 
+  private syncServerState = async () => {
+    const state = await this.client.invoke(new Api.updates.GetState())
+    this.state.localState.date = state.date
+    this.state.localState.pts = state.pts
+    await this.differenceUpdates()
+  }
+
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
     const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
     this.state.localState.cancelDifference = true
@@ -451,6 +457,14 @@ export default class TelegramAPI implements PlatformAPI {
           case 'UpdateFolderPeers': {
             texts.log(`[Telegram] localPts = ${this.state.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
             const sum = this.state.localState.pts + update.ptsCount
+            if (Math.abs(this.state.localState.pts - update.pts) > 2 << 15) {
+              texts.Sentry.captureMessage('Local and Remote Pts differ by too large a value.')
+              texts.log('Differ by too large a value.')
+              await this.syncServerState()
+              ignore = true
+              break
+            }
+
             if (sum > update.pts) {
               texts.log('[Telegram] Update already applied')
               this.state.localState.pts += sum
@@ -458,9 +472,10 @@ export default class TelegramAPI implements PlatformAPI {
             } else if (sum < update.pts) {
               texts.log('[Telegram] Missing updates')
               // we need to interrupt update handling while we resync
-              await setTimeoutAsync(500)
-              if (!this.state.localState.cancelDifference) await this.differenceUpdates()
-              this.state.localState.cancelDifference = false
+              setTimeout(async () => {
+                if (!this.state.localState.cancelDifference) await this.differenceUpdates()
+                this.state.localState.cancelDifference = false
+              }, 500)
               ignore = true
             } else {
               this.state.localState.pts += update.ptsCount
@@ -470,10 +485,7 @@ export default class TelegramAPI implements PlatformAPI {
           }
           case 'UpdatesTooLong': {
             texts.log('[Telegram] Need to sync from server state')
-            const state = await this.client.invoke(new Api.updates.GetState())
-            this.state.localState.date = state.date
-            this.state.localState.pts = state.pts
-            await this.differenceUpdates()
+            await this.syncServerState()
             ignore = true
             break
           }
@@ -534,10 +546,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async registerUpdateListeners() {
-    const state = await this.client.invoke(new Api.updates.GetState())
-    this.state.localState = { pts: state.pts, date: state.date, updateMutex: new Mutex() }
+    await this.syncServerState()
     this.client.addEventHandler(this.updateHandler)
-    await this.updateWatchdog()
   }
 
   private emitDeleteThread(threadID: string) {
@@ -700,7 +710,6 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
-    clearTimeout(this.state.localState?.watchdogTimeout)
     await this.client?.destroy()
   }
 
@@ -1149,12 +1158,5 @@ export default class TelegramAPI implements PlatformAPI {
       isAdmin: role === 'admin',
       userId: BigInteger(participantID),
     }))
-  }
-
-  private updateWatchdog = async () => {
-    clearTimeout(this.state.localState.watchdogTimeout)
-    const current = Date.now() / 1000
-    if (current > UPDATES_WATCHDOG_INTERVAL / 1000) { this.state.localState.updateMutex.runExclusive(() => this.differenceUpdates()) }
-    this.state.localState.watchdogTimeout = setTimeout(() => this.updateWatchdog(), UPDATES_WATCHDOG_INTERVAL)
   }
 }
