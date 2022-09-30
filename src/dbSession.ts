@@ -22,6 +22,8 @@ interface EntityObject {
 
 export class DbSession extends Session {
   private sessionSchema = `
+    PRAGMA journal_mode=wal;
+
     CREATE TABLE version (version integer primary key);
 
     CREATE TABLE session (
@@ -38,6 +40,12 @@ export class DbSession extends Session {
         phone text,
         name text
     );`
+    );
+
+    CREATE UNIQUE INDEX entity_idx_username ON entity (username);
+    CREATE UNIQUE INDEX entity_idx_phone ON entity (phone);
+    CREATE INDEX entity_idx_name ON entity (name);
+  `
 
   private db: Database.Database
 
