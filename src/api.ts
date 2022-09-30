@@ -444,17 +444,22 @@ export default class TelegramAPI implements PlatformAPI {
       await this.state.localState.updateMutex.runExclusive(async () => {
         this.state.localState.cancelDifference = false
         // common sequence
-        // only these updates contain the sync value common to all dialogs
+        // fgrep 'pts_count:' node_modules/telegram/tl/apiTl.js | fgrep '= Update'
         switch (update.className) {
           case 'UpdateNewMessage':
-          case 'UpdateReadMessagesContents':
-          case 'UpdateEditMessage':
           case 'UpdateDeleteMessages':
           case 'UpdateReadHistoryInbox':
           case 'UpdateReadHistoryOutbox':
           case 'UpdateWebPage':
+          case 'UpdateReadMessagesContents':
+          case 'UpdateNewChannelMessage':
+          case 'UpdateDeleteChannelMessages':
+          case 'UpdateEditChannelMessage':
+          case 'UpdateEditMessage':
+          case 'UpdateChannelWebPage':
+          case 'UpdateFolderPeers':
           case 'UpdatePinnedMessages':
-          case 'UpdateFolderPeers': {
+          case 'UpdatePinnedChannelMessages': {
             texts.log(`[Telegram] localPts = ${this.state.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
             const sum = this.state.localState.pts + update.ptsCount
             if (Math.abs(this.state.localState.pts - update.pts) > 2 << 15) {
