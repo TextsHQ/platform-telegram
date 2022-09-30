@@ -427,7 +427,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (updateShort instanceof Api.UpdateShort) {
       return updateShort.update
     }
-    this.state.localState.pts += updateShort.pts
+    this.state.localState.pts += updateShort.ptsCount
   }
 
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
