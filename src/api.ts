@@ -477,18 +477,18 @@ export default class TelegramAPI implements PlatformAPI {
             ignore = true
             break
           }
+          case 'UpdateShortMessage':
+          case 'UpdateShortChatMessage':
+          case 'UpdateShortSentMessage':
+          case 'UpdateShort': {
+            texts.log('[Telegram] Received short update')
+            const regularUpdate = this.convertShortUpdate(update)
+            this.updateHandler(regularUpdate)
+            ignore = true
+            break
+          }
           default:
             break
-        }
-
-        if (update instanceof Api.UpdateShortMessage
-          || update instanceof Api.UpdateShortChatMessage
-          || update instanceof Api.UpdateShortSentMessage
-          || update instanceof Api.UpdateShort) {
-          texts.log('[Telegram] Received short update')
-          const regularUpdate = this.convertShortUpdate(update)
-          this.updateHandler(regularUpdate)
-          ignore = true
         }
       })
 
