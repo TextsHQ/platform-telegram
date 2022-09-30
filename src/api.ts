@@ -444,7 +444,7 @@ export default class TelegramAPI implements PlatformAPI {
       await this.state.localState.updateMutex.runExclusive(async () => {
         this.state.localState.cancelDifference = false
         // common sequence
-        // fgrep 'pts_count:' node_modules/telegram/tl/apiTl.js | fgrep '= Update'
+        // fgrep 'pts_count:' node_modules/telegram/tl/apiTl.js | fgrep '= Update' | fgrep -v 'updateShort'
         switch (update.className) {
           case 'UpdateNewMessage':
           case 'UpdateDeleteMessages':
@@ -463,8 +463,8 @@ export default class TelegramAPI implements PlatformAPI {
             texts.log(`[Telegram] localPts = ${this.state.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
             const sum = this.state.localState.pts + update.ptsCount
             if (Math.abs(this.state.localState.pts - update.pts) > 2 << 15) {
-              texts.Sentry.captureMessage('Local and Remote Pts differ by too large a value.')
-              texts.log('Differ by too large a value.')
+              texts.Sentry.captureMessage('[Telegram] local and remote pts differ by too large a value')
+              texts.log('[Telegram] local and remote pts differ by too large a value')
               await this.syncServerState()
               ignore = true
               break
@@ -702,7 +702,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (elapsed > 2 * 60_000) {
         throw Error('timed out waiting for client connection')
       } else if (elapsed > 10_000) {
-        texts.Sentry.captureMessage('>10s passed waiting for client connection')
+        texts.Sentry.captureMessage('[Telegram] >10s passed waiting for client connection')
       }
     }
   }
