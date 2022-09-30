@@ -454,8 +454,8 @@ export default class TelegramAPI implements PlatformAPI {
             if (sum > update.pts) {
               texts.log('[Telegram] Update already applied')
               this.state.localState.pts += sum
-              // ignore = true
-            } else if (sum < update.pts) {
+              return
+            } if (sum < update.pts) {
               texts.log('[Telegram] Missing updates')
               // we need to interrupt update handling while we resync
               await setTimeoutAsync(500)
