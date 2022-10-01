@@ -303,8 +303,8 @@ export default class TelegramMapper {
     }
     if (photo instanceof Api.Photo) {
       link.img = this.getMediaUrl(photo.id, messageId, 'image/png')
-      const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize)
-      link.imgSize = photoSize && 'w' in photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
+      const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize
+      link.imgSize = photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
     }
     return link
   }
@@ -431,14 +431,14 @@ export default class TelegramMapper {
       if (msg.media instanceof Api.MessageMediaPhoto) {
         const { photo } = msg
         if (!photo) return
-        const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) : undefined
+        const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize : undefined
         // setting to 'image/png' seems fine as other formats are sent as "Api.Document"
         mapped.attachments ||= []
         mapped.attachments.push({
           id: String(photo.id),
           srcURL: this.getMediaUrl(photo.id, msg.id, 'image/png'),
           type: MessageAttachmentType.IMG,
-          size: photoSize && 'w' in photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
+          size: photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
         })
       } else if (msg.video) {
         if (msg.video.attributes.find(a => a.className === 'DocumentAttributeSticker')) {
@@ -447,8 +447,8 @@ export default class TelegramMapper {
         } else {
           mapped.attachments ||= []
           const { video } = msg
-          const documentAttribute = video.attributes.find(a => a instanceof Api.DocumentAttributeVideo)
-          let size = documentAttribute && 'w' in documentAttribute ? { width: documentAttribute.w, height: documentAttribute.h } : undefined
+          const documentAttribute = video.attributes.find(a => a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeVideo
+          let size = documentAttribute ? { width: documentAttribute.w, height: documentAttribute.h } : undefined
           if (documentAttribute && 'duration' in documentAttribute && !documentAttribute.duration && size?.height === 1 && size?.width === 1) {
             // Telegram will send videos twice
             // 1st time doesn't have a duration or w/h - presumably this is to "loading" preview
@@ -497,7 +497,7 @@ export default class TelegramMapper {
         })
       } else if (msg.gif) {
         const animation = msg.gif
-        const sizeAttribute = animation.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo)
+        const sizeAttribute = animation.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
         mapped.attachments ||= []
         mapped.attachments.push({
           id: String(animation.id),
@@ -507,10 +507,8 @@ export default class TelegramMapper {
           fileName: animation.accessHash.toString(),
           fileSize: animation.size.toJSNumber(),
           mimeType: animation.mimeType,
-          size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
+          size: sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
         })
-      } else if (msg.sticker) {
-        pushSticker(msg.sticker, msg.id)
       } else if (msg.contact) {
         const { contact } = msg
         const vcard = contact.vcard ? contact.vcard : new VCard().addName(contact.lastName, contact.firstName).addPhoneNumber(contact.phoneNumber).buildVCard()
@@ -523,18 +521,22 @@ export default class TelegramMapper {
         })
       } else if (msg.document) {
         const { document } = msg
-        const sizeAttribute = document.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || Api.DocumentAttributeVideo)
-        const fileName = document.attributes.find(f => f instanceof Api.DocumentAttributeFilename)
-        mapped.attachments ||= []
-        mapped.attachments.push({
-          id: String(document.id),
-          type: MessageAttachmentType.UNKNOWN,
-          srcURL: this.getMediaUrl(document.id, msg.id, document.mimeType),
-          fileName: fileName && 'fileName' in fileName ? fileName.fileName : undefined,
-          size: sizeAttribute && 'w' in sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
-          mimeType: document.mimeType,
-          fileSize: document.size.toJSNumber(),
-        })
+        if (document.mimeType === 'application/x-tgsticker' || document.attributes.find(a => a instanceof Api.DocumentAttributeSticker)) {
+          pushSticker(msg.document, msg.id)
+        } else {
+          const sizeAttribute = document.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
+          const fileName = document.attributes.find(a => a instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename
+          mapped.attachments ||= []
+          mapped.attachments.push({
+            id: String(document.id),
+            type: MessageAttachmentType.UNKNOWN,
+            srcURL: this.getMediaUrl(document.id, msg.id, document.mimeType),
+            fileName: fileName ? fileName.fileName : undefined,
+            size: sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
+            mimeType: document.mimeType,
+            fileSize: document.size.toJSNumber(),
+          })
+        }
       } else if (msg.dice) {
         if (mapped.textHeading) mapped.textHeading += '\n'
         else mapped.textHeading = ''
