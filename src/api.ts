@@ -372,25 +372,23 @@ export default class TelegramAPI implements PlatformAPI {
 
   private async differenceUpdates(): Promise<void> {
     const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: this.state.localState.pts, date: this.state.localState.date }))
+    const processDiff = (state: Api.updates.TypeState, diff: Api.updates.Difference | Api.updates.DifferenceSlice) => {
+      this.state.localState = {
+        ...this.state.localState,
+        ...state,
+      }
+      diff.newMessages?.forEach(message => {
+        if (!(message instanceof Api.MessageEmpty)) this.emitMessage(message)
+      })
+      return Promise.all(diff.otherUpdates.flatMap(otherUpdate => this.updateHandler(otherUpdate)))
+    }
+    texts.log('[Telegram] Received', differenceRes.className)
     if (differenceRes instanceof Api.updates.Difference) {
-      texts.log('Received difference')
-      this.state.localState = {
-        ...this.state.localState,
-        ...differenceRes.state,
-      }
-      differenceRes.newMessages?.forEach(msg => { if (msg instanceof Api.Message) this.emitMessage(msg) })
+      await processDiff(differenceRes.state, differenceRes)
     } else if (differenceRes instanceof Api.updates.DifferenceSlice) {
-      await Promise.all(differenceRes.otherUpdates.flat().map(otherUpdate => this.updateHandler(otherUpdate)))
-      texts.log('Received difference slice')
-      this.state.localState = {
-        ...this.state.localState,
-        ...differenceRes.intermediateState,
-      }
-      differenceRes.newMessages?.forEach(msg => { if (msg instanceof Api.Message) this.emitMessage(msg) })
-      await Promise.all(differenceRes.otherUpdates.flat().map(otherUpdate => this.updateHandler(otherUpdate)))
+      await processDiff(differenceRes.intermediateState, differenceRes)
       await this.differenceUpdates()
     } else if (differenceRes instanceof Api.updates.DifferenceTooLong) {
-      texts.log('Received difference too long')
       this.state.localState.pts = differenceRes.pts
       await this.differenceUpdates()
     } else if (differenceRes instanceof Api.updates.DifferenceEmpty) {
