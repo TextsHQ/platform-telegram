@@ -62,6 +62,7 @@ const info: PlatformInfo = {
   ]),
   attachments: {
     supportsCaption: true,
+    supportsStickers: true,
     recordedAudioMimeType: 'audio/ogg',
     gifMimeType: 'video/mp4',
     maxSize: {

@@ -1,4 +1,4 @@
-import { Message, Thread, User, MessageAttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size } from '@textshq/platform-sdk'
+import { Message, Thread, User, AttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size, StickerPack, Attachment } from '@textshq/platform-sdk'
 import { addSeconds } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -285,13 +285,13 @@ export default class TelegramMapper {
   getCustomEmojiUrl = (id: bigInt.BigInteger) =>
     `asset://${this.accountID}/emoji/${id}/tgs/${id}.tgs`
 
-  getMediaUrl = (id: bigInt.BigInteger, messageId: string | number, mimeType: string) =>
-    `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${messageId}`
+  getMediaUrl = (id: bigInt.BigInteger, entityId: string | number, mimeType: string) =>
+    `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${entityId}`
 
   getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
     `asset://${this.accountID}/photos/${assetId.xor(userId)}/png/${userId}`
 
-  mapMessageLink(webPage: Api.TypeWebPage, messageId: string | number) {
+  mapMessageLink(webPage: Api.TypeWebPage, entityId: string | number) {
     if (!(webPage instanceof Api.WebPage)) return
     const { url, title, description, photo } = webPage
     const link: MessageLink = {
@@ -302,7 +302,7 @@ export default class TelegramMapper {
       imgSize: undefined,
     }
     if (photo instanceof Api.Photo) {
-      link.img = this.getMediaUrl(photo.id, messageId, 'image/png')
+      link.img = this.getMediaUrl(photo.id, entityId, 'image/png')
       const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize
       link.imgSize = photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
     }
@@ -378,6 +378,34 @@ export default class TelegramMapper {
     return `${poll.publicVoters ? '' : 'Anonymous '}${isQuiz ? 'Quiz' : 'Poll'}\n\n` + mappedResults
   }
 
+  mapSticker(sticker: Api.Document): Attachment {
+    const sizeAttribute = sticker.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
+    const size: Size = {
+      width: sizeAttribute?.w || 100,
+      height: sizeAttribute?.h || 100,
+    }
+    return {
+      id: sticker.id.toString(),
+      srcURL: this.getMediaUrl(sticker.id, sticker.id.toString(), sticker.mimeType),
+      type: sticker.mimeType.startsWith('video/') ? AttachmentType.VIDEO : AttachmentType.IMG,
+      mimeType: sticker.mimeType,
+      size,
+    }
+  }
+
+  static mapStickerPack(set: Api.StickerSet, stickers: Attachment[]): StickerPack {
+    return {
+      id: set.id.toString(),
+      name: set.title,
+      // todo: use set.thumbDocumentId instead
+      preview: stickers[0],
+      stickers: {
+        items: stickers,
+        hasMore: false,
+      },
+    }
+  }
+
   mapMessage(msg: CustomMessage | Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
     const isSender = msg.senderId?.equals(this.me.id) ?? false
     const isThreadSender = msg.sender?.className.includes('Chat') || msg.sender?.className.includes('Channel')
@@ -416,7 +444,7 @@ export default class TelegramMapper {
         id: String(sticker.id),
         srcURL: this.getMediaUrl(sticker.id, messageId, sticker.mimeType),
         mimeType: sticker.mimeType,
-        type: isWebm ? MessageAttachmentType.VIDEO : MessageAttachmentType.IMG,
+        type: isWebm ? AttachmentType.VIDEO : AttachmentType.IMG,
         isGif: true,
         isSticker: true,
         size,
@@ -437,7 +465,7 @@ export default class TelegramMapper {
         mapped.attachments.push({
           id: String(photo.id),
           srcURL: this.getMediaUrl(photo.id, msg.id, 'image/png'),
-          type: MessageAttachmentType.IMG,
+          type: AttachmentType.IMG,
           size: photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
         })
       } else if (msg.video) {
@@ -458,7 +486,7 @@ export default class TelegramMapper {
           mapped.attachments.push({
             id: String(video.id),
             srcURL: this.getMediaUrl(video.id, msg.id, video.mimeType),
-            type: MessageAttachmentType.VIDEO,
+            type: AttachmentType.VIDEO,
             fileName: video.accessHash.toString(),
             mimeType: video.mimeType,
             size,
@@ -471,7 +499,7 @@ export default class TelegramMapper {
         mapped.attachments.push({
           id: String(audio.id),
           srcURL: this.getMediaUrl(audio.id, msg.id, audio.mimeType),
-          type: MessageAttachmentType.AUDIO,
+          type: AttachmentType.AUDIO,
           fileName: audio.accessHash.toString(),
           mimeType: audio.mimeType,
           fileSize: audio.size?.toJSNumber(),
@@ -483,7 +511,7 @@ export default class TelegramMapper {
         mapped.attachments.push({
           id: String(videoNote.id),
           srcURL: this.getMediaUrl(videoNote.id, msg.id, videoNote.mimeType),
-          type: MessageAttachmentType.VIDEO,
+          type: AttachmentType.VIDEO,
           fileSize: videoNote.size?.toJSNumber(),
         })
       } else if (msg.voice) {
@@ -492,7 +520,7 @@ export default class TelegramMapper {
         mapped.attachments.push({
           id: String(voice.id),
           srcURL: this.getMediaUrl(voice.id, msg.id, voice.mimeType),
-          type: MessageAttachmentType.AUDIO,
+          type: AttachmentType.AUDIO,
           fileSize: voice.size?.toJSNumber(),
         })
       } else if (msg.gif) {
@@ -502,7 +530,7 @@ export default class TelegramMapper {
         mapped.attachments.push({
           id: String(animation.id),
           srcURL: this.getMediaUrl(animation.id, msg.id, animation.mimeType),
-          type: MessageAttachmentType.VIDEO,
+          type: AttachmentType.VIDEO,
           isGif: true,
           fileName: animation.accessHash.toString(),
           fileSize: animation.size.toJSNumber(),
@@ -515,7 +543,7 @@ export default class TelegramMapper {
         mapped.attachments ||= []
         mapped.attachments.push({
           id: String(contact.userId),
-          type: MessageAttachmentType.UNKNOWN,
+          type: AttachmentType.UNKNOWN,
           data: Buffer.from(vcard, 'utf-8'),
           fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
         })
@@ -529,7 +557,7 @@ export default class TelegramMapper {
           mapped.attachments ||= []
           mapped.attachments.push({
             id: String(document.id),
-            type: MessageAttachmentType.UNKNOWN,
+            type: AttachmentType.UNKNOWN,
             srcURL: this.getMediaUrl(document.id, msg.id, document.mimeType),
             fileName: fileName ? fileName.fileName : undefined,
             size: sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,

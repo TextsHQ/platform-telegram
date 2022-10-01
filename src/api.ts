@@ -4,7 +4,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack } from '@textshq/platform-sdk'
 import { debounce } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -52,7 +52,7 @@ interface LocalState {
 interface TelegramState {
   localState: LocalState
   dialogs: Map<string, Dialog>
-  messageMediaStore: Map<string, Api.TypeMessageMedia>
+  mediaStore: Map<string, Api.TypeMessageMedia>
   messageChatIdMap: Map<number, string>
   dialogIdToParticipantIds: Map<string, Set<string>>
   dialogToDialogAdminIds: Map<string, Set<string>>
@@ -115,7 +115,7 @@ export default class TelegramAPI implements PlatformAPI {
   private state: TelegramState = {
     localState: { updateMutex: new Mutex(), date: 0, pts: 0 },
     dialogs: new Map<string, Dialog>(),
-    messageMediaStore: new Map<string, Api.TypeMessageMedia>(),
+    mediaStore: new Map<string, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
     dialogIdToParticipantIds: new Map<string, Set<string>>(),
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
@@ -243,7 +243,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private storeMessage = (message: CustomMessage) => {
     if (message.media) {
-      this.state.messageMediaStore.set(String(message.id), message.media)
+      this.state.mediaStore.set(String(message.id), message.media)
     }
     if (message.poll?.poll) {
       this.state.pollIdMessageId.set(String(message.poll.poll.id), message.id)
@@ -881,9 +881,9 @@ export default class TelegramAPI implements PlatformAPI {
   getLinkPreview = async (link: string): Promise<MessageLink> => {
     const res = await this.client.invoke(new Api.messages.GetWebPage({ url: link }))
     if (!(res instanceof Api.WebPage)) return
-    const mid = String(res.photo.id)
-    this.state.messageMediaStore.set(mid, new Api.MessageMediaPhoto({ photo: res.photo }))
-    return this.mapper.mapMessageLink(res, mid)
+    const photoID = String(res.photo.id)
+    this.state.mediaStore.set(photoID, new Api.MessageMediaPhoto({ photo: res.photo }))
+    return this.mapper.mapMessageLink(res, photoID)
   }
 
   onThreadSelected = async (threadID: string): Promise<void> => {
@@ -1074,10 +1074,10 @@ export default class TelegramAPI implements PlatformAPI {
         return
       }
       case 'media': {
-        const media = this.state.messageMediaStore.get(entityId)
+        const media = this.state.mediaStore.get(entityId)
         if (!media) throw Error('message media not found')
         await this.client.downloadMedia(media, { outputFile: filePath })
-        this.state.messageMediaStore.delete(entityId)
+        this.state.mediaStore.delete(entityId)
         return
       }
       case 'photos': {
@@ -1163,5 +1163,25 @@ export default class TelegramAPI implements PlatformAPI {
       isAdmin: role === 'admin',
       userId: BigInteger(participantID),
     }))
+  }
+
+  getStickerPacks = async (): Promise<Paginated<StickerPack>> => {
+    // todo cache
+    const allStickers = await this.client.invoke(new Api.messages.GetAllStickers({}))
+    if (allStickers instanceof Api.messages.AllStickersNotModified) throw Error('AllStickersNotModified') // wont happen
+    return {
+      items: await Promise.all(allStickers.sets.map(async s => {
+        // todo cache
+        const set = await this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: s.accessHash, id: s.id }) }))
+        if (set instanceof Api.messages.StickerSetNotModified) return // wont happen
+        const stickers = set.documents.map(document => {
+          if (document instanceof Api.DocumentEmpty) return
+          this.state.mediaStore.set(document.id.toString(), new Api.MessageMediaDocument({ document }))
+          return this.mapper.mapSticker(document)
+        }).filter(Boolean)
+        return TelegramMapper.mapStickerPack(s, stickers)
+      })),
+      hasMore: false,
+    }
   }
 }
