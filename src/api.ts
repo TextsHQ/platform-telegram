@@ -17,6 +17,7 @@ import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
 import type { TotalList } from 'telegram/Helpers'
+import type { FileLike } from 'telegram/define'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
@@ -27,10 +28,10 @@ import { CustomClient } from './CustomClient'
 
 const { IS_DEV } = texts
 
-async function getMessageContent(msgContent: MessageContent) {
+function getFileFromMessageContent(msgContent: MessageContent): FileLike {
   const { fileBuffer, fileName, filePath } = msgContent
-  const buffer = filePath ? await fsp.readFile(filePath) : fileBuffer
-  return buffer && new CustomFile(fileName, buffer.byteLength, filePath, buffer)
+  if (fileBuffer) return new CustomFile(fileName, fileBuffer.byteLength, filePath, fileBuffer)
+  return filePath
 }
 
 type LoginEventCallback = (authState: AuthState) => void
@@ -897,8 +898,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
-    const { text } = msgContent
-    const file = await getMessageContent(msgContent)
+    const { text, stickerID } = msgContent
+    const file = stickerID
+      ? this.state.mediaStore.get(stickerID) as Api.MessageMediaDocument
+      : getFileFromMessageContent(msgContent)
     const msgSendParams: SendMessageParams = {
       parseMode: 'md',
       message: text,
@@ -917,7 +920,7 @@ export default class TelegramAPI implements PlatformAPI {
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
     let { text } = msgContent
     if (!msgContent.text || /^\s+$/.test(msgContent.text)) text = '.'
-    const file = await getMessageContent(msgContent)
+    const file = await getFileFromMessageContent(msgContent)
     await this.client.editMessage(threadID, { message: +messageID, text, file })
     return true
   }
@@ -1168,16 +1171,16 @@ export default class TelegramAPI implements PlatformAPI {
     const allStickers = await this.client.invoke(new Api.messages.GetAllStickers({}))
     if (allStickers instanceof Api.messages.AllStickersNotModified) throw Error('AllStickersNotModified') // wont happen
     return {
-      items: await Promise.all(allStickers.sets.filter(s => !s.videos).map(async s => {
+      items: await Promise.all(allStickers.sets.map(async ss => {
         // todo cache
-        const set = await this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: s.accessHash, id: s.id }) }))
+        const set = await this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: ss.accessHash, id: ss.id }) }))
         if (set instanceof Api.messages.StickerSetNotModified) return // wont happen
         const stickers = set.documents.map(document => {
           if (document instanceof Api.DocumentEmpty) return
           this.state.mediaStore.set(document.id.toString(), new Api.MessageMediaDocument({ document }))
           return this.mapper.mapSticker(document)
         }).filter(Boolean)
-        return TelegramMapper.mapStickerPack(s, stickers)
+        return TelegramMapper.mapStickerPack(ss, stickers)
       })),
       hasMore: false,
     }
