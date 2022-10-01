@@ -1168,7 +1168,7 @@ export default class TelegramAPI implements PlatformAPI {
     const allStickers = await this.client.invoke(new Api.messages.GetAllStickers({}))
     if (allStickers instanceof Api.messages.AllStickersNotModified) throw Error('AllStickersNotModified') // wont happen
     return {
-      items: await Promise.all(allStickers.sets.map(async s => {
+      items: await Promise.all(allStickers.sets.filter(s => !s.videos).map(async s => {
         // todo cache
         const set = await this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: s.accessHash, id: s.id }) }))
         if (set instanceof Api.messages.StickerSetNotModified) return // wont happen
