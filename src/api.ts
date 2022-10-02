@@ -900,7 +900,7 @@ export default class TelegramAPI implements PlatformAPI {
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
     const { text, stickerID } = msgContent
     const file = stickerID
-      ? this.state.mediaStore.get(stickerID) as Api.MessageMediaDocument
+      ? this.state.mediaStore.get('sticker_' + stickerID) as Api.MessageMediaDocument
       : getFileFromMessageContent(msgContent)
     const msgSendParams: SendMessageParams = {
       parseMode: 'md',
@@ -1078,7 +1078,7 @@ export default class TelegramAPI implements PlatformAPI {
         const media = this.state.mediaStore.get(entityId)
         if (!media) throw Error('message media not found')
         await this.client.downloadMedia(media, { outputFile: filePath })
-        this.state.mediaStore.delete(entityId)
+        if (!entityId.startsWith('sticker_')) this.state.mediaStore.delete(entityId)
         return
       }
       case 'photos': {
@@ -1177,7 +1177,7 @@ export default class TelegramAPI implements PlatformAPI {
         if (set instanceof Api.messages.StickerSetNotModified) return // wont happen
         const stickers = set.documents.map(document => {
           if (document instanceof Api.DocumentEmpty) return
-          this.state.mediaStore.set(document.id.toString(), new Api.MessageMediaDocument({ document }))
+          this.state.mediaStore.set('sticker_' + document.id.toString(), new Api.MessageMediaDocument({ document }))
           return this.mapper.mapSticker(document)
         }).filter(Boolean)
         return TelegramMapper.mapStickerPack(ss, stickers)

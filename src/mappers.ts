@@ -386,7 +386,7 @@ export default class TelegramMapper {
     }
     return {
       id: sticker.id.toString(),
-      srcURL: this.getMediaUrl(sticker.id, sticker.id.toString(), sticker.mimeType),
+      srcURL: this.getMediaUrl(sticker.id, 'sticker_' + sticker.id.toString(), sticker.mimeType),
       type: sticker.mimeType.startsWith('video/') ? AttachmentType.VIDEO : AttachmentType.IMG,
       mimeType: sticker.mimeType,
       size,
