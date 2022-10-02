@@ -461,7 +461,7 @@ export default class TelegramAPI implements PlatformAPI {
           case 'UpdatePinnedChannelMessages': {
             texts.log(`[Telegram] localPts = ${this.state.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
             const sum = this.state.localState.pts + update.ptsCount
-            if (Math.abs(this.state.localState.pts - update.pts) > 2 << 15) {
+            if (Math.abs(this.state.localState.pts - update.pts) > (2 ** 24)) {
               texts.Sentry.captureMessage('[Telegram] local and remote pts differ by too large a value')
               texts.log('[Telegram] local and remote pts differ by too large a value')
               await this.syncServerState()
