@@ -328,6 +328,16 @@ export default class TelegramMapper {
       if (reaction instanceof Api.ReactionCustomEmoji) return String(reaction.documentId)
     }
     if (!reactions.recentReactions && !reactions.results) return
+    function mapReaction(reaction: Api.TypeReaction, participantID: string, reactionKey: string) {
+      if (reaction instanceof Api.ReactionEmpty) return
+      return {
+        id: participantID + reactionKey,
+        participantID,
+        emoji: reaction instanceof Api.ReactionEmoji,
+        reactionKey,
+        imgURL: reaction instanceof Api.ReactionCustomEmoji ? this.getCustomEmojiUrl(reaction.documentId) : undefined,
+      }
+    }
     // hack, use messages.getMessageReactionsList API call instead
     const subtractCounts: Record<string, number> = {}
     const mappedReactions = reactions.recentReactions?.map<MessageReaction>(r => {
@@ -335,25 +345,14 @@ export default class TelegramMapper {
       const reactionKey = mapReactionKey(r.reaction)
       if (!reactionKey) return
       subtractCounts[reactionKey] = (subtractCounts[reactionKey] ?? 0) + 1
-      return {
-        id: participantID + reactionKey,
-        participantID,
-        emoji: r.reaction instanceof Api.ReactionEmoji,
-        reactionKey,
-        imgURL: r.reaction instanceof Api.ReactionCustomEmoji ? this.getCustomEmojiUrl(r.reaction.documentId) : undefined,
-      }
+      return mapReaction(r.reaction, participantID, reactionKey)
     }) ?? []
     const mappedReactionResults = reactions.results?.flatMap(r => {
       const reactionKey = mapReactionKey(r.reaction)
       if (!reactionKey) return
-      const reactionResult = range(r.count - (subtractCounts[reactionKey] ?? 0)).map<MessageReaction>(index => ({
-        // hack since we don't have access to id
-        id: `${index}`,
-        participantID: `${index}`,
-        emoji: r.reaction instanceof Api.ReactionEmoji,
-        reactionKey,
-        imgURL: r.reaction instanceof Api.ReactionCustomEmoji ? this.getCustomEmojiUrl(r.reaction.documentId) : undefined,
-      }))
+      // hack: using index instead since we don't have access to id
+      const reactionResult = range(r.count - (subtractCounts[reactionKey] ?? 0))
+        .map<MessageReaction>(index => mapReaction(r.reaction, String(index), reactionKey))
       // chosen = Whether the current user sent this reaction
       if (r.chosenOrder != null && reactionResult.length) {
         reactionResult[reactionResult.length - 1].participantID = String(this.me.id)
