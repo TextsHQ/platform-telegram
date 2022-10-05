@@ -372,6 +372,14 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async differenceUpdates(): Promise<void> {
+    if (this.state.localState.pts >= (2 ** 31)) {
+      texts.Sentry.captureMessage('[Telegram] pts > 2^31')
+      return
+    }
+    if (this.state.localState.date >= (2 ** 31)) {
+      texts.Sentry.captureMessage('[Telegram] date > 2^31')
+      return
+    }
     const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: this.state.localState.pts, date: this.state.localState.date }))
     const processDiff = (state: Api.updates.TypeState, diff: Api.updates.Difference | Api.updates.DifferenceSlice) => {
       this.state.localState = {
