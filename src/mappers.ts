@@ -250,6 +250,7 @@ export default class TelegramMapper {
         activityType: ActivityType.NONE,
       }
     }
+    texts.Sentry.captureMessage(`[Telegram] unsupported activity ${update.action.className}`)
     texts.log('unsupported activity', update.action.className, update.action)
   }
 
