@@ -5,7 +5,7 @@ import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack } from '@textshq/platform-sdk'
-import { debounce } from 'lodash'
+import { debounce, uniqBy } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
 import { Api } from 'telegram/tl'
@@ -255,13 +255,10 @@ export default class TelegramAPI implements PlatformAPI {
   private emitMessage = (message: Api.Message | Api.MessageService) => {
     const threadID = getPeerId(message.peerId)
     const thread = this.state.dialogs.get(threadID)
-    if (thread.isChannel) { // all participants not sent
-      this.emitParticipantFromMessages(threadID, [message])
-    }
+    if (thread?.isChannel) this.emitParticipantsFromMessages(threadID, [message])
     const readOutboxMaxId = thread?.dialog.readOutboxMaxId
     const mappedMessage = this.mapper.mapMessage(message, readOutboxMaxId)
     if (!mappedMessage) return
-    // this.emitParticipantFromMessages(threadID, [message.senderId])
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -644,25 +641,17 @@ export default class TelegramAPI implements PlatformAPI {
     }])
   }
 
-  private emitParticipantFromMessages = async (dialogId: string, messages: CustomMessage[]) => {
+  private emitParticipantsFromMessages = async (threadID: string, messages: CustomMessage[]) => {
     const users = await Promise.all(messages.map(m => m.getSender()))
-    // const { adminIds } = await this.getDialogAdmins(dialogId)
-    const mapped = users.map(entity => (entity instanceof Api.User ? this.mapper.mapUser(entity) : undefined)).filter(Boolean)
-    this.upsertParticipants(dialogId, mapped)
+    // const { adminIds } = await this.getDialogAdmins(threadID)
+    const mapped = uniqBy(users.map(entity => (entity instanceof Api.User ? this.mapper.mapUser(entity) : undefined)).filter(Boolean), 'id')
+    this.upsertParticipants(threadID, mapped)
   }
-
-  // private emitParticipantsFromMessages = async (messages: CustomMessage[]) => {
-  //   const withUserId = messages.filter(msg => (msg.fromId && 'userId' in msg.fromId)
-  //     || (msg.action && 'users' in msg.action))
-  //   Object.values(groupBy(withUserId, 'chatId'))
-  //     // @ts-expect-error
-  //     .forEach(msg => this.emitParticipantFromMessages(String((m: { chatId: any }[]) => m[0].chatId), msg.map(m => m.fromId.chatId)))
-  // }
 
   private emitParticipants = async (dialog: Dialog) => {
     if (!dialog.id) return
     const dialogId = String(dialog.id)
-    const limit = 1024
+    const limit = dialog.isChannel ? 256 : 1024
     // const { adminIds, admins } = await this.getDialogAdmins(dialogId)
     const members: TotalList<Api.User> = await (() => {
       try {
@@ -878,10 +867,10 @@ export default class TelegramAPI implements PlatformAPI {
     const replies = await this.getMessageReplies(BigInteger(threadID), messages)
     replies.forEach(this.storeMessage)
     messages.push(...replies)
-    const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
+    const thread = this.state.dialogs.get(threadID)
+    const readOutboxMaxId = thread?.dialog.readOutboxMaxId
     const items = this.mapper.mapMessages(messages, readOutboxMaxId)
-    // TODO: fix hack
-    // setTimeout(() => this.emitParticipantsFromMessages(messages), 100)
+    if (thread?.isChannel) this.emitParticipantsFromMessages(threadID, messages)
     return {
       items,
       hasMore: messages.length !== 0,
@@ -897,12 +886,11 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   onThreadSelected = async (threadID: string): Promise<void> => {
-    texts.log('onThreadSelected', threadID)
     if (!threadID) return
     if (!this.state.hasFetchedParticipantsForDialog.get(threadID)) {
       const dialog = this.state.dialogs.get(threadID)
       if (!dialog) return
-      texts.log(`Emitting participants for selected thread ${dialog?.title || dialog?.id}`)
+      texts.log(`onThreadSelected: emitting participants for ${dialog?.title || dialog?.id}`)
       this.state.hasFetchedParticipantsForDialog.set(threadID, true)
       this.emitParticipants(dialog)
     }
