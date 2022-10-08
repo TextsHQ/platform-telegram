@@ -611,7 +611,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (!this.pendingEvents.length) return
     this.onServerEvent(this.pendingEvents)
     this.pendingEvents = []
-  }, 300)
+  }, 200)
 
   private dialogToParticipantIdsUpdate = (threadID: string, participantIds: Iterable<string>) => {
     const set = this.state.dialogIdToParticipantIds.get(threadID)
