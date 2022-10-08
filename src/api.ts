@@ -258,7 +258,6 @@ export default class TelegramAPI implements PlatformAPI {
     const mappedMessage = this.mapper.mapMessage(message, readOutboxMaxId)
     if (!mappedMessage) return
     // this.emitParticipantFromMessages(threadID, [message.senderId])
-    if (!mappedMessage) return
     const event: ServerEvent = {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'upsert',
@@ -857,6 +856,7 @@ export default class TelegramAPI implements PlatformAPI {
   getMessage = async (threadID: string, messageID: string) => {
     await this.waitForClientConnected()
     const msg = await this.client.getMessages(threadID, { ids: [+messageID] })
+    if (!msg[0]) return
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
     this.storeMessage(msg[0])
     return this.mapper.mapMessage(msg[0], readOutboxMaxId)
