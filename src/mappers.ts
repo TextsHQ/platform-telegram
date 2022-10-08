@@ -324,12 +324,12 @@ export default class TelegramMapper {
   }
 
   mapReactions = (reactions: Api.MessageReactions) => {
-    function mapReactionKey(reaction: Api.TypeReaction) {
+    const mapReactionKey = (reaction: Api.TypeReaction) => {
       if (reaction instanceof Api.ReactionEmoji) return reaction.emoticon.replace('❤', '❤️')
       if (reaction instanceof Api.ReactionCustomEmoji) return String(reaction.documentId)
     }
     if (!reactions.recentReactions && !reactions.results) return
-    function mapReaction(reaction: Api.TypeReaction, participantID: string, reactionKey: string) {
+    const mapReaction = (reaction: Api.TypeReaction, participantID: string, reactionKey: string) => {
       if (reaction instanceof Api.ReactionEmpty) return
       return {
         id: participantID + reactionKey,
