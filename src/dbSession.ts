@@ -42,8 +42,8 @@ export class DbSession extends Session {
     );`
     );
 
-    CREATE UNIQUE INDEX entity_idx_username ON entity (username);
-    CREATE UNIQUE INDEX entity_idx_phone ON entity (phone);
+    CREATE INDEX entity_idx_username ON entity (username);
+    CREATE INDEX entity_idx_phone ON entity (phone);
     CREATE INDEX entity_idx_name ON entity (name);
   `
 
