@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-throw-literal */
-import { randomBytes } from 'crypto'
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
@@ -126,11 +124,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
-    this.dbFileName = session as string || randomBytes(8).toString('hex')
+    this.dbFileName = session as string || 'db'
 
     const dbPath = path.join(accountInfo.dataDirPath, this.dbFileName + '.sqlite')
-    this.dbSession = new DbSession({ dbPath })
-    await this.dbSession.init()
+    this.dbSession = new DbSession(dbPath)
+    await this.dbSession.initPromise
 
     this.client = new CustomClient(this.dbSession, API_ID, API_HASH, {
       retryDelay: 1_000,

@@ -7,7 +7,7 @@ import { Session } from 'telegram/sessions'
 import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { texts } from '@textshq/platform-sdk'
 import { promises as fsp } from 'fs'
-import { dirname } from 'path'
+import path from 'path'
 import Database, { Statement } from 'better-sqlite3'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
@@ -20,36 +20,39 @@ interface EntityObject {
   name?: string
 }
 
+const SCHEMA_MIGRATIONS = [
+  `PRAGMA journal_mode=wal;
+
+  CREATE TABLE IF NOT EXISTS session (
+      dc_id integer not null primary key,
+      address text,
+      port integer,
+      auth blob
+  );
+
+  CREATE TABLE IF NOT EXISTS entity (
+      id text not null primary key,
+      hash text,
+      username text,
+      phone text,
+      name text
+  );
+
+  DROP TABLE IF EXISTS version;
+  CREATE INDEX IF NOT EXISTS entity_idx_username ON entity (username);
+  CREATE INDEX IF NOT EXISTS entity_idx_phone ON entity (phone);
+  CREATE INDEX IF NOT EXISTS entity_idx_name ON entity (name);
+  `,
+]
+
 export class DbSession extends Session {
-  private sessionSchema = `
-    CREATE TABLE version (version integer primary key);
-
-    CREATE TABLE session (
-        dc_id integer not null primary key,
-        address text,
-        port integer,
-        auth blob
-    );
-
-    CREATE TABLE entity (
-        id text not null primary key,
-        hash text,
-        username text,
-        phone text,
-        name text
-    );`
-
   private db: Database.Database
 
-  private dbPath: string
+  private readonly statementCache = new Map<string, Statement>()
 
-  private statementCache: Map<string, Statement>
-
-  private version = 1
+  protected _dcId = 0
 
   protected _serverAddress?: string
-
-  protected _dcId: number
 
   protected _port?: number
 
@@ -59,14 +62,22 @@ export class DbSession extends Session {
 
   private _key?: Buffer
 
-  constructor({ dbPath }: { dbPath: string }) {
+  initPromise: Promise<void>
+
+  private async updateSchema() {
+    // this should be 0 when new
+    const currentSchemaVersion: number = this.db.prepare('PRAGMA user_version').pluck().get()
+    let i = currentSchemaVersion
+    for (const schemaMigration of SCHEMA_MIGRATIONS.slice(currentSchemaVersion)) {
+      texts.log('tg', { currentSchemaVersion, schemaMigration })
+      this.db.exec(schemaMigration)
+      this.db.exec(`PRAGMA user_version = ${++i}`)
+    }
+  }
+
+  constructor(private readonly dbPath: string) {
     super()
-    this._serverAddress = undefined
-    this._dcId = 0
-    this._port = undefined
-    this._takeoutId = undefined
-    this.dbPath = dbPath
-    this.statementCache = new Map<string, Statement>()
+    this.initPromise = this.init()
   }
 
   private prepareCache = (sql: string): Statement => {
@@ -143,26 +154,11 @@ export class DbSession extends Session {
     this._port = port
   }
 
-  private createTables = async () => {
-    this.db.exec(this.sessionSchema)
-    this.prepareCache('insert into version values (?)').run(this.version)
-  }
-
-  async init() {
-    try {
-      await fsp.stat(dirname(this.dbPath))
-    } catch {
-      await fsp.mkdir(dirname(this.dbPath))
-    }
+  private async init() {
+    await fsp.mkdir(path.dirname(this.dbPath), { recursive: true })
     this.db = new Database(this.dbPath, {})
-    texts.log(`load DB path: ${this.dbPath}`)
-    if (
-      !(this.prepareCache(
-        'select name from sqlite_master where type = ? and name = ?',
-      ).get('table', 'version'))
-    ) {
-      await this.createTables()
-    }
+    texts.log('tg', this.dbPath)
+    this.updateSchema()
     const session = await this.prepareCache('select * from session').get()
     if (!session) return
     this._dcId = session.dc_id
