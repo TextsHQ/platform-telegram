@@ -107,7 +107,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private me: Api.User
 
-  private dbSession: DbSession
+  private db: DbSession
 
   private dbFileName: string
 
@@ -127,10 +127,10 @@ export default class TelegramAPI implements PlatformAPI {
     this.dbFileName = session as string || 'db'
 
     const dbPath = path.join(accountInfo.dataDirPath, this.dbFileName + '.sqlite')
-    this.dbSession = new DbSession(dbPath)
-    await this.dbSession.initPromise
+    this.db = new DbSession(dbPath)
+    await this.db.initPromise
 
-    this.client = new CustomClient(this.dbSession, API_ID, API_HASH, {
+    this.client = new CustomClient(this.db, API_ID, API_HASH, {
       retryDelay: 1_000,
       autoReconnect: true,
       connectionRetries: Infinity,
@@ -218,7 +218,7 @@ export default class TelegramAPI implements PlatformAPI {
         }
         case AuthState.READY: {
           texts.log('telegram.login: READY')
-          this.dbSession.save()
+          this.db.save()
           await this.afterLogin()
           return { type: 'success' }
         }
@@ -1107,7 +1107,7 @@ export default class TelegramAPI implements PlatformAPI {
         texts.log(`Download attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
         await this.downloadAsset(filePath, type, assetId, entityId)
       } catch (err) {
-        texts.error('Error downloading media', err.message)
+        texts.error('Error downloading media', err)
         texts.Sentry.captureException(err)
       }
     }

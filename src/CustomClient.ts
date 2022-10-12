@@ -1,13 +1,10 @@
+import { setTimeout as sleep } from 'timers/promises'
 import { texts } from '@textshq/platform-sdk'
 import { Api, errors, TelegramClient } from 'telegram'
-import { setTimeout as sleep } from 'timers/promises'
 import type { MTProtoSender } from 'telegram/network'
 
 export class CustomClient extends TelegramClient {
-  override async invoke<R extends Api.AnyRequest>(
-    request: R,
-    sender?: MTProtoSender,
-  ): Promise<R['__response']> {
+  override async invoke<R extends Api.AnyRequest>(request: R, sender?: MTProtoSender): Promise<R['__response']> {
     try {
       const result = await super.invoke(request, sender)
       return result

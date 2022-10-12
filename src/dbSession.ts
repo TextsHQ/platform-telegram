@@ -1,14 +1,16 @@
+// db version of https://github.com/gram-js/gramjs/blob/master/gramjs/sessions/Memory.ts
+import { promises as fsp } from 'fs'
+import path from 'path'
 import bigInt from 'big-integer'
 import { isArrayLike } from 'lodash'
+import Database, { Statement } from 'better-sqlite3'
+import { texts } from '@textshq/platform-sdk'
+
 import { utils } from 'telegram'
 import { Api } from 'telegram/tl'
 import { returnBigInt } from 'telegram/Helpers'
 import { Session } from 'telegram/sessions'
 import { getDisplayName, getPeerId } from 'telegram/Utils'
-import { texts } from '@textshq/platform-sdk'
-import { promises as fsp } from 'fs'
-import path from 'path'
-import Database, { Statement } from 'better-sqlite3'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
 
@@ -62,7 +64,7 @@ export class DbSession extends Session {
 
   private _key?: Buffer
 
-  initPromise: Promise<void>
+  readonly initPromise: Promise<void>
 
   private async updateSchema() {
     // this should be 0 when new
@@ -138,15 +140,15 @@ export class DbSession extends Session {
   }
 
   save() {
-    this.prepareCache('delete from session').run()
     if (this.authKey?.getKey() && this.serverAddress && this.port) {
-      this.prepareCache('insert into session (dc_id, address, port, auth) values (?,?,?,?)')
+      this.prepareCache('insert or replace into session (dc_id, address, port, auth) values (?,?,?,?)')
         .run(this.dcId, this.serverAddress, this.port, this.authKey.getKey())
     }
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  delete(): void {}
+  delete(): void {
+    // do nothing since only called on logout() and the entire directory is deleted
+  }
 
   setDC(dcId: number, serverAddress: string, port: number) {
     this._dcId = dcId | 0
@@ -200,7 +202,7 @@ export class DbSession extends Session {
 
     const stmt = this.prepareCache('insert or replace into entity (id, hash, username, phone, name) VALUES (?,?,?,?,?)')
     for (const e of entities) {
-      const entityObject: EntityObject = this.entityObject(e)
+      const entityObject = this.entityObject(e)
       if (entityObject) {
         stmt.run(entityObject.id, entityObject.hash, entityObject.username, entityObject.phone, entityObject.name)
       }
@@ -236,7 +238,7 @@ export class DbSession extends Session {
       getPeerId(new Api.PeerChat({ chatId: returnBigInt(id) })),
       getPeerId(new Api.PeerChannel({ channelId: returnBigInt(id) })),
     ]
-    return this.prepareCache('select * from entity where id IN(?)').get(ids)
+    return this.prepareCache('select * from entity where id IN (?)').get(ids)
   }
 
   getInputEntity(key: EntityLike): Api.TypeInputPeer {
@@ -249,9 +251,7 @@ export class DbSession extends Session {
       && entityKey.SUBCLASS_OF_ID
     ) {
       if (
-        // TypeInputPeer
-        // TypeInputPeer
-        // TypeInputChannel
+        // https://github.com/gram-js/gramjs/blob/6f7568c8ff38a7491d2ed6d1563205b691a9b56e/gramjs/sessions/Memory.ts#L239-L241
         entityKey.SUBCLASS_OF_ID === 0xc91c90b6
         || entityKey.SUBCLASS_OF_ID === 0xe669bf46
         || entityKey.SUBCLASS_OF_ID === 0x40f202fd
@@ -277,7 +277,7 @@ export class DbSession extends Session {
     ) {
       entityKey = entityKey.toString()
     }
-    let result
+    let result: any
     if (typeof entityKey === 'string') {
       const phone = utils.parsePhone(entityKey)
       if (phone) {
