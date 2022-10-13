@@ -1164,14 +1164,22 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getStickerPacks = async (): Promise<Paginated<StickerPack>> => {
-    // todo cache
-    const allStickers = await this.client.invoke(new Api.messages.GetAllStickers({}))
-    if (allStickers instanceof Api.messages.AllStickersNotModified) throw Error('AllStickersNotModified') // wont happen
+    const cachedGetAllStickers = this.db.cacheGet<Api.messages.AllStickers>('GetAllStickers')
+    const networkAllStickers = await this.client.invoke(new Api.messages.GetAllStickers(cachedGetAllStickers ? { hash: BigInteger(cachedGetAllStickers.hash) } : {}))
+    const isCached = networkAllStickers instanceof Api.messages.AllStickersNotModified
+    const allStickers = isCached ? cachedGetAllStickers.value : networkAllStickers
+    if (!isCached) this.db.cacheSet('GetAllStickers', allStickers.hash, networkAllStickers.getBytes())
     return {
       items: await Promise.all(allStickers.sets.map(async ss => {
-        // todo cache
-        const set = await this.client.invoke(new Api.messages.GetStickerSet({ stickerset: new Api.InputStickerSetID({ accessHash: ss.accessHash, id: ss.id }) }))
-        if (set instanceof Api.messages.StickerSetNotModified) return // wont happen
+        const cacheKey = `GetStickerSet_${ss.id}`
+        const cachedGetStickerSet = this.db.cacheGet<Api.messages.StickerSet>(cacheKey)
+        const networkSet = await this.client.invoke(new Api.messages.GetStickerSet({
+          stickerset: new Api.InputStickerSetID({ accessHash: ss.accessHash, id: ss.id }),
+          ...(cachedGetStickerSet ? { hash: +cachedGetStickerSet.hash } : {}),
+        }))
+        const isCachedSet = networkSet instanceof Api.messages.StickerSetNotModified
+        const set = isCachedSet ? cachedGetStickerSet.value : networkSet
+        if (!isCachedSet) this.db.cacheSet(cacheKey, networkSet.set.hash, networkSet.getBytes())
         const stickers = set.documents.map(document => {
           if (document instanceof Api.DocumentEmpty) return
           this.state.mediaStore.set('sticker_' + document.id.toString(), new Api.MessageMediaDocument({ document }))

@@ -10,6 +10,7 @@ import { utils } from 'telegram'
 import { Api } from 'telegram/tl'
 import { returnBigInt } from 'telegram/Helpers'
 import { Session } from 'telegram/sessions'
+import { BinaryReader } from 'telegram/extensions/BinaryReader'
 import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
@@ -26,25 +27,31 @@ const SCHEMA_MIGRATIONS = [
   `PRAGMA journal_mode=wal;
 
   CREATE TABLE IF NOT EXISTS session (
-      dc_id integer not null primary key,
-      address text,
-      port integer,
-      auth blob
+    dc_id INTEGER NOT NULL PRIMARY KEY,
+    address TEXT,
+    port INTEGER,
+    auth BLOB
   );
 
   CREATE TABLE IF NOT EXISTS entity (
-      id text not null primary key,
-      hash text,
-      username text,
-      phone text,
-      name text
+    id TEXT NOT NULL PRIMARY KEY,
+    hash TEXT,
+    username TEXT,
+    phone TEXT,
+    name TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS cache (
+    key TEXT NOT NULL PRIMARY KEY,
+    hash TEXT NOT NULL,
+    value BLOB NOT NULL,
+    created_timestamp INTEGER NOT NULL
   );
 
   DROP TABLE IF EXISTS version;
   CREATE INDEX IF NOT EXISTS entity_idx_username ON entity (username);
   CREATE INDEX IF NOT EXISTS entity_idx_phone ON entity (phone);
-  CREATE INDEX IF NOT EXISTS entity_idx_name ON entity (name);
-  `,
+  CREATE INDEX IF NOT EXISTS entity_idx_name ON entity (name);`,
 ]
 
 export class DbSession extends Session {
@@ -317,9 +324,16 @@ export class DbSession extends Session {
           accessHash,
         })
       }
-    } else {
-      throw new Error('Could not find input entity with key ' + entityKey)
     }
     throw new Error('Could not find input entity with key ' + entityKey)
+  }
+
+  cacheGet<T>(key: string) {
+    const row = this.prepareCache('select hash,value from cache where key = ?').raw().get(key)
+    if (row) return { hash: row[0] as string, value: new BinaryReader(row[1]).tgReadObject() as T }
+  }
+
+  cacheSet<T>(key: string, hash: number | bigInt.BigInteger, value: T) {
+    this.prepareCache('insert or replace into cache values (?,?,?,?)').run(key, String(hash), value, Date.now())
   }
 }
