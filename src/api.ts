@@ -1164,21 +1164,21 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getStickerPacks = async (): Promise<Paginated<StickerPack>> => {
-    const cachedGetAllStickers = this.db.cacheGet<Api.messages.AllStickers>('GetAllStickers')
-    const networkAllStickers = await this.client.invoke(new Api.messages.GetAllStickers(cachedGetAllStickers ? { hash: BigInteger(cachedGetAllStickers.hash) } : {}))
+    const cachedGetAllStickersHash = this.db.cacheGetHash('GetAllStickers')
+    const networkAllStickers = await this.client.invoke(new Api.messages.GetAllStickers(cachedGetAllStickersHash ? { hash: BigInteger(cachedGetAllStickersHash) } : {}))
     const isCached = networkAllStickers instanceof Api.messages.AllStickersNotModified
-    const allStickers = isCached ? cachedGetAllStickers.value : networkAllStickers
+    const allStickers = isCached ? this.db.cacheGetValue<Api.messages.AllStickers>('GetAllStickers') : networkAllStickers
     if (!isCached) this.db.cacheSet('GetAllStickers', allStickers.hash, networkAllStickers.getBytes())
     return {
       items: await Promise.all(allStickers.sets.map(async ss => {
         const cacheKey = `GetStickerSet_${ss.id}`
-        const cachedGetStickerSet = this.db.cacheGet<Api.messages.StickerSet>(cacheKey)
+        const cachedGetStickerSetHash = this.db.cacheGetHash(cacheKey)
         const networkSet = await this.client.invoke(new Api.messages.GetStickerSet({
           stickerset: new Api.InputStickerSetID({ accessHash: ss.accessHash, id: ss.id }),
-          ...(cachedGetStickerSet ? { hash: +cachedGetStickerSet.hash } : {}),
+          ...(cachedGetStickerSetHash ? { hash: +cachedGetStickerSetHash } : {}),
         }))
         const isCachedSet = networkSet instanceof Api.messages.StickerSetNotModified
-        const set = isCachedSet ? cachedGetStickerSet.value : networkSet
+        const set = isCachedSet ? this.db.cacheGetValue<Api.messages.StickerSet>(cacheKey) : networkSet
         if (!isCachedSet) this.db.cacheSet(cacheKey, networkSet.set.hash, networkSet.getBytes())
         const stickers = set.documents.map(document => {
           if (document instanceof Api.DocumentEmpty) return

@@ -43,7 +43,7 @@ const SCHEMA_MIGRATIONS = [
 
   CREATE TABLE IF NOT EXISTS cache (
     key TEXT NOT NULL PRIMARY KEY,
-    hash TEXT NOT NULL,
+    hash TEXT,
     value BLOB NOT NULL,
     created_timestamp INTEGER NOT NULL
   );
@@ -311,26 +311,34 @@ export class DbSession extends Session {
       const kind = resolved[1]
       const accessHash = returnBigInt(result.hash)
       // removes the mark and returns type of entity
-      if (kind === Api.PeerUser) {
-        return new Api.InputPeerUser({
-          userId: entityId,
-          accessHash,
-        })
-      } if (kind === Api.PeerChat) {
-        return new Api.InputPeerChat({ chatId: entityId })
-      } if (kind === Api.PeerChannel) {
-        return new Api.InputPeerChannel({
-          channelId: entityId,
-          accessHash,
-        })
+      switch (kind) {
+        case Api.PeerUser:
+          return new Api.InputPeerUser({
+            userId: entityId,
+            accessHash,
+          })
+        case Api.PeerChat:
+          return new Api.InputPeerChat({ chatId: entityId })
+        case Api.PeerChannel:
+          return new Api.InputPeerChannel({
+            channelId: entityId,
+            accessHash,
+          })
+        default:
+          break
       }
     }
     throw new Error('Could not find input entity with key ' + entityKey)
   }
 
-  cacheGet<T>(key: string) {
-    const row = this.prepareCache('select hash,value from cache where key = ?').raw().get(key)
-    if (row) return { hash: row[0] as string, value: new BinaryReader(row[1]).tgReadObject() as T }
+  cacheGetHash(key: string): string {
+    const hash = this.prepareCache('select hash from cache where key = ?').pluck().get(key)
+    return hash
+  }
+
+  cacheGetValue<T>(key: string) {
+    const value = this.prepareCache('select value from cache where key = ?').pluck().get(key)
+    if (value) return new BinaryReader(value).tgReadObject() as T
   }
 
   cacheSet<T>(key: string, hash: number | bigInt.BigInteger, value: T) {
