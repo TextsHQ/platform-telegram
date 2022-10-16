@@ -370,7 +370,7 @@ export default class TelegramMapper {
     const mappedResults = results.results
       ? `${results.results.map((result, index) => [
         result.chosen ? '✔️' : ' ',
-        `${((result.voters / (results.totalVoters || result.voters || 1)) * 100).toString().padStart(6)}% — `,
+        `${((result.voters / (results.totalVoters || result.voters || 1)) * 100).toFixed(1).padStart(6)}% — `,
         pollAnswers[index],
         `(${result.voters})`,
       ].filter(Boolean).join('\t')).join('\n')}`
