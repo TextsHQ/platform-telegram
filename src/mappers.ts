@@ -1,5 +1,5 @@
 import { Message, Thread, User, AttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size, StickerPack, Attachment } from '@textshq/platform-sdk'
-import { addSeconds } from 'date-fns'
+import { addSeconds, subDays } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
 import mime from 'mime-types'
@@ -155,24 +155,20 @@ export default class TelegramMapper {
   static mapUserPresence(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresence {
     const presence: UserPresence = {
       userID: getMarkedId({ userId }),
-      lastActive: undefined,
       status: 'offline',
     }
-    const oneDay = 24 * 3600 * 1000
     if (status instanceof Api.UserStatusOnline) {
       presence.status = 'online'
       presence.lastActive = new Date()
-    } else if (status instanceof Api.UserStatusRecently) {
-      presence.status = 'online'
-      presence.lastActive = new Date(Date.now() - 3600 * 1000)
-    } else if (status instanceof Api.UserStatusLastWeek) {
-      presence.lastActive = new Date(Date.now() - 7 * oneDay)
-    } else if (status instanceof Api.UserStatusLastMonth) {
-      presence.lastActive = new Date(Date.now() - 30 * oneDay)
     } else if (status instanceof Api.UserStatusOffline) {
       presence.lastActive = new Date(status.wasOnline * 1000)
+    } else if (status instanceof Api.UserStatusLastWeek) {
+      presence.lastActive = subDays(new Date(), 7)
+    } else if (status instanceof Api.UserStatusLastMonth) {
+      presence.lastActive = subDays(new Date(), 30)
+    } else if (status instanceof Api.UserStatusRecently) {
+      // can't map
     }
-
     return presence
   }
 
