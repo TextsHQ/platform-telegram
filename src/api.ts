@@ -834,16 +834,6 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  private getMessageReplies = async (dialogId: BigInteger.BigInteger, messages: Api.Message[]) => {
-    const replyToMessages: Api.Message[] = []
-    const currentIds = messages.map(msg => msg.id)
-    const unloadedReplies = messages.filter(m => m.replyToMsgId && !currentIds.includes(m.replyToMsgId)).map(m => m.replyToMsgId)
-    for await (const msg of this.client.iterMessages(dialogId, { ids: unloadedReplies })) {
-      if (msg) replyToMessages.push(msg)
-    }
-    return replyToMessages
-  }
-
   getMessage = async (threadID: string, messageID: string) => {
     await this.waitForClientConnected()
     const msg = await this.client.getMessages(threadID, { ids: [+messageID] })
@@ -863,9 +853,6 @@ export default class TelegramAPI implements PlatformAPI {
       this.storeMessage(msg)
       messages.push(msg)
     }
-    const replies = await this.getMessageReplies(BigInteger(threadID), messages)
-    replies.forEach(this.storeMessage)
-    messages.push(...replies)
     const thread = this.state.dialogs.get(threadID)
     const readOutboxMaxId = thread?.dialog.readOutboxMaxId
     const items = this.mapper.mapMessages(messages, readOutboxMaxId)
