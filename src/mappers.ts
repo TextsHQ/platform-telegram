@@ -1,4 +1,4 @@
-import { Message, Thread, User, AttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size, StickerPack, Attachment } from '@textshq/platform-sdk'
+import { Message, Thread, User, AttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size, StickerPack, Attachment, AttachmentWithURL } from '@textshq/platform-sdk'
 import { addSeconds, subDays } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
@@ -426,30 +426,6 @@ export default class TelegramMapper {
       mapped.text = msgText
       mapped.textAttributes = TelegramMapper.mapTextAttributes(msgText, msgEntities)
     }
-    const pushSticker = (sticker: Api.Document, messageId: number) => {
-      const isWebm = sticker.mimeType === 'video/webm'
-      const isTgs = sticker.mimeType === 'application/x-tgsticker'
-      const animated = isTgs || isWebm
-      const sizeAttribute = sticker.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
-      const size: Size = {
-        width: sizeAttribute?.w || 100,
-        height: sizeAttribute?.h || 100,
-      }
-      mapped.attachments ||= []
-      mapped.attachments.push({
-        id: String(sticker.id),
-        srcURL: this.getMediaUrl(sticker.id, messageId, sticker.mimeType),
-        mimeType: sticker.mimeType,
-        type: isWebm ? AttachmentType.VIDEO : AttachmentType.IMG,
-        isGif: true,
-        isSticker: true,
-        size,
-        fileSize: sticker.size?.toJSNumber(),
-        extra: {
-          loop: animated,
-        },
-      })
-    }
 
     const mapMessageMedia = () => {
       if (msg.media instanceof Api.MessageMediaPhoto) {
@@ -464,75 +440,6 @@ export default class TelegramMapper {
           type: AttachmentType.IMG,
           size: photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
         })
-      } else if (msg.video) {
-        if (msg.video.attributes.find(a => a.className === 'DocumentAttributeSticker')) {
-          // new animated stickers are webm
-          pushSticker(msg.video, msg.id)
-        } else {
-          mapped.attachments ||= []
-          const { video } = msg
-          const documentAttribute = video.attributes.find(a => a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeVideo
-          let size = documentAttribute ? { width: documentAttribute.w, height: documentAttribute.h } : undefined
-          if (documentAttribute && 'duration' in documentAttribute && !documentAttribute.duration && size?.height === 1 && size?.width === 1) {
-            // Telegram will send videos twice
-            // 1st time doesn't have a duration or w/h - presumably this is to "loading" preview
-            // need too ignore height
-            size = undefined
-          }
-          mapped.attachments.push({
-            id: String(video.id),
-            srcURL: this.getMediaUrl(video.id, msg.id, video.mimeType),
-            type: AttachmentType.VIDEO,
-            fileName: video.accessHash.toString(),
-            mimeType: video.mimeType,
-            size,
-            fileSize: video.size?.toJSNumber(),
-          })
-        }
-      } else if (msg.audio) {
-        const { audio } = msg
-        mapped.attachments ||= []
-        mapped.attachments.push({
-          id: String(audio.id),
-          srcURL: this.getMediaUrl(audio.id, msg.id, audio.mimeType),
-          type: AttachmentType.AUDIO,
-          fileName: audio.accessHash.toString(),
-          mimeType: audio.mimeType,
-          fileSize: audio.size?.toJSNumber(),
-        })
-      } else if (msg.videoNote) {
-        const { videoNote } = msg
-        mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
-        mapped.attachments ||= []
-        mapped.attachments.push({
-          id: String(videoNote.id),
-          srcURL: this.getMediaUrl(videoNote.id, msg.id, videoNote.mimeType),
-          type: AttachmentType.VIDEO,
-          fileSize: videoNote.size?.toJSNumber(),
-        })
-      } else if (msg.voice) {
-        const { voice } = msg
-        mapped.attachments ||= []
-        mapped.attachments.push({
-          id: String(voice.id),
-          srcURL: this.getMediaUrl(voice.id, msg.id, voice.mimeType),
-          type: AttachmentType.AUDIO,
-          fileSize: voice.size?.toJSNumber(),
-        })
-      } else if (msg.gif) {
-        const animation = msg.gif
-        const sizeAttribute = animation.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
-        mapped.attachments ||= []
-        mapped.attachments.push({
-          id: String(animation.id),
-          srcURL: this.getMediaUrl(animation.id, msg.id, animation.mimeType),
-          type: AttachmentType.VIDEO,
-          isGif: true,
-          fileName: animation.accessHash.toString(),
-          fileSize: animation.size.toJSNumber(),
-          mimeType: animation.mimeType,
-          size: sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
-        })
       } else if (msg.contact) {
         const { contact } = msg
         const vcard = contact.vcard ? contact.vcard : new VCard().addName(contact.lastName, contact.firstName).addPhoneNumber(contact.phoneNumber).buildVCard()
@@ -544,23 +451,49 @@ export default class TelegramMapper {
           fileName: ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.phoneNumber) + '.vcf',
         })
       } else if (msg.document) {
-        const { document } = msg
-        if (document.mimeType === 'application/x-tgsticker' || document.attributes.find(a => a instanceof Api.DocumentAttributeSticker)) {
-          pushSticker(msg.document, msg.id)
-        } else {
-          const sizeAttribute = document.attributes.find(a => a instanceof Api.DocumentAttributeImageSize || a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeImageSize | Api.DocumentAttributeVideo
-          const fileName = document.attributes.find(a => a instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename
-          mapped.attachments ||= []
-          mapped.attachments.push({
-            id: String(document.id),
-            type: AttachmentType.UNKNOWN,
-            srcURL: this.getMediaUrl(document.id, msg.id, document.mimeType),
-            fileName: fileName ? fileName.fileName : undefined,
-            size: sizeAttribute ? { height: sizeAttribute.h, width: sizeAttribute.w } : undefined,
-            mimeType: document.mimeType,
-            fileSize: document.size.toJSNumber(),
-          })
+        const doc = msg.document
+        const fileNameAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename
+        const audioAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeAudio) as Api.DocumentAttributeAudio
+        const stickerAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeSticker) as Api.DocumentAttributeSticker
+        const videoAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeVideo
+        const animatedAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeAnimated) as Api.DocumentAttributeAnimated
+        const attachment: AttachmentWithURL = {
+          id: String(doc.id),
+          type: AttachmentType.UNKNOWN,
+          fileSize: doc.size.toJSNumber(),
+          fileName: fileNameAttr?.fileName || doc.accessHash.toString(),
+          mimeType: doc.mimeType,
+          srcURL: this.getMediaUrl(doc.id, msg.id, doc.mimeType),
         }
+        if (stickerAttr) {
+          const isWebm = doc.mimeType === 'video/webm'
+          const isTgs = doc.mimeType === 'application/x-tgsticker'
+          const animated = isTgs || isWebm
+          const sizeAttribute = doc.attributes.find(a => a instanceof Api.DocumentAttributeImageSize) as Api.DocumentAttributeImageSize || videoAttr
+          attachment.type = isWebm ? AttachmentType.VIDEO : AttachmentType.IMG
+          attachment.isSticker = true
+          attachment.isGif = true
+          attachment.extra = { ...mapped.extra, loop: animated }
+          attachment.size = sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : { width: undefined, height: 100 }
+        }
+        if (audioAttr) {
+          attachment.type = AttachmentType.AUDIO
+          attachment.isVoiceNote = audioAttr.voice
+        }
+        if (videoAttr) {
+          attachment.type = AttachmentType.VIDEO
+          attachment.size = { width: videoAttr.w, height: videoAttr.h }
+          // see fixtures/DocumentAttributeVideo.json
+          if (!videoAttr.duration && attachment.size.height === 1 && attachment.size.width === 1) {
+            attachment.size = undefined
+          }
+          if (videoAttr.roundMessage) {
+            mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
+          }
+        }
+        if (animatedAttr) attachment.isGif = true
+        mapped.attachments ||= []
+        mapped.attachments.push(attachment)
       } else if (msg.dice) {
         if (mapped.textHeading) mapped.textHeading += '\n'
         else mapped.textHeading = ''
@@ -763,7 +696,7 @@ export default class TelegramMapper {
     const mapped: User = {
       id: String(user.id),
       username: user.username,
-      fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
+      fullName: [user.firstName, user.lastName].filter(Boolean).join(' ') || (user.deleted ? 'Deleted Account' : undefined),
     }
     if (user.photo instanceof Api.UserProfilePhoto) mapped.imgURL = this.getProfilePhotoUrl(user.photo.photoId, user.id)
     if (user.phone) mapped.phoneNumber = '+' + user.phone
