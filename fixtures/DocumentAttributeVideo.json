@@ -1,0 +1,137 @@
+{
+  "message": {
+    "id": "35536",
+    "timestamp": "2022-10-10T22:31:26.000Z",
+    "forwardedCount": 0,
+    "senderID": "54920706",
+    "isSender": false,
+    "expiresInSeconds": null,
+    "seen": true,
+    "text": "AC has done a pretty good job\nToolbar also feels indistinguishable from native",
+    "reactions": [
+      {
+        "id": "290386249❤️",
+        "participantID": "290386249",
+        "emoji": true,
+        "reactionKey": "❤️"
+      }
+    ],
+    "attachments": [
+      {
+        "id": "5343864306150678888",
+        "type": "video",
+        "fileSize": 1634550,
+        "fileName": "Screen Recording 2022-10-11 at 00.30.20.mov",
+        "mimeType": "video/quicktime",
+        "srcURL": "asset://telegram_53d6bd65019189b82c97a6faa8e681eb/media/5343864306150678888/qt/35536"
+      }
+    ]
+  },
+  "original": [
+    {
+      "flags": 3179008,
+      "out": false,
+      "mentioned": false,
+      "mediaUnread": false,
+      "silent": false,
+      "post": false,
+      "fromScheduled": false,
+      "legacy": false,
+      "editHide": true,
+      "pinned": false,
+      "noforwards": false,
+      "id": 35536,
+      "fromId": null,
+      "peerId": {
+        "userId": "54920706",
+        "className": "PeerUser"
+      },
+      "fwdFrom": null,
+      "viaBotId": null,
+      "replyTo": null,
+      "date": 1665441086,
+      "message": "AC has done a pretty good job\nToolbar also feels indistinguishable from native",
+      "media": {
+        "flags": 1,
+        "nopremium": false,
+        "document": {
+          "flags": 0,
+          "id": "5343864306150678888",
+          "accessHash": "-6612441458555649569",
+          "fileReference": "data:;base64,AQAAitBjUvnX5FVDlkjJTiy3cbcqcM+5lQ==",
+          "date": 1665441086,
+          "mimeType": "video/quicktime",
+          "size": "1634550",
+          "thumbs": null,
+          "videoThumbs": null,
+          "dcId": 2,
+          "attributes": [
+            {
+              "flags": 2,
+              "roundMessage": false,
+              "supportsStreaming": true,
+              "duration": 0,
+              "w": 1,
+              "h": 1,
+              "className": "DocumentAttributeVideo"
+            },
+            {
+              "fileName": "Screen Recording 2022-10-11 at 00.30.20.mov",
+              "className": "DocumentAttributeFilename"
+            }
+          ],
+          "className": "Document"
+        },
+        "ttlSeconds": null,
+        "className": "MessageMediaDocument"
+      },
+      "replyMarkup": null,
+      "entities": null,
+      "views": null,
+      "forwards": null,
+      "replies": null,
+      "editDate": 1665441129,
+      "postAuthor": null,
+      "groupedId": null,
+      "reactions": {
+        "flags": 2,
+        "min": false,
+        "canSeeList": false,
+        "results": [
+          {
+            "flags": 1,
+            "chosenOrder": 0,
+            "reaction": {
+              "emoticon": "❤",
+              "className": "ReactionEmoji"
+            },
+            "count": 1,
+            "className": "ReactionCount"
+          }
+        ],
+        "recentReactions": [
+          {
+            "flags": 0,
+            "big": false,
+            "unread": false,
+            "peerId": {
+              "userId": "290386249",
+              "className": "PeerUser"
+            },
+            "reaction": {
+              "emoticon": "❤",
+              "className": "ReactionEmoji"
+            },
+            "className": "MessagePeerReaction"
+          }
+        ],
+        "className": "MessageReactions"
+      },
+      "restrictionReason": null,
+      "ttlPeriod": null,
+      "className": "Message"
+    },
+    "MessageMediaDocument",
+    null
+  ]
+}
