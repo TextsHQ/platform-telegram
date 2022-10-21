@@ -452,11 +452,18 @@ export default class TelegramMapper {
         })
       } else if (msg.document) {
         const doc = msg.document
-        const fileNameAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeFilename) as Api.DocumentAttributeFilename
-        const audioAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeAudio) as Api.DocumentAttributeAudio
-        const stickerAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeSticker) as Api.DocumentAttributeSticker
-        const videoAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeVideo) as Api.DocumentAttributeVideo
-        const animatedAttr = doc.attributes.find(a => a instanceof Api.DocumentAttributeAnimated) as Api.DocumentAttributeAnimated
+        let fileNameAttr: Api.DocumentAttributeFilename
+        let audioAttr: Api.DocumentAttributeAudio
+        let videoAttr: Api.DocumentAttributeVideo
+        let stickerAttr: Api.DocumentAttributeSticker
+        let animatedAttr: Api.DocumentAttributeAnimated
+        for (const attr of doc.attributes) {
+          if (attr instanceof Api.DocumentAttributeFilename) fileNameAttr = attr
+          else if (attr instanceof Api.DocumentAttributeAudio) audioAttr = attr
+          else if (attr instanceof Api.DocumentAttributeSticker) stickerAttr = attr
+          else if (attr instanceof Api.DocumentAttributeVideo) videoAttr = attr
+          else if (attr instanceof Api.DocumentAttributeAnimated) animatedAttr = attr
+        }
         const attachment: AttachmentWithURL = {
           id: String(doc.id),
           type: AttachmentType.UNKNOWN,
