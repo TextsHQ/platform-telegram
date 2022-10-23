@@ -589,7 +589,7 @@ export default class TelegramAPI implements PlatformAPI {
       this.me ||= await this.client.getMe() as Api.User
     } catch (err) {
       texts.error(JSON.stringify(err, null, 2))
-      if (err.code === 401 && err.errorMessage === 'AUTH_KEY_UNREGISTERED') throw new ReAuthError()
+      if (err.code === 401 && err.errorMessage === 'AUTH_KEY_UNREGISTERED') throw new ReAuthError(err.message ?? err.errorMessage)
       else throw err
     }
     this.mapper = new TelegramMapper(this.accountInfo.accountID, this.me)
