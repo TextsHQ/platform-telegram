@@ -286,7 +286,7 @@ export default class TelegramMapper {
     `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${entityId}`
 
   getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
-    `asset://${this.accountID}/photos/${assetId.xor(userId)}/png/${userId}`
+    `asset://${this.accountID}/photos/${assetId.xor(userId)}/jpg/${userId}`
 
   mapMessageLink(webPage: Api.TypeWebPage, entityId: string | number) {
     if (!(webPage instanceof Api.WebPage)) return
@@ -299,7 +299,7 @@ export default class TelegramMapper {
       imgSize: undefined,
     }
     if (photo instanceof Api.Photo) {
-      link.img = this.getMediaUrl(photo.id, entityId, 'image/png')
+      link.img = this.getMediaUrl(photo.id, entityId, 'image/jpg')
       const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize
       link.imgSize = photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
     }
@@ -432,11 +432,10 @@ export default class TelegramMapper {
         const { photo } = msg
         if (!photo) return
         const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize : undefined
-        // setting to 'image/png' seems fine as other formats are sent as "Api.Document"
         mapped.attachments ||= []
         mapped.attachments.push({
           id: String(photo.id),
-          srcURL: this.getMediaUrl(photo.id, msg.id, 'image/png'),
+          srcURL: this.getMediaUrl(photo.id, msg.id, 'image/jpg'),
           type: AttachmentType.IMG,
           size: photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
         })
