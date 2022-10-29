@@ -140,13 +140,14 @@ export class DbSession extends Session {
     }
 
     this.authKey = authKey
+    this.save()
   }
 
   close(): void {
     this.db.close()
   }
 
-  save() {
+  async save() {
     if (this.authKey?.getKey() && this.serverAddress && this.port) {
       this.prepareCache('insert or replace into session (dc_id, address, port, auth) values (?,?,?,?)')
         .run(this.dcId, this.serverAddress, this.port, this.authKey.getKey())
