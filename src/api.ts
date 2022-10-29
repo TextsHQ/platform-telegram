@@ -712,6 +712,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   dispose = async () => {
+    this.db.close()
     await this.client?.destroy()
   }
 
