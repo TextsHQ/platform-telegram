@@ -35,14 +35,14 @@ function getUnmarkedId(unmarked: UnmarkedId) {
 export default class TelegramMapper {
   constructor(private readonly accountID: string, private readonly me: Api.User) { }
 
-  static* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {
+  private static* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {
     if (interactionInfo?.views) yield `${interactionInfo!.views.toLocaleString()} ${interactionInfo!.views === 1 ? 'view' : 'views'}`
     if (interactionInfo?.forwards) yield `${interactionInfo!.forwards.toLocaleString()} ${interactionInfo!.forwards === 1 ? 'forward' : 'forwards'}`
   }
 
-  static mapTextFooter = (interactionInfo: Api.MessageInteractionCounters) => [...TelegramMapper.getTextFooter(interactionInfo)].join(' · ')
+  private static mapTextFooter = (interactionInfo: Api.MessageInteractionCounters) => [...TelegramMapper.getTextFooter(interactionInfo)].join(' · ')
 
-  static transformOffset(text: string, entities: TextEntity[]) {
+  private static transformOffset(text: string, entities: TextEntity[]) {
     const arr = Array.from(text)
     let strCursor = 0
     let arrCursor = 0
@@ -57,7 +57,7 @@ export default class TelegramMapper {
     return entities
   }
 
-  static fixLinkProtocol(link: string) {
+  private static fixLinkProtocol(link: string) {
     try {
       new URL(link)
       return link
@@ -67,7 +67,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes | undefined {
+  private static mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes | undefined {
     if (!entities || entities.length === 0) return
     return {
       entities: TelegramMapper.transformOffset(text, entities.map<TextEntity>(e => {
@@ -124,7 +124,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapCallReason(reason: Api.TypePhoneCall | Api.TypePhoneCallDiscardReason) {
+  private static mapCallReason(reason: Api.TypePhoneCall | Api.TypePhoneCallDiscardReason) {
     if (reason instanceof Api.PhoneCallAccepted) return 'Accepted'
     if (reason instanceof Api.PhoneCallWaiting) return 'Waiting'
     if (reason instanceof Api.PhoneCallRequested) return 'Requested'
@@ -136,7 +136,7 @@ export default class TelegramMapper {
     return `Call reason unmapped ${reason}`
   }
 
-  static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, threadID: string, messageID: number) {
+  private static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, threadID: string, messageID: number) {
     switch (row.className) {
       case 'KeyboardButtonUrl':
       case 'KeyboardButtonUrlAuth':
@@ -172,7 +172,7 @@ export default class TelegramMapper {
     return presence
   }
 
-  static mapUserPresenceEvent(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
+  private static mapUserPresenceEvent(userId: bigInt.BigInteger, status: Api.TypeUserStatus): UserPresenceEvent {
     const presence = this.mapUserPresence(userId, status)
     return {
       type: ServerEventType.USER_PRESENCE_UPDATED,
@@ -180,7 +180,7 @@ export default class TelegramMapper {
     }
   }
 
-  static mapUserAction(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping): UserActivityEvent {
+  private static mapUserAction(update: Api.UpdateUserTyping | Api.UpdateChatUserTyping | Api.UpdateChannelUserTyping): UserActivityEvent {
     const [threadID, participantID] = (() => {
       if (update instanceof Api.UpdateUserTyping) return [update.userId, update.userId] // these don't need to be marked
       if (update instanceof Api.UpdateChatUserTyping) return [getMarkedId({ chatId: update.chatId }), getPeerId(update.fromId)]
@@ -250,7 +250,7 @@ export default class TelegramMapper {
     texts.log('unsupported activity', update.action.className, update.action)
   }
 
-  getMessageButtons(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number) {
+  private getMessageButtons(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number) {
     if (!replyMarkup) return
     switch (replyMarkup.className) {
       case 'ReplyInlineMarkup':
@@ -279,13 +279,13 @@ export default class TelegramMapper {
     }
   }
 
-  getCustomEmojiUrl = (id: bigInt.BigInteger) =>
+  private getCustomEmojiUrl = (id: bigInt.BigInteger) =>
     `asset://${this.accountID}/emoji/${id}/tgs/${id}.tgs`
 
-  getMediaUrl = (id: bigInt.BigInteger, entityId: string | number, mimeType: string) =>
+  private getMediaUrl = (id: bigInt.BigInteger, entityId: string | number, mimeType: string) =>
     `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${entityId}`
 
-  getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
+  private getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
     `asset://${this.accountID}/photos/${assetId.xor(userId)}/jpg/${userId}`
 
   mapMessageLink(webPage: Api.TypeWebPage, entityId: string | number) {
@@ -306,7 +306,7 @@ export default class TelegramMapper {
     return link
   }
 
-  mapMessageUpdateText(messageID: string, newContent: Api.Message) {
+  private mapMessageUpdateText(messageID: string, newContent: Api.Message) {
     if ('text' in newContent) {
       return {
         id: messageID,
@@ -319,13 +319,13 @@ export default class TelegramMapper {
     }
   }
 
-  mapReactions = (reactions: Api.MessageReactions) => {
+  private mapReactions = (reactions: Api.MessageReactions) => {
     const mapReactionKey = (reaction: Api.TypeReaction) => {
       if (reaction instanceof Api.ReactionEmoji) return reaction.emoticon.replace('❤', '❤️')
       if (reaction instanceof Api.ReactionCustomEmoji) return String(reaction.documentId)
     }
     if (!reactions.recentReactions && !reactions.results) return
-    const mapReaction = (reaction: Api.TypeReaction, participantID: string, reactionKey: string) => {
+    const mapReaction = (reaction: Api.TypeReaction, participantID: string, reactionKey: string): MessageReaction => {
       if (reaction instanceof Api.ReactionEmpty) return
       return {
         id: participantID + reactionKey,
@@ -359,7 +359,7 @@ export default class TelegramMapper {
     return [...mappedReactions, ...mappedReactionResults].filter(Boolean)
   }
 
-  static mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
+  private static mapPoll({ poll, results }: { poll: Api.TypePoll, results: Api.TypePollResults }) {
     if (!poll || !results) return
     const pollAnswers = poll.answers.map(a => a.text)
     const isQuiz = poll.quiz
@@ -716,7 +716,7 @@ export default class TelegramMapper {
     isAdmin: adminIds?.has(user.id?.toString()),
   })
 
-  static mapMuteUntil = (seconds: number) => {
+  private static mapMuteUntil = (seconds: number) => {
     if (seconds >= MUTED_FOREVER_CONSTANT) return 'forever'
     if (seconds === 0) return
     return addSeconds(new Date(), seconds)
