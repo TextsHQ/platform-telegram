@@ -352,7 +352,9 @@ export default class TelegramMapper {
         .map<MessageReaction>(index => mapReaction(r.reaction, String(index), reactionKey))
       // chosen = Whether the current user sent this reaction
       if (r.chosenOrder != null && reactionResult.length) {
-        reactionResult[reactionResult.length - 1].participantID = String(this.me.id)
+        const lastReaction = reactionResult[reactionResult.length - 1]
+        lastReaction.participantID = String(this.me.id)
+        lastReaction.id = lastReaction.participantID + lastReaction.reactionKey
       }
       return reactionResult
     }) ?? []
