@@ -218,8 +218,8 @@ export default class TelegramAPI implements PlatformAPI {
         }
         case AuthState.READY: {
           texts.log('telegram.login: READY')
-          this.db.save()
-          this.db.close()
+          await this.client.disconnect()
+          await this.client.connect()
           await this.afterLogin()
           return { type: 'success' }
         }
@@ -585,7 +585,6 @@ export default class TelegramAPI implements PlatformAPI {
 
   private afterLogin = async () => {
     // await this.emptyAssets()
-    this.db.load()
     await this.createAssetsDir()
     try {
       this.me ||= await this.client.getMe() as Api.User
