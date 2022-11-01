@@ -14,6 +14,7 @@
   "dependencies": {
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#371330e6b91adffa4540728701433ed5030267a4",
     "async-mutex": "^0.3.2",
+    "better-sqlite3": "https://github.com/neoxpert/better-sqlite3.git",
     "big-integer": "^1.6.51",
     "date-fns": "^2.29.3",
     "lodash": "^4.17.21",

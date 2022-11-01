@@ -3,7 +3,6 @@ import { promises as fsp } from 'fs'
 import path from 'path'
 import bigInt from 'big-integer'
 import { isArrayLike } from 'lodash'
-import Database, { Statement } from 'better-sqlite3'
 import { texts } from '@textshq/platform-sdk'
 
 import { utils } from 'telegram'
@@ -14,6 +13,8 @@ import { BinaryReader } from 'telegram/extensions/BinaryReader'
 import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { EntityLike } from 'telegram/define'
+
+import Database, { Statement } from 'better-sqlite3'
 
 interface EntityObject {
   id: string
@@ -55,7 +56,7 @@ const SCHEMA_MIGRATIONS = [
 ]
 
 export class DbSession extends Session {
-  private db: Database.Database
+  private db
 
   private readonly statementCache = new Map<string, Statement>()
 
@@ -167,6 +168,7 @@ export class DbSession extends Session {
   private async init() {
     await fsp.mkdir(path.dirname(this.dbPath), { recursive: true })
     this.db = new Database(this.dbPath, {})
+    this.db.pragma('journal_mode = DELETE')
     texts.log('tg', this.dbPath)
     this.updateSchema()
     const session = await this.prepareCache('select * from session').get()
