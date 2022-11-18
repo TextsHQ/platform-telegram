@@ -219,7 +219,6 @@ export default class TelegramAPI implements PlatformAPI {
         }
         case AuthState.READY: {
           texts.log('telegram.login: READY')
-          this.db.save()
           await this.afterLogin()
           return { type: 'success' }
         }
