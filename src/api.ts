@@ -109,8 +109,6 @@ export default class TelegramAPI implements PlatformAPI {
 
   private db: DbSession
 
-  private dbFileName: string
-
   private state: TelegramState = {
     localState: { updateMutex: new Mutex(), date: 0, pts: 0 },
     dialogs: new Map<string, Dialog>(),
@@ -124,9 +122,12 @@ export default class TelegramAPI implements PlatformAPI {
 
   init = async (session: string | undefined, accountInfo: AccountInfo) => {
     this.accountInfo = accountInfo
-    this.dbFileName = session as string || 'db'
 
-    const dbPath = path.join(accountInfo.dataDirPath, this.dbFileName + '.sqlite')
+    const dbPath = path.join(accountInfo.dataDirPath, 'db.sqlite')
+    if (session && session !== 'db') { // legacy migration for existing accounts
+      await fsp.rename(path.join(accountInfo.dataDirPath, session + '.sqlite'), dbPath)
+    }
+
     this.db = new DbSession(dbPath)
     await this.db.initPromise
 
@@ -728,7 +729,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.onServerEvent = onServerEvent
   }
 
-  serializeSession = () => this.dbFileName
+  serializeSession = () => 'db'
 
   searchUsers = async (query: string) => {
     const res = await this.client.invoke(new Api.contacts.Search({ q: query }))
