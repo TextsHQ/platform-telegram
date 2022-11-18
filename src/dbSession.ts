@@ -148,6 +148,7 @@ export class DbSession extends Session {
 
   save() {
     if (this.authKey?.getKey() && this.serverAddress && this.port) {
+      this.prepareCache('delete from session').run()
       this.prepareCache('insert or replace into session (dc_id, address, port, auth) values (?,?,?,?)')
         .run(this.dcId, this.serverAddress, this.port, this.authKey.getKey())
     }
