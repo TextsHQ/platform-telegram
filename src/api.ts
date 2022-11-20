@@ -19,7 +19,7 @@ import type { FileLike } from 'telegram/define'
 
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
-import TelegramMapper, { getMarkedId } from './mappers'
+import TelegramMapper, { getMarkedId, STICKER_PREFIX } from './mappers'
 import { fileExists, stringifyCircular } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
@@ -835,13 +835,17 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  getMessage = async (threadID: string, messageID: string) => {
+  private getUnmappedMessage = async (threadID: string, messageID: string) => {
     await this.waitForClientConnected()
     const msg = await this.client.getMessages(threadID, { ids: [+messageID] })
-    if (!msg[0]) return
+    return msg[0]
+  }
+
+  getMessage = async (threadID: string, messageID: string) => {
+    const msg = await this.getUnmappedMessage(threadID, messageID)
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
-    this.storeMessage(msg[0])
-    return this.mapper.mapMessage(msg[0], readOutboxMaxId)
+    this.storeMessage(msg)
+    return this.mapper.mapMessage(msg, readOutboxMaxId)
   }
 
   getMessages = async (threadID: string, pagination: PaginationArg): Promise<Paginated<Message>> => {
@@ -886,7 +890,7 @@ export default class TelegramAPI implements PlatformAPI {
   sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
     const { text, stickerID } = msgContent
     const file = stickerID
-      ? this.state.mediaStore.get('sticker_' + stickerID) as Api.MessageMediaDocument
+      ? this.state.mediaStore.get(STICKER_PREFIX + stickerID) as Api.MessageMediaDocument
       : getFileFromMessageContent(msgContent)
     const msgSendParams: SendMessageParams = {
       parseMode: 'md',
@@ -1049,41 +1053,46 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.getMe()
   }
 
-  private getAssetPath = (assetType: AssetType, assetId: string, extension: string) =>
-    path.join(this.accountInfo.dataDirPath, assetType, `${assetId}.${extension}`)
+  private getAssetPath = (assetType: AssetType, fileName: string) =>
+    path.join(this.accountInfo.dataDirPath, assetType, fileName)
 
-  private async downloadAsset(filePath: string, type: AssetType, assetId: string, entityId: string) {
+  private async downloadAsset(filePath: string, type: AssetType, id: string, fileName: string) {
     switch (type) {
       case 'emoji': {
-        const [document] = await this.client.invoke(new Api.messages.GetCustomEmojiDocuments({ documentId: [BigInteger(assetId)] }))
+        const [document] = await this.client.invoke(new Api.messages.GetCustomEmojiDocuments({ documentId: [BigInteger(id)] }))
         if (document instanceof Api.DocumentEmpty) throw Error('custom emoji is doc empty')
         await this.client.downloadMedia(new Api.MessageMediaDocument({ document }), { outputFile: filePath })
         return
       }
       case 'media': {
-        const media = this.state.mediaStore.get(entityId)
-        if (!media) throw Error('message media not found')
+        const [threadID, messageID] = id.split('_')
+        const [key] = fileName.split('.')
+        const media = this.state.mediaStore.get(key) || (await this.getUnmappedMessage(threadID, messageID))?.media
+        if (!media) {
+          console.log(`${type}/${id}/${fileName}`)
+          throw Error('message media not found')
+        }
         await this.client.downloadMedia(media, { outputFile: filePath })
-        if (!entityId.startsWith('sticker_')) this.state.mediaStore.delete(entityId)
+        if (!key.startsWith(STICKER_PREFIX)) this.state.mediaStore.delete(key)
         return
       }
       case 'photos': {
-        await this.client.downloadProfilePhoto(entityId, { outputFile: filePath })
+        const [key] = fileName.split('.')
+        await this.client.downloadProfilePhoto(key, { outputFile: filePath })
         return
       }
       default:
         break
     }
 
-    throw Error(`telegram getAsset: No buffer or path for media ${type}/${assetId}/${entityId}/${entityId}`)
+    throw Error(`telegram getAsset: No buffer or path for media ${type}/${id}/${fileName}`)
   }
 
-  getAsset = async (_: GetAssetOptions, type: AssetType, assetId: string, extension: string, entityId: string/* , extra?: string */) => {
-    // texts.log(type, assetId, extension, entityId, extra)
+  getAsset = async (_: GetAssetOptions, type: AssetType, id: string, fileName: string) => {
     if (!ASSET_TYPES.includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
-    const filePath = this.getAssetPath(type, assetId, extension)
+    const filePath = this.getAssetPath(type, fileName)
 
     for (let attempt = 0; attempt !== MAX_DOWNLOAD_ATTEMPTS; attempt++) {
       try {
@@ -1094,7 +1103,7 @@ export default class TelegramAPI implements PlatformAPI {
           texts.Sentry.captureMessage('[Telegram] File was zero bytes')
         }
         texts.log(`Download attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
-        await this.downloadAsset(filePath, type, assetId, entityId)
+        await this.downloadAsset(filePath, type, id, fileName)
       } catch (err) {
         texts.error('Error downloading media', err)
         texts.Sentry.captureException(err)
@@ -1171,7 +1180,7 @@ export default class TelegramAPI implements PlatformAPI {
         if (!isCachedSet) this.db.cacheSet(cacheKey, networkSet.set.hash, networkSet.getBytes())
         const stickers = set.documents.map(document => {
           if (document instanceof Api.DocumentEmpty) return
-          this.state.mediaStore.set('sticker_' + document.id.toString(), new Api.MessageMediaDocument({ document }))
+          this.state.mediaStore.set(STICKER_PREFIX + document.id.toString(), new Api.MessageMediaDocument({ document }))
           return this.mapper.mapSticker(document)
         }).filter(Boolean)
         return TelegramMapper.mapStickerPack(ss, stickers)

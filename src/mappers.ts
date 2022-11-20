@@ -13,6 +13,8 @@ import type { Entity } from 'telegram/define'
 import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
+export const STICKER_PREFIX = 'sticker_'
+
 type UnmarkedId = { userId: bigInt.BigInteger } | { chatId: bigInt.BigInteger } | { channelId: bigInt.BigInteger }
 
 export function getMarkedId(unmarked: UnmarkedId) {
@@ -279,16 +281,18 @@ export default class TelegramMapper {
     }
   }
 
-  private getCustomEmojiUrl = (id: bigInt.BigInteger) =>
-    `asset://${this.accountID}/emoji/${id}/tgs/${id}.tgs`
+  // asset://$accountID/$mediaType/$someID/$fileName
 
-  private getMediaUrl = (id: bigInt.BigInteger, entityId: string | number, mimeType: string) =>
-    `asset://${this.accountID}/media/${id}/${mime.extension(mimeType) || 'bin'}/${entityId}`
+  private getCustomEmojiUrl = (id: bigInt.BigInteger) =>
+    `asset://${this.accountID}/emoji/${id}/${id}.tgs`
+
+  private getMediaUrl = (threadID: string, messageID: number, key: string | number, mimeType: string) =>
+    `asset://${this.accountID}/media/${threadID}_${messageID}/${key}.${mime.extension(mimeType) || 'bin'}`
 
   private getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
-    `asset://${this.accountID}/photos/${assetId.xor(userId)}/jpg/${userId}`
+    `asset://${this.accountID}/photos/${assetId.xor(userId)}/${userId}.jpg`
 
-  mapMessageLink(webPage: Api.TypeWebPage, entityId: string | number) {
+  mapMessageLink(webPage: Api.TypeWebPage, key: string | number) {
     if (!(webPage instanceof Api.WebPage)) return
     const { url, title, description, photo } = webPage
     const link: MessageLink = {
@@ -299,7 +303,7 @@ export default class TelegramMapper {
       imgSize: undefined,
     }
     if (photo instanceof Api.Photo) {
-      link.img = this.getMediaUrl(photo.id, entityId, 'image/jpg')
+      link.img = this.getMediaUrl(null, null, key, 'image/jpg')
       const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize
       link.imgSize = photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
     }
@@ -384,7 +388,7 @@ export default class TelegramMapper {
     }
     return {
       id: sticker.id.toString(),
-      srcURL: this.getMediaUrl(sticker.id, 'sticker_' + sticker.id.toString(), sticker.mimeType),
+      srcURL: this.getMediaUrl(null, null, STICKER_PREFIX + sticker.id.toString(), sticker.mimeType),
       type: sticker.mimeType.startsWith('video/') ? AttachmentType.VIDEO : AttachmentType.IMG,
       mimeType: sticker.mimeType,
       size,
@@ -405,6 +409,7 @@ export default class TelegramMapper {
   }
 
   mapMessage(msg: CustomMessage | Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
+    const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
     const isThreadSender = msg.sender?.className.includes('Chat') || msg.sender?.className.includes('Channel')
     const senderID = isThreadSender
@@ -437,7 +442,7 @@ export default class TelegramMapper {
         mapped.attachments ||= []
         mapped.attachments.push({
           id: String(photo.id),
-          srcURL: this.getMediaUrl(photo.id, msg.id, 'image/jpg'),
+          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, 'image/jpg'),
           type: AttachmentType.IMG,
           size: photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
         })
@@ -471,7 +476,7 @@ export default class TelegramMapper {
           fileSize: doc.size.toJSNumber(),
           fileName: fileNameAttr?.fileName || doc.accessHash.toString(),
           mimeType: doc.mimeType,
-          srcURL: this.getMediaUrl(doc.id, msg.id, doc.mimeType),
+          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, doc.mimeType),
         }
         if (stickerAttr) {
           const isWebm = doc.mimeType === 'video/webm'
