@@ -967,6 +967,7 @@ export default class TelegramMapper {
   }
 
   mapUpdateMessageReactions(update: Api.UpdateMessageReactions, threadID: string): StateSyncEvent {
+    if (!threadID) return
     return {
       type: ServerEventType.STATE_SYNC,
       mutationType: 'update',
