@@ -647,7 +647,7 @@ export default class TelegramMapper {
         mapped.text = `Group "${title}" was migrated`
         mapped.isAction = true
       } else if (msg.action instanceof Api.MessageActionCustomAction) {
-        mapped.text = msg.text
+        mapped.text = msg.action.message
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionPaymentSent) {
