@@ -463,6 +463,7 @@ export default class TelegramMapper {
         let videoAttr: Api.DocumentAttributeVideo
         let stickerAttr: Api.DocumentAttributeSticker
         let animatedAttr: Api.DocumentAttributeAnimated
+        const sizeAttribute = doc.attributes.find(a => a instanceof Api.DocumentAttributeImageSize) as Api.DocumentAttributeImageSize || videoAttr
         for (const attr of doc.attributes) {
           if (attr instanceof Api.DocumentAttributeFilename) fileNameAttr = attr
           else if (attr instanceof Api.DocumentAttributeAudio) audioAttr = attr
@@ -477,17 +478,17 @@ export default class TelegramMapper {
           fileName: fileNameAttr?.fileName || doc.accessHash.toString(),
           mimeType: doc.mimeType,
           srcURL: this.getMediaUrl(threadID, msg.id, msg.id, doc.mimeType),
+          size: sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined,
         }
         if (stickerAttr) {
           const isWebm = doc.mimeType === 'video/webm'
           const isTgs = doc.mimeType === 'application/x-tgsticker'
           const animated = isTgs || isWebm
-          const sizeAttribute = doc.attributes.find(a => a instanceof Api.DocumentAttributeImageSize) as Api.DocumentAttributeImageSize || videoAttr
           attachment.type = isWebm ? AttachmentType.VIDEO : AttachmentType.IMG
           attachment.isSticker = true
           attachment.isGif = true
           attachment.extra = { ...mapped.extra, loop: animated }
-          attachment.size = sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : { width: undefined, height: 100 }
+          attachment.size ||= { width: undefined, height: 100 }
         }
         if (audioAttr) {
           attachment.type = AttachmentType.AUDIO
