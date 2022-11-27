@@ -844,6 +844,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   getMessage = async (threadID: string, messageID: string) => {
     const msg = await this.getUnmappedMessage(threadID, messageID)
+    if (!msg) return
     const readOutboxMaxId = this.state.dialogs.get(threadID)?.dialog.readOutboxMaxId
     this.storeMessage(msg)
     return this.mapper.mapMessage(msg, readOutboxMaxId)
