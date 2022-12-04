@@ -286,8 +286,8 @@ export default class TelegramMapper {
   private getCustomEmojiUrl = (id: bigInt.BigInteger) =>
     `asset://${this.accountID}/emoji/${id}/${id}.tgs`
 
-  private getMediaUrl = (threadID: string, messageID: number, key: string | number, mimeType: string) =>
-    `asset://${this.accountID}/media/${threadID}_${messageID}/${key}.${mime.extension(mimeType) || 'bin'}`
+  private getMediaUrl = (threadID: string, messageID: number, key: string | number, extension: string) =>
+    `asset://${this.accountID}/media/${threadID}_${messageID}/${key}.${extension}`
 
   private getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
     `asset://${this.accountID}/photos/${assetId.xor(userId)}/${userId}.jpg`
@@ -303,7 +303,7 @@ export default class TelegramMapper {
       imgSize: undefined,
     }
     if (photo instanceof Api.Photo) {
-      link.img = this.getMediaUrl(null, null, key, 'image/jpg')
+      link.img = this.getMediaUrl(null, null, key, 'jpg')
       const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize
       link.imgSize = photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
     }
@@ -388,7 +388,7 @@ export default class TelegramMapper {
     }
     return {
       id: sticker.id.toString(),
-      srcURL: this.getMediaUrl(null, null, STICKER_PREFIX + sticker.id.toString(), sticker.mimeType),
+      srcURL: this.getMediaUrl(null, null, STICKER_PREFIX + sticker.id.toString(), mime.extension(sticker.mimeType) || 'bin'),
       type: sticker.mimeType.startsWith('video/') ? AttachmentType.VIDEO : AttachmentType.IMG,
       mimeType: sticker.mimeType,
       size,
@@ -442,7 +442,7 @@ export default class TelegramMapper {
         mapped.attachments ||= []
         mapped.attachments.push({
           id: String(photo.id),
-          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, 'image/jpg'),
+          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, 'jpg'),
           type: AttachmentType.IMG,
           size: photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
         })
@@ -477,7 +477,7 @@ export default class TelegramMapper {
           fileSize: doc.size.toJSNumber(),
           fileName: fileNameAttr?.fileName || doc.accessHash.toString(),
           mimeType: doc.mimeType,
-          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, doc.mimeType),
+          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, mime.extension(doc.mimeType) || 'bin'),
           size: sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined,
         }
         if (stickerAttr) {
