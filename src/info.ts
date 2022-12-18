@@ -1,22 +1,23 @@
 import { MessageDeletionMode, PlatformInfo, Attribute } from '@textshq/platform-sdk'
 import type { SupportedReaction } from '@textshq/platform-sdk'
 
-const REACTIONS: Record<string, SupportedReaction> = {
-  '👍': { title: 'Thumbs Up', render: '👍' },
-  '👎': { title: 'Thumbs Down', render: '👎' },
-  '❤️': { title: 'Red Heart', render: '❤️' },
-  '🔥': { title: 'Fire', render: '🔥' },
-  '🥰': { title: 'Smiling Face with Hearts', render: '🥰' },
-  '🎉': { title: 'Party Popper', render: '🎉' },
-  '🤩': { title: 'Star-Struck', render: '🤩' },
-  '😱': { title: 'Screaming Face', render: '😱' },
-  '😁': { title: 'Beaming Face', render: '😁' },
-  '🤔': { title: 'Thinking Face', render: '🤔' },
-  '🤯': { title: 'Exploding Head', render: '🤯' },
-  '😢': { title: 'Crying Face', render: '😢' },
-  '🤬': { title: 'Face with Symbols on Mouth', render: '🤬' },
-  '💩': { title: 'Pile of Poo', render: '💩' },
-  '🤮': { title: 'Face Vomiting', render: '🤮' },
+const reactions: Record<string, SupportedReaction> = {
+  '👍': { title: '👍', render: '👍' },
+  '👎': { title: '👎', render: '👎' },
+  '❤️': { title: '❤️', render: '❤️' },
+  '🔥': { title: '🔥', render: '🔥' },
+  '🥰': { title: '🥰', render: '🥰' },
+  '💯': { title: '💯', render: '💯' },
+  '🎉': { title: '🎉', render: '🎉' },
+  '🤩': { title: '🤩', render: '🤩' },
+  '😱': { title: '😱', render: '😱' },
+  '😁': { title: '😁', render: '😁' },
+  '🤔': { title: '🤔', render: '🤔' },
+  '🤯': { title: '🤯', render: '🤯' },
+  '😢': { title: '😢', render: '😢' },
+  '🤬': { title: '🤬', render: '🤬' },
+  '💩': { title: '💩', render: '💩' },
+  '🤮': { title: '🤮', render: '🤮' },
 }
 
 const info: PlatformInfo = {
@@ -75,7 +76,7 @@ const info: PlatformInfo = {
     },
   },
   reactions: {
-    supported: REACTIONS,
+    supported: reactions,
     allowsMultipleReactionsToSingleMessage: false,
   },
   notifications: {
