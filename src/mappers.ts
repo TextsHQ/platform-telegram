@@ -475,7 +475,7 @@ export default class TelegramMapper {
           id: String(doc.id),
           type: AttachmentType.UNKNOWN,
           fileSize: doc.size.toJSNumber(),
-          fileName: fileNameAttr?.fileName || doc.accessHash.toString(),
+          fileName: fileNameAttr?.fileName,
           mimeType: doc.mimeType,
           srcURL: this.getMediaUrl(threadID, msg.id, msg.id, mime.extension(doc.mimeType) || 'bin'),
           size: sizeAttribute ? { width: sizeAttribute.w, height: sizeAttribute.h } : undefined,
