@@ -750,7 +750,8 @@ export default class TelegramMapper {
       type: isSingle ? 'single' : isChannel ? 'channel' : 'group',
       // isPinned: dialog.pinned,
       isArchived: dialog.archived,
-      timestamp: new Date(dialog.date * 1000),
+      // if last (and first) message is "X joined Telegram", set undefined timestamp which will hide the thread on client
+      timestamp: dialog.message?.action instanceof Api.MessageActionContactSignUp ? undefined : new Date(dialog.date * 1000),
       isUnread: dialog.unreadCount !== 0,
       isReadOnly,
       lastReadMessageID: String(dialog.message?.out ? dialog.dialog.readOutboxMaxId : dialog.dialog.readInboxMaxId),
