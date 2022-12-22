@@ -908,7 +908,7 @@ export default class TelegramMapper {
         entries: [
           {
             id: String(update.userId),
-            username: update.username,
+            username: update.usernames[0]?.username,
             fullName: [update.firstName, update.lastName].filter(Boolean).join(' '),
           },
         ],

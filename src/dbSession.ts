@@ -13,6 +13,7 @@ import { Session } from 'telegram/sessions'
 import { BinaryReader } from 'telegram/extensions/BinaryReader'
 import { getDisplayName, getPeerId } from 'telegram/Utils'
 import { AuthKey } from 'telegram/crypto/AuthKey'
+import { LAYER } from 'telegram/tl/AllTLObjects'
 import type { EntityLike } from 'telegram/define'
 
 interface EntityObject {
@@ -23,15 +24,16 @@ interface EntityObject {
   name?: string
 }
 
-const SCHEMA_MIGRATIONS = [
-  `PRAGMA journal_mode=wal;
+function migrateSessionTable(db: Database.Database) {
+  const session = db.prepare('select * from session').get()
+  if (!session) return
+  db.prepare('insert into key_values values ("dc_id", ?), ("address", ?), ("port", ?), ("auth", ?)')
+    .run(session.dc_id, session.address, session.port, Buffer.from(session.auth).toString('base64'))
+  db.prepare('drop table if exists session').run()
+}
 
-  CREATE TABLE IF NOT EXISTS session (
-    dc_id INTEGER NOT NULL PRIMARY KEY,
-    address TEXT,
-    port INTEGER,
-    auth BLOB
-  );
+const SCHEMA_MIGRATIONS: [string, ((db: Database.Database) => void)?][] = [
+  [`PRAGMA journal_mode=wal;
 
   CREATE TABLE IF NOT EXISTS entity (
     id TEXT NOT NULL PRIMARY KEY,
@@ -51,7 +53,11 @@ const SCHEMA_MIGRATIONS = [
   DROP TABLE IF EXISTS version;
   CREATE INDEX IF NOT EXISTS entity_idx_username ON entity (username);
   CREATE INDEX IF NOT EXISTS entity_idx_phone ON entity (phone);
-  CREATE INDEX IF NOT EXISTS entity_idx_name ON entity (name);`,
+  CREATE INDEX IF NOT EXISTS entity_idx_name ON entity (name);`],
+  [`CREATE TABLE IF NOT EXISTS key_values (
+    key TEXT NOT NULL PRIMARY KEY,
+    value JSON NOT NULL
+  );`, migrateSessionTable],
 ]
 
 export class DbSession extends Session {
@@ -77,10 +83,11 @@ export class DbSession extends Session {
     // this should be 0 when new
     const currentSchemaVersion: number = this.db.prepare('PRAGMA user_version').pluck().get()
     let i = currentSchemaVersion
-    for (const schemaMigration of SCHEMA_MIGRATIONS.slice(currentSchemaVersion)) {
+    for (const [schemaMigration, migrationFn] of SCHEMA_MIGRATIONS.slice(currentSchemaVersion)) {
       texts.log('tg', { currentSchemaVersion, schemaMigration })
       this.db.exec(schemaMigration)
       this.db.exec(`PRAGMA user_version = ${++i}`)
+      migrationFn?.(this.db)
     }
   }
 
@@ -149,9 +156,8 @@ export class DbSession extends Session {
   save() {
     const key = this.authKey?.getKey()
     if (key && this.serverAddress && this.port) {
-      this.prepareCache('delete from session').run()
-      this.prepareCache('insert or replace into session (dc_id, address, port, auth) values (?,?,?,?)')
-        .run(this.dcId, this.serverAddress, this.port, key)
+      this.prepareCache('insert or replace into key_values values ("dc_id", ?), ("address", ?), ("port", ?), ("auth", ?)')
+        .run(this.dcId, this.serverAddress, this.port, key.toString('base64'))
     }
   }
 
@@ -170,12 +176,35 @@ export class DbSession extends Session {
     this.db = new Database(this.dbPath, {})
     texts.log('tg', this.dbPath)
     this.updateSchema()
-    const session = await this.prepareCache('select * from session').get()
-    if (!session) return
-    this._dcId = session.dc_id
-    this._serverAddress = session.address
-    this._port = session.port
-    if (session.auth) this._key = session.auth
+    const rows = this.db.prepare('select * from key_values').raw().all()
+    let apiLayer: number
+    for (const [key, value] of rows) {
+      switch (key) {
+        case 'dc_id':
+          this._dcId = value
+          break
+        case 'address':
+          this._serverAddress = value
+          break
+        case 'port':
+          this._port = value
+          break
+        case 'auth':
+          this._key = Buffer.from(value, 'base64')
+          break
+        case 'api_layer':
+          apiLayer = value
+          break
+        default:
+      }
+    }
+    if (apiLayer !== LAYER) {
+      // we don't need to clear cache on ALL api layer changes, it's only required when the cached objects cannot be decoded anymore
+      // but this is the easiest and safest
+      texts.log('api layer changed, clearing cache')
+      this.prepareCache('insert or replace into key_values values ("api_layer", ?)').run(LAYER)
+      this.prepareCache('delete from cache').run()
+    }
   }
 
   async load() {

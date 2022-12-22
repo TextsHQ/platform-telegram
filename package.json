@@ -20,21 +20,21 @@
     "mime-types": "^2.1.35",
     "react": "https://github.com/TextsHQ/react-global-shim",
     "react-phone-number-input": "3.1.53",
-    "telegram": "^2.13.6",
+    "telegram": "^2.15.2",
     "vcard-creator": "^0.5.0"
   },
   "devDependencies": {
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main",
-    "@types/better-sqlite3": "^7.6.2",
-    "@types/eslint": "^8.4.8",
+    "@types/better-sqlite3": "^7.6.3",
+    "@types/eslint": "^8.4.10",
     "@types/glob": "^8.0.0",
-    "@types/lodash": "^4.14.186",
+    "@types/lodash": "^4.14.191",
     "@types/mime-types": "^2.1.1",
-    "@types/node": "^18.11.6",
-    "@types/react": "18.0.23",
+    "@types/node": "^18.11.17",
+    "@types/react": "18.0.26",
     "@types/react-phone-number-input": "^3.0.14",
-    "eslint": "^8.26.0",
-    "typescript": "^4.8.4"
+    "eslint": "^8.30.0",
+    "typescript": "^4.9.4"
   },
   "packageManager": "yarn@3.2.4"
 }
