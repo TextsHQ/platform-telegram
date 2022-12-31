@@ -330,11 +330,12 @@ export default class TelegramMapper {
     }
   }
 
+  static mapReactionKey(reaction: Api.TypeReaction) {
+    if (reaction instanceof Api.ReactionEmoji) return reaction.emoticon.replace('❤', '❤️')
+    if (reaction instanceof Api.ReactionCustomEmoji) return String(reaction.documentId)
+  }
+
   private mapReactions = (reactions: Api.MessageReactions) => {
-    const mapReactionKey = (reaction: Api.TypeReaction) => {
-      if (reaction instanceof Api.ReactionEmoji) return reaction.emoticon.replace('❤', '❤️')
-      if (reaction instanceof Api.ReactionCustomEmoji) return String(reaction.documentId)
-    }
     if (!reactions.recentReactions && !reactions.results) return
     const mapReaction = (reaction: Api.TypeReaction, participantID: string, reactionKey: string): MessageReaction => {
       if (reaction instanceof Api.ReactionEmpty) return
@@ -350,13 +351,13 @@ export default class TelegramMapper {
     const subtractCounts: Record<string, number> = {}
     const mappedReactions = reactions.recentReactions?.map<MessageReaction>(r => {
       const participantID = getPeerId(r.peerId)
-      const reactionKey = mapReactionKey(r.reaction)
+      const reactionKey = TelegramMapper.mapReactionKey(r.reaction)
       if (!reactionKey) return
       subtractCounts[reactionKey] = (subtractCounts[reactionKey] ?? 0) + 1
       return mapReaction(r.reaction, participantID, reactionKey)
     }) ?? []
     const mappedReactionResults = reactions.results?.flatMap(r => {
-      const reactionKey = mapReactionKey(r.reaction)
+      const reactionKey = TelegramMapper.mapReactionKey(r.reaction)
       if (!reactionKey) return
       // hack: using index instead since we don't have access to id
       const reactionResult = range(r.count - (subtractCounts[reactionKey] ?? 0))

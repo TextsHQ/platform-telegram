@@ -2,7 +2,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo } from '@textshq/platform-sdk'
 import { debounce, uniqBy } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -580,6 +580,30 @@ export default class TelegramAPI implements PlatformAPI {
         fsp.rm(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
     } catch {
       // ignore
+    }
+  }
+
+  private async getReactions() {
+    const cached = this.db.cacheGetHash('GetTopReactions')
+    const networkReactions = await this.client.invoke(new Api.messages.GetTopReactions(cached ? { hash: BigInteger(cached) } : { limit: 100 }))
+    const isCached = networkReactions instanceof Api.messages.ReactionsNotModified
+    const reactions = isCached ? this.db.cacheGetValue<Api.messages.Reactions>('GetTopReactions') : networkReactions
+    if (!isCached) this.db.cacheSet('GetTopReactions', networkReactions.hash, networkReactions.getBytes())
+    return reactions
+  }
+
+  getPlatformInfo = async (): Promise<OverridablePlatformInfo> => {
+    const reactions = await this.getReactions()
+    const supported = reactions.reactions.map<[string, SupportedReaction]>(r => {
+      if (!(r instanceof Api.ReactionEmoji)) return undefined
+      const emoji = TelegramMapper.mapReactionKey(r)
+      return [emoji, { title: emoji, render: emoji }]
+    }).filter(Boolean)
+    return {
+      reactions: {
+        supported: Object.fromEntries(supported),
+        allowsMultipleReactionsToSingleMessage: false,
+      },
     }
   }
 
