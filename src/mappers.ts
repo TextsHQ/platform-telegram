@@ -69,7 +69,7 @@ export default class TelegramMapper {
     }
   }
 
-  private static mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes | undefined {
+  private mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes | undefined {
     if (!entities || entities.length === 0) return
     return {
       entities: TelegramMapper.transformOffset(text, entities.map<TextEntity>(e => {
@@ -118,6 +118,18 @@ export default class TelegramMapper {
               to,
               mentionedUser: { id: String(e.userId) },
             }
+
+          case 'MessageEntityCustomEmoji':
+            return {
+              from,
+              to,
+              replaceWithMedia: {
+                mediaType: 'img',
+                srcURL: this.getCustomEmojiUrl(e.documentId),
+                size: { width: 20, height: 20 },
+              },
+            }
+
           default:
             return undefined
         }
@@ -315,7 +327,7 @@ export default class TelegramMapper {
       return {
         id: messageID,
         text: newContent.text,
-        textAttributes: TelegramMapper.mapTextAttributes(newContent.text, newContent.entities ?? []),
+        textAttributes: this.mapTextAttributes(newContent.text, newContent.entities ?? []),
         links: newContent.media && 'webpage' in newContent.media && newContent.media.webpage instanceof Api.WebPage
           ? [this.mapMessageLink(newContent.media.webpage, Number(messageID))]
           : undefined,
@@ -431,7 +443,7 @@ export default class TelegramMapper {
 
     const setFormattedText = (msgText: string, msgEntities: Api.TypeMessageEntity[]) => {
       mapped.text = msgText
-      mapped.textAttributes = TelegramMapper.mapTextAttributes(msgText, msgEntities)
+      mapped.textAttributes = this.mapTextAttributes(msgText, msgEntities)
     }
 
     const mapMessageMedia = () => {
