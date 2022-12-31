@@ -138,16 +138,11 @@ export default class TelegramMapper {
     }
   }
 
-  private static mapCallReason(reason: Api.TypePhoneCall | Api.TypePhoneCallDiscardReason) {
-    if (reason instanceof Api.PhoneCallAccepted) return 'Accepted'
-    if (reason instanceof Api.PhoneCallWaiting) return 'Waiting'
-    if (reason instanceof Api.PhoneCallRequested) return 'Requested'
-    if (reason instanceof Api.PhoneCallAccepted) return 'Accepted'
+  private static mapCallReason(reason: Api.TypePhoneCallDiscardReason) {
     if (reason instanceof Api.PhoneCallDiscardReasonMissed) return 'Missed'
     if (reason instanceof Api.PhoneCallDiscardReasonBusy) return 'Declined'
     if (reason instanceof Api.PhoneCallDiscardReasonDisconnect) return 'Disconnected'
     if (reason instanceof Api.PhoneCallDiscardReasonHangup) return 'Hung up'
-    return `Call reason unmapped ${reason}`
   }
 
   private static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, threadID: string, messageID: number) {
