@@ -35,6 +35,13 @@ function migrateSessionTable(db: Database.Database) {
 const SCHEMA_MIGRATIONS: [string, ((db: Database.Database) => void)?][] = [
   [`PRAGMA journal_mode=wal;
 
+  CREATE TABLE IF NOT EXISTS session (
+    dc_id INTEGER NOT NULL PRIMARY KEY,
+    address TEXT,
+    port INTEGER,
+    auth BLOB
+  );
+
   CREATE TABLE IF NOT EXISTS entity (
     id TEXT NOT NULL PRIMARY KEY,
     hash TEXT,
@@ -79,7 +86,7 @@ export class DbSession extends Session {
 
   readonly initPromise: Promise<void>
 
-  private async updateSchema() {
+  private updateSchema() {
     // this should be 0 when new
     const currentSchemaVersion: number = this.db.prepare('PRAGMA user_version').pluck().get()
     let i = currentSchemaVersion
