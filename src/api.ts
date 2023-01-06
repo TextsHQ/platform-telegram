@@ -20,7 +20,7 @@ import type { FileLike } from 'telegram/define'
 import { API_ID, API_HASH, MUTED_FOREVER_CONSTANT, MAX_DOWNLOAD_ATTEMPTS } from './constants'
 import { AuthState } from './common-constants'
 import TelegramMapper, { getMarkedId, STICKER_PREFIX } from './mappers'
-import { fileExists, stringifyCircular } from './util'
+import { fileExists, stringifyCircular, toJSON } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
 
@@ -593,16 +593,33 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getPlatformInfo = async (): Promise<OverridablePlatformInfo> => {
-    const reactions = await this.getReactions()
+    const [reactions, appConfigJSONValue] = await Promise.all([
+      this.getReactions(),
+      this.client.invoke(new Api.help.GetAppConfig())
+    ])
     const supported = reactions.reactions.map<[string, SupportedReaction]>(r => {
       if (!(r instanceof Api.ReactionEmoji)) return undefined
       const emoji = TelegramMapper.mapReactionKey(r)
       return [emoji, { title: emoji, render: emoji }]
     }).filter(Boolean)
+    const appConfig = toJSON(appConfigJSONValue)
+    const maxFileSize = (this.me.premium ? appConfig.upload_max_fileparts_premium : appConfig.upload_max_fileparts_default) * (512 * 1024)
     return {
       reactions: {
         supported: Object.fromEntries(supported),
-        allowsMultipleReactionsToSingleMessage: false,
+        allowsMultipleReactionsToSingleMessage: this.me.premium,
+      },
+      attachments: {
+        supportsCaption: true,
+        supportsStickers: true,
+        recordedAudioMimeType: 'audio/ogg',
+        gifMimeType: 'video/mp4',
+        maxSize: {
+          image: maxFileSize,
+          video: maxFileSize,
+          audio: maxFileSize,
+          files: maxFileSize,
+        },
       },
     }
   }

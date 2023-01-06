@@ -143,7 +143,7 @@ export default class TelegramMapper {
     if (reason instanceof Api.PhoneCallDiscardReasonHangup) return 'Hung up'
   }
 
-  private static getButtonLinkURL(row: Api.TypeKeyboardButton, accountID: string, threadID: string, messageID: number) {
+  private getButtonLinkURL(row: Api.TypeKeyboardButton, threadID: string, messageID: number) {
     switch (row.className) {
       case 'KeyboardButtonUrl':
       case 'KeyboardButtonUrlAuth':
@@ -151,7 +151,7 @@ export default class TelegramMapper {
       case 'KeyboardButtonSwitchInline':
         return 'texts://fill-textarea?text=' + encodeURIComponent(row.query)
       case 'KeyboardButtonCallback':
-        return `texts://platform-callback/${accountID}/callback/${threadID}/${messageID}/${'data' in row ? row.data : ''}`
+        return `texts://platform-callback/${this.accountID}/callback/${threadID}/${messageID}/${'data' in row ? row.data : ''}`
       // case 'inlineKeyboardButtonTypeCallbackGame':
       // case 'inlineKeyboardButtonTypeCallbackWithPassword':
       //   return 'texts://platform-callback/' + row.data
@@ -263,7 +263,7 @@ export default class TelegramMapper {
       case 'ReplyInlineMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => ({
           label: row.text,
-          linkURL: TelegramMapper.getButtonLinkURL(row, this.accountID, threadID, messageID) ?? '',
+          linkURL: this.getButtonLinkURL(row, threadID, messageID) ?? '',
         })))
       case 'ReplyKeyboardMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => {
