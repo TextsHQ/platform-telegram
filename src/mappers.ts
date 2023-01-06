@@ -97,14 +97,12 @@ export default class TelegramMapper {
           case 'MessageEntitySpoiler':
             return { from, to, spoiler: true }
 
-          case 'MessageEntityUrl':
-          {
+          case 'MessageEntityUrl': {
             const link = text.slice(from, to)
             return { from, to, link: TelegramMapper.fixLinkProtocol(link) }
           }
 
-          case 'MessageEntityTextUrl':
-          {
+          case 'MessageEntityTextUrl': {
             if (e.url) return { from, to, link: e.url }
             break
           }
@@ -676,8 +674,15 @@ export default class TelegramMapper {
           : `${sender} disabled the auto-delete timer`
         mapped.isAction = true
         mapped.parseTemplate = true
+      } else if (msg.action instanceof Api.MessageActionTopicCreate) {
+        mapped.text = `${sender} created topic "${msg.action.title}"`
+        mapped.isAction = true
+        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
+      } else if (msg.action) {
+        texts.Sentry.captureMessage(`[Telegram] unmapped action: ${msg.action.className || msg.action.constructor?.name}`)
+        texts.log('[Telegram] unmapped action', msg.action.className || msg.action.constructor?.name)
       }
       return true
     }
