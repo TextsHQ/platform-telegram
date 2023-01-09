@@ -27,7 +27,7 @@ interface EntityObject {
 function migrateSessionTable(db: Database.Database) {
   const session = db.prepare('select * from session').get()
   if (!session) return
-  db.prepare('insert into key_values values (\'dc_id\', ?), (\'address\', ?), (\'port\', ?), (\'auth\', ?)')
+  db.prepare("insert into key_values values ('dc_id', ?), ('address', ?), ('port', ?), ('auth', ?)")
     .run(session.dc_id, session.address, session.port, Buffer.from(session.auth).toString('base64'))
   db.prepare('drop table if exists session').run()
 }
@@ -163,7 +163,7 @@ export class DbSession extends Session {
   save() {
     const key = this.authKey?.getKey()
     if (key && this.serverAddress && this.port) {
-      this.prepareCache('insert or replace into key_values values (\'dc_id\', ?), (\'address\', ?), (\'port\', ?), (\'auth\', ?)')
+      this.prepareCache("insert or replace into key_values values ('dc_id', ?), ('address', ?), ('port', ?), ('auth', ?)")
         .run(this.dcId, this.serverAddress, this.port, key.toString('base64'))
     }
   }
@@ -209,7 +209,7 @@ export class DbSession extends Session {
       // we don't need to clear cache on ALL api layer changes, it's only required when the cached objects cannot be decoded anymore
       // but this is the easiest and safest
       texts.log('api layer changed, clearing cache')
-      this.prepareCache('insert or replace key_values values (\'api_layer\', ?)').run(LAYER)
+      this.prepareCache("insert or replace into key_values values ('api_layer', ?)").run(LAYER)
       this.prepareCache('delete from cache').run()
     }
   }
