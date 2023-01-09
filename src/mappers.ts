@@ -845,6 +845,7 @@ export default class TelegramMapper {
         entries: [
           {
             id: threadID,
+            lastReadMessageID: String(update.maxId),
             isUnread: update.stillUnreadCount > 0,
           },
         ],
