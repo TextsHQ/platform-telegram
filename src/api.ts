@@ -584,22 +584,22 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async getReactions() {
-    const cached = this.db.cacheGetHash('GetTopReactions')
-    const networkReactions = await this.client.invoke(new Api.messages.GetTopReactions(cached ? { hash: BigInteger(cached) } : { limit: 100 }))
-    const isCached = networkReactions instanceof Api.messages.ReactionsNotModified
-    const reactions = isCached ? this.db.cacheGetValue<Api.messages.Reactions>('GetTopReactions') : networkReactions
-    if (!isCached) this.db.cacheSet('GetTopReactions', networkReactions.hash, networkReactions.getBytes())
+    const cached = this.db.cacheGetHash('GetAvailableReactions')
+    const networkReactions = await this.client.invoke(new Api.messages.GetAvailableReactions(cached ? { hash: +cached } : {}))
+    const isCached = networkReactions instanceof Api.messages.AvailableReactionsNotModified
+    const reactions = isCached ? this.db.cacheGetValue<Api.messages.AvailableReactions>('GetAvailableReactions') : networkReactions
+    if (!isCached) this.db.cacheSet('GetAvailableReactions', networkReactions.hash, networkReactions.getBytes())
     return reactions
   }
 
   getPlatformInfo = async (): Promise<OverridablePlatformInfo> => {
     const [reactions, appConfigJSONValue] = await Promise.all([
       this.getReactions(),
-      this.client.invoke(new Api.help.GetAppConfig())
+      this.client.invoke(new Api.help.GetAppConfig()),
     ])
     const supported = reactions.reactions.map<[string, SupportedReaction]>(r => {
-      if (!(r instanceof Api.ReactionEmoji)) return undefined
-      const emoji = TelegramMapper.mapReactionKey(r)
+      if (r.inactive || (r.premium && !this.me.premium)) return
+      const emoji = r.reaction
       return [emoji, { title: emoji, render: emoji }]
     }).filter(Boolean)
     const appConfig = toJSON(appConfigJSONValue)
