@@ -1131,27 +1131,43 @@ export default class TelegramAPI implements PlatformAPI {
     throw Error(`telegram getAsset: No buffer or path for media ${type}/${id}/${fileName}`)
   }
 
+  private downloadingAssets = new Map<string, Promise<void>>()
+
   getAsset = async (_: GetAssetOptions, type: AssetType, id: string, fileName: string) => {
     if (!ASSET_TYPES.includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
     const filePath = this.getAssetPath(type, fileName)
 
-    for (let attempt = 0; attempt !== MAX_DOWNLOAD_ATTEMPTS; attempt++) {
+    let attempt = MAX_DOWNLOAD_ATTEMPTS
+    while (attempt--) {
       try {
         if (await fileExists(filePath)) {
           const file = await fsp.stat(filePath)
           if (file.size > 0) return url.pathToFileURL(filePath).href
-          texts.error('File was zero bytes', filePath)
+          texts.error('[tg] 0 byte file', filePath)
           texts.Sentry.captureMessage('[Telegram] File was zero bytes')
         }
-        texts.log(`Download attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
-        await this.downloadAsset(filePath, type, id, fileName)
+        const key = [filePath, type, id, fileName].join('-')
+        if (this.downloadingAssets.has(key)) {
+          texts.log('[tg] reusing dl promise', key)
+          texts.Sentry.captureMessage('[tg] reusing dl promise')
+          await this.downloadingAssets.get(key)
+        } else {
+          texts.log(`[tg] dl attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
+          const dlPromise = this.downloadAsset(filePath, type, id, fileName)
+          this.downloadingAssets.set(key, dlPromise)
+          await dlPromise
+          this.downloadingAssets.delete(key)
+        }
       } catch (err) {
-        texts.error('Error downloading media', err)
+        texts.error('[tg] err media download', err)
         texts.Sentry.captureException(err)
       }
     }
+    const msg = '[tg] download attempts exhausted for ' + type
+    texts.error(msg)
+    texts.Sentry.captureMessage(msg)
   }
 
   handleDeepLink = async (link: string) => {
