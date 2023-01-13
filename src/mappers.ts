@@ -297,7 +297,7 @@ export default class TelegramMapper {
   private getProfilePhotoUrl = (assetId: bigInt.BigInteger, userId: bigInt.BigInteger) =>
     `asset://${this.accountID}/photos/${assetId.xor(userId)}/${userId}.jpg`
 
-  mapMessageLink(webPage: Api.TypeWebPage, key: string | number) {
+  mapMessageLink(webPage: Api.TypeWebPage, imgKey?: string | number) {
     if (!(webPage instanceof Api.WebPage)) return
     const { url, title, description, photo } = webPage
     const link: MessageLink = {
@@ -308,7 +308,7 @@ export default class TelegramMapper {
       imgSize: undefined,
     }
     if (photo instanceof Api.Photo) {
-      link.img = this.getMediaUrl(null, null, key, 'jpg')
+      if (imgKey) link.img = this.getMediaUrl(null, null, imgKey, 'jpg')
       const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize
       link.imgSize = photoSize ? { width: photoSize.w, height: photoSize.h } : undefined
     }
