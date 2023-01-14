@@ -678,6 +678,10 @@ export default class TelegramMapper {
         mapped.text = `${sender} created topic "${msg.action.title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
+      } else if (msg.action instanceof Api.MessageActionTopicEdit) {
+        mapped.text = `${sender} changed topic name to "${msg.action.title}"`
+        mapped.isAction = true
+        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
       } else if (msg.action) {
