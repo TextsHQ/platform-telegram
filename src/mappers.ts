@@ -1,5 +1,5 @@
 import { Message, Thread, User, AttachmentType, TextAttributes, TextEntity, MessageButton, MessageLink, UserPresenceEvent, ServerEventType, UserPresence, ActivityType, UserActivityEvent, MessageActionType, MessageReaction, Participant, ServerEvent, texts, MessageBehavior, StateSyncEvent, Size, StickerPack, Attachment, AttachmentWithURL } from '@textshq/platform-sdk'
-import { addSeconds, subDays } from 'date-fns'
+import { addSeconds, subDays, formatDuration, intervalToDuration } from 'date-fns'
 import { range } from 'lodash'
 import VCard from 'vcard-creator'
 import mime from 'mime-types'
@@ -418,9 +418,11 @@ export default class TelegramMapper {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
     const isThreadSender = msg.sender?.className.includes('Chat') || msg.sender?.className.includes('Channel')
-    const senderID = isThreadSender
-      ? '$thread' + (msg.senderId === msg.chatId ? '' : `_${msg.senderId}`)
-      : String(msg.senderId)
+    const senderID = msg.senderId
+      ? (isThreadSender
+        ? '$thread' + (msg.senderId === msg.chatId ? '' : `_${msg.senderId}`)
+        : String(msg.senderId))
+      : undefined
     const mapped: Message = {
       _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: String(msg.id),
@@ -544,7 +546,6 @@ export default class TelegramMapper {
     }
 
     const mapMessageService = () => {
-      const sender = mapped.senderID === '$thread' && msg.fromId && 'userId' in msg.fromId ? `{{${msg.fromId.userId}}}` : '{{sender}}'
       if (msg.action instanceof Api.MessageActionPhoneCall) {
         const isShortDuration = Number(msg.action.duration) < 3600
         const startIndexDuration = isShortDuration ? 11 + 4 : 11
@@ -556,17 +557,22 @@ export default class TelegramMapper {
             .substring(startIndexDuration, endIndexDuration) : '',
           msg.action.reason ? TelegramMapper.mapCallReason(msg.action.reason) : '',
         ].filter(Boolean).join('\n')
+      } else if (msg.action instanceof Api.MessageActionGroupCall) {
+        mapped.text = `{{${mapped.senderID ? 'sender' : '$thread'}}} ${msg.action.duration ? 'ended the' : 'started a'} video chat`
+          + (msg.action.duration ? ` (${formatDuration(intervalToDuration({ start: 0, end: msg.action.duration * 1000 }))})` : '')
+        mapped.isAction = true
+        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionPinMessage) {
-        mapped.text = `${sender} pinned a message`
+        mapped.text = '{{sender}} pinned a message'
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionContactSignUp) {
-        mapped.text = `${sender} joined Telegram`
+        mapped.text = '{{sender}} joined Telegram'
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.behavior = MessageBehavior.SILENT
       } else if (msg.action instanceof Api.MessageActionChatEditTitle) {
-        mapped.text = `${sender} changed the thread title to "${msg.action.title}"`
+        mapped.text = `{{sender}} changed the thread title to "${msg.action.title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -593,25 +599,25 @@ export default class TelegramMapper {
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
-        mapped.text = `${sender} joined the group via invite link`
+        mapped.text = '{{sender}} joined the group via invite link'
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
           type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: [sender],
+          participantIDs: [mapped.senderID],
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatJoinedByRequest) {
-        mapped.text = `${sender} was accepted into the group`
+        mapped.text = '{{sender}} was accepted into the group'
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
           type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: [sender],
+          participantIDs: [mapped.senderID],
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatEditPhoto) {
-        mapped.text = `${sender} updated the group photo`
+        mapped.text = '{{sender}} updated the group photo'
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -619,7 +625,7 @@ export default class TelegramMapper {
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatDeletePhoto) {
-        mapped.text = `${sender}} deleted the group photo`
+        mapped.text = '{{sender}}} deleted the group photo'
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -628,7 +634,7 @@ export default class TelegramMapper {
         }
       } else if (msg.action instanceof Api.MessageActionChatCreate) {
         const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `${sender} created the group "${title}"`
+        mapped.text = `{{sender}} created the group "${title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
@@ -663,23 +669,23 @@ export default class TelegramMapper {
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionSetChatTheme) {
         mapped.text = msg.action.emoticon
-          ? `${sender} changed the chat theme to ${msg.action.emoticon}`
-          : `${sender} disabled the chat theme`
+          ? `{{sender}} changed the chat theme to ${msg.action.emoticon}`
+          : '{{sender}} disabled the chat theme'
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionSetMessagesTTL) {
         const days = Math.floor(msg.action.period / (60 * 60 * 24))
         mapped.text = msg.action.period
-          ? `${sender} set messages to automatically delete after ${days} day${days === 1 ? '' : 's'}`
-          : `${sender} disabled the auto-delete timer`
+          ? `{{sender}} set messages to automatically delete after ${days} day${days === 1 ? '' : 's'}`
+          : '{{sender}} disabled the auto-delete timer'
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionTopicCreate) {
-        mapped.text = `${sender} created topic "${msg.action.title}"`
+        mapped.text = `{{sender}} created topic "${msg.action.title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionTopicEdit) {
-        mapped.text = `${sender} changed topic name to "${msg.action.title}"`
+        mapped.text = `{{sender}} changed topic name to "${msg.action.title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
