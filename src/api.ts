@@ -1171,42 +1171,44 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   handleDeepLink = async (link: string) => {
-    let message: string
+    const showToast = (text: string) =>
+      this.onEvent([{
+        type: ServerEventType.TOAST,
+        toast: { text },
+      }])
 
     const linkParsed = new URL(link)
-
-    if (linkParsed.host === 't.me' || linkParsed.host === 'tg') {
+    if (linkParsed.host === 't.me' || linkParsed.host === 'tg') { // unused
       const info = await this.client.invoke(new Api.help.GetDeepLinkInfo({ path: link }))
       if (info instanceof Api.help.DeepLinkInfo) {
-        if (info.message) message = info.message
+        if (info.message) showToast(info.message)
       }
+      return
     }
 
     const [, , , , type, threadID, messageID, data] = link.split('/')
 
-    if (type === 'inline-query') {
-      const peerID = resolveId(BigInteger(threadID))[0]
-      const sendRes = await this.client.sendMessage(peerID, { message: decodeURIComponent(data) })
-      const sentMessage = await this.client.getMessages(peerID, { ids: sendRes.id })
-      if (sentMessage?.length) {
-        this.emitMessage(sentMessage[0])
+    switch (type) {
+      case 'inline-query': {
+        const [peerID] = resolveId(BigInteger(threadID))
+        const sendRes = await this.client.sendMessage(peerID, { message: decodeURIComponent(data) })
+        const sentMessage = await this.client.getMessages(peerID, { ids: sendRes.id })
+        if (sentMessage?.length) {
+          this.emitMessage(sentMessage[0])
+        }
+        break
       }
-    } else if (type === 'callback' && !message) {
-      const res = await this.client.invoke(new Api.messages.GetBotCallbackAnswer({
-        data: Buffer.from(data),
-        peer: threadID,
-        msgId: +messageID,
-      }))
-      if (res.message) message = res.message
-    }
-
-    if (message) {
-      this.onEvent([{
-        type: ServerEventType.TOAST,
-        toast: {
-          text: message,
-        },
-      }])
+      case 'callback': {
+        const [peer] = resolveId(BigInteger(threadID))
+        const res = await this.client.invoke(new Api.messages.GetBotCallbackAnswer({
+          data: Buffer.from(data, 'base64url'),
+          peer,
+          msgId: +messageID,
+        }))
+        if (res.message) showToast(res.message)
+        break
+      }
+      default:
     }
   }
 

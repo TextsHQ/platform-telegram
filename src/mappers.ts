@@ -151,7 +151,7 @@ export default class TelegramMapper {
       case 'KeyboardButtonSwitchInline':
         return 'texts://fill-textarea?text=' + encodeURIComponent(row.query)
       case 'KeyboardButtonCallback':
-        return `texts://platform-callback/${this.accountID}/callback/${threadID}/${messageID}/${'data' in row ? row.data : ''}`
+        return `texts://platform-callback/${this.accountID}/callback/${threadID}/${messageID}/${row.data.toString('base64url')}`
       // case 'inlineKeyboardButtonTypeCallbackGame':
       // case 'inlineKeyboardButtonTypeCallbackWithPassword':
       //   return 'texts://platform-callback/' + row.data
