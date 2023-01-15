@@ -599,7 +599,7 @@ export default class TelegramAPI implements PlatformAPI {
     ])
     const supported = reactions.reactions.map<[string, SupportedReaction]>(r => {
       if (r.inactive || (r.premium && !this.me.premium)) return
-      const emoji = r.reaction
+      const emoji = r.reaction.replace('❤', '❤️')
       return [emoji, { title: emoji, render: emoji }]
     }).filter(Boolean)
     const appConfig = toJSON(appConfigJSONValue)
