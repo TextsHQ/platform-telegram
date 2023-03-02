@@ -12,7 +12,7 @@
     "rebuild-windows": "yarn tsc && taskkill.exe /IM Texts.exe /F; cmd /c \"start cmd /c \"start /wait %LOCALAPPDATA%/Programs/jack/Texts.exe\"\""
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#main",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#b6aec517e7f1d8bb9ed10cb47bfd29fd7dc8d189",
     "async-mutex": "^0.3.2",
     "big-integer": "^1.6.51",
     "date-fns": "^2.29.3",

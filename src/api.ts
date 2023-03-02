@@ -953,7 +953,7 @@ export default class TelegramAPI implements PlatformAPI {
   editMessage = async (threadID: string, messageID: string, msgContent: MessageContent) => {
     let { text } = msgContent
     if (!msgContent.text || /^\s+$/.test(msgContent.text)) text = '.'
-    const file = await getFileFromMessageContent(msgContent)
+    const file = getFileFromMessageContent(msgContent)
     await this.client.editMessage(threadID, { message: +messageID, text, file })
     return true
   }
