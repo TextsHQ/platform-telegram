@@ -2,7 +2,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as setTimeoutAsync } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo } from '@textshq/platform-sdk'
 import { debounce, uniqBy } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -852,7 +852,7 @@ export default class TelegramAPI implements PlatformAPI {
     return this.mapThread(dialogThread)
   }
 
-  getThreads = async (inboxName: InboxName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
+  getThreads = async (inboxName: ThreadFolderName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     await this.waitForClientConnected()
 
@@ -1060,7 +1060,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   removeParticipant = (threadID: string, participantID: string) => this.modifyParticipant(threadID, participantID, true)
 
-  registerForPushNotifications = async (type: 'apple' | 'web', json: string) => {
+  registerForPushNotifications = async (type: keyof NotificationsInfo, json: string) => {
+    if (type === 'android') throw Error('invalid type')
     const { token, secret } = type === 'web'
       ? { token: json, secret: Buffer.from('') }
       : (() => {
@@ -1082,7 +1083,8 @@ export default class TelegramAPI implements PlatformAPI {
     if (!result) throw new Error('Could not register for push notifications')
   }
 
-  unregisterForPushNotifications = async (type: 'apple' | 'web', token: string) => {
+  unregisterForPushNotifications = async (type: keyof NotificationsInfo, token: string) => {
+    if (type === 'android') throw Error('invalid type')
     const result = await this.client.invoke(new Api.account.UnregisterDevice({
       token,
       tokenType: type === 'apple' ? 1 : 10,
@@ -1133,7 +1135,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   private downloadingAssets = new Map<string, Promise<void>>()
 
-  getAsset = async (_: GetAssetOptions, type: AssetType, id: string, fileName: string) => {
+  getAsset = async (_: GetAssetOptions, _type: string, id: string, fileName: string) => {
+    const type = _type as AssetType
     if (!ASSET_TYPES.includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
