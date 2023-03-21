@@ -72,7 +72,7 @@ export default class TelegramMapper {
   private mapTextAttributes(text: string, entities: Api.TypeMessageEntity[]): TextAttributes | undefined {
     if (!entities || entities.length === 0) return
     return {
-      entities: TelegramMapper.transformOffset(text, entities.map<TextEntity>(e => {
+      entities: TelegramMapper.transformOffset(text, entities.map<TextEntity>((e): TextEntity => {
         const from = e.offset
         const to = e.offset + e.length
         switch (e.className) {
@@ -107,8 +107,11 @@ export default class TelegramMapper {
             break
           }
 
+          case 'MessageEntityPhone':
+            return { from, to, link: `tel:${text.slice(from, to)}` }
+
           case 'MessageEntityMention':
-            return { from, to, mentionedUser: { username: text.slice(from, to) } } as TextEntity
+            return { from, to, mentionedUser: { username: text.slice(from, to) } }
 
           case 'MessageEntityMentionName':
             return {
