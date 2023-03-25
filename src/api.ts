@@ -192,7 +192,9 @@ export default class TelegramAPI implements PlatformAPI {
             }),
           }))
           texts.log('telegram.login: PHONE_INPUT', JSON.stringify(res))
-          this.loginInfo.phoneCodeHash = res.phoneCodeHash
+          // https://github.com/gram-js/gramjs/blob/270751101c0b94c49f9cbfe46f87e55618b2dd03/gramjs/client/auth.ts#L385
+          if (res instanceof Api.auth.SentCodeSuccess) throw new Error('Logged in right after sending code')
+          if (res instanceof Api.auth.SentCode) this.loginInfo.phoneCodeHash = res.phoneCodeHash
           this.loginInfo.authState = AuthState.CODE_INPUT
           break
         }
@@ -550,6 +552,16 @@ export default class TelegramAPI implements PlatformAPI {
         if (!threadID) return texts.Sentry.captureMessage('[Telegram] Api.UpdateMessagePoll missing threadID for messageID')
         const messageUpdate = TelegramMapper.mapUpdateMessagePoll(update, threadID, String(messageID))
         if (messageUpdate) return this.onEvent([messageUpdate])
+      }
+      if (update instanceof Api.UpdateUser) {
+        const user = await this.getUser({ userID: update.userId.toString() })
+        return this.onEvent([{
+          type: ServerEventType.STATE_SYNC,
+          mutationType: 'update',
+          objectName: 'participant',
+          objectIDs: { threadID: user.id },
+          entries: [user],
+        }])
       }
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)

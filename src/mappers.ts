@@ -942,21 +942,6 @@ export default class TelegramMapper {
         ],
       }]
     }
-    if (update instanceof Api.UpdateUserPhoto) {
-      if (!(update.photo instanceof Api.UserProfilePhoto)) return []
-      return [{
-        type: ServerEventType.STATE_SYNC,
-        mutationType: 'update',
-        objectName: 'participant',
-        objectIDs: { threadID: String(update.userId) },
-        entries: [
-          {
-            id: String(update.userId),
-            imgURL: this.getProfilePhotoUrl(update.photo.photoId, update.userId),
-          },
-        ],
-      }]
-    }
     if (update instanceof Api.UpdateChatParticipantAdmin) {
       return [{
         type: ServerEventType.STATE_SYNC,
