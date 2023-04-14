@@ -421,11 +421,14 @@ export default class TelegramMapper {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
     const isThreadSender = msg.sender?.className.includes('Chat') || msg.sender?.className.includes('Channel')
-    const senderID = msg.senderId
-      ? (isThreadSender
-        ? '$thread' + (msg.senderId === msg.chatId ? '' : `_${msg.senderId}`)
-        : String(msg.senderId))
-      : undefined
+    let senderID = '$thread' // default to $thread since senderID can't be null
+    if (msg.senderId) {
+      if (isThreadSender) {
+        senderID = '$thread' + (msg.senderId.equals(msg.chatId) ? '' : `_${msg.senderId}`)
+      } else {
+        senderID = String(msg.senderId)
+      }
+    }
     const mapped: Message = {
       _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: String(msg.id),
