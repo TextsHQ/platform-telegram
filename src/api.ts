@@ -175,12 +175,11 @@ export default class TelegramAPI implements PlatformAPI {
     if (user instanceof Api.User) return this.mapper.mapUser(user)
   }
 
-  login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
-    texts.log('CREDS_CUSTOM', JSON.stringify(creds.custom, null, 4))
+  login = async ({ custom }: LoginCreds = {}): Promise<LoginResult> => {
     try {
       switch (this.loginInfo.authState) {
         case AuthState.PHONE_INPUT: {
-          this.loginInfo.phoneNumber = creds.custom.phoneNumber
+          this.loginInfo.phoneNumber = custom.phoneNumber
           const res = await this.client.invoke(new Api.auth.SendCode({
             apiHash: API_HASH,
             apiId: API_ID,
@@ -199,7 +198,7 @@ export default class TelegramAPI implements PlatformAPI {
           break
         }
         case AuthState.CODE_INPUT: {
-          this.loginInfo.phoneCode = creds.custom.code
+          this.loginInfo.phoneCode = custom.code
           if (this.loginInfo.phoneNumber === undefined || this.loginInfo.phoneCodeHash === undefined || this.loginInfo.phoneCode === undefined) throw new ReAuthError(JSON.stringify(this.loginInfo, null, 4))
           const res = await this.client.invoke(new Api.auth.SignIn({
             phoneNumber: this.loginInfo.phoneNumber,
@@ -211,7 +210,7 @@ export default class TelegramAPI implements PlatformAPI {
           break
         }
         case AuthState.PASSWORD_INPUT: {
-          const { password } = creds.custom
+          const { password } = custom
           if (!password) throw new Error('Password is empty')
           const passwordSrpResult = await this.client.invoke(new Api.account.GetPassword())
           const passwordSrpCheck = await computePasswordSrpCheck(passwordSrpResult, password)
