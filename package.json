@@ -8,8 +8,7 @@
   "scripts": {
     "prepack": "tsc",
     "build": "yarn tsc",
-    "lint": "eslint src --ext ts,tsx,js,jsx --cache",
-    "rebuild-windows": "yarn tsc && taskkill.exe /IM Texts.exe /F; cmd /c \"start cmd /c \"start /wait %LOCALAPPDATA%/Programs/jack/Texts.exe\"\""
+    "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "dependencies": {
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#5f2b77daa0449c65b57d4d6326ff890305a17dcf",
