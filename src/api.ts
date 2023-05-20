@@ -604,16 +604,16 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   getPlatformInfo = async (): Promise<OverridablePlatformInfo> => {
-    const [reactions, appConfigJSONValue] = await Promise.all([
+    const [reactions, appConfigRes] = await Promise.all([
       this.getReactions(),
-      this.client.invoke(new Api.help.GetAppConfig()),
+      this.client.invoke(new Api.help.GetAppConfig({})),
     ])
     const supported = reactions.reactions.map<[string, SupportedReaction]>(r => {
       if (r.inactive || (r.premium && !this.me.premium)) return
       const emoji = r.reaction.replace('❤', '❤️')
       return [emoji, { title: emoji, render: emoji }]
     }).filter(Boolean)
-    const appConfig = toJSON(appConfigJSONValue)
+    const appConfig = toJSON((appConfigRes as Api.help.AppConfig).config)
     const maxFileSize = (this.me.premium ? appConfig.upload_max_fileparts_premium : appConfig.upload_max_fileparts_default) * (512 * 1024)
     return {
       reactions: {

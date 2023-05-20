@@ -25,7 +25,7 @@ interface EntityObject {
 }
 
 function migrateSessionTable(db: Database.Database) {
-  const session = db.prepare('select * from session').get()
+  const session = db.prepare('select * from session').get() as { dc_id: number, address: string, port: number, auth: ArrayBuffer }
   if (!session) return
   db.prepare("insert into key_values values ('dc_id', ?), ('address', ?), ('port', ?), ('auth', ?)")
     .run(session.dc_id, session.address, session.port, Buffer.from(session.auth).toString('base64'))
@@ -70,7 +70,7 @@ const SCHEMA_MIGRATIONS: [string, ((db: Database.Database) => void)?][] = [
 export class DbSession extends Session {
   private db: Database.Database
 
-  private readonly statementCache = new Map<string, Statement>()
+  private readonly statementCache = new Map<string, Statement<any>>()
 
   protected _dcId = 0
 
@@ -88,7 +88,7 @@ export class DbSession extends Session {
 
   private updateSchema() {
     // this should be 0 when new
-    const currentSchemaVersion: number = this.db.prepare('PRAGMA user_version').pluck().get()
+    const currentSchemaVersion = this.db.prepare('PRAGMA user_version').pluck().get() as number
     let i = currentSchemaVersion
     for (const [schemaMigration, migrationFn] of SCHEMA_MIGRATIONS.slice(currentSchemaVersion)) {
       texts.log('tg', { currentSchemaVersion, schemaMigration })
@@ -103,11 +103,11 @@ export class DbSession extends Session {
     this.initPromise = this.init()
   }
 
-  private prepareCache = (sql: string): Statement => {
+  private prepareCache = <T>(sql: string): Statement<T> => {
     if (!this.statementCache.has(sql)) {
-      this.statementCache.set(sql, this.db.prepare(sql))
+      this.statementCache.set(sql, this.db.prepare<T>(sql))
     }
-    return this.statementCache.get(sql)
+    return this.statementCache.get(sql) as Statement<T>
   }
 
   get dcId() {
@@ -164,7 +164,7 @@ export class DbSession extends Session {
     const key = this.authKey?.getKey()
     if (key && this.serverAddress && this.port) {
       this.prepareCache("insert or replace into key_values values ('dc_id', ?), ('address', ?), ('port', ?), ('auth', ?)")
-        .run(this.dcId, this.serverAddress, this.port, key.toString('base64'))
+        .run([this.dcId, this.serverAddress, this.port, key.toString('base64')])
     }
   }
 
@@ -183,7 +183,7 @@ export class DbSession extends Session {
     this.db = new Database(this.dbPath, {})
     texts.log('tg', this.dbPath)
     this.updateSchema()
-    const rows = this.db.prepare('select * from key_values').raw().all()
+    const rows = this.db.prepare('select * from key_values').raw().all() as [string, any]
     let apiLayer: number
     for (const [key, value] of rows) {
       switch (key) {
@@ -210,7 +210,7 @@ export class DbSession extends Session {
       // but this is the easiest and safest
       texts.log('api layer changed, clearing cache')
       this.prepareCache("insert or replace into key_values values ('api_layer', ?)").run(LAYER)
-      this.prepareCache('delete from cache').run()
+      this.prepareCache('delete from cache').run([])
     }
   }
 
@@ -249,7 +249,7 @@ export class DbSession extends Session {
     for (const e of entities) {
       const entityObject = this.entityObject(e)
       if (entityObject) {
-        stmt.run(entityObject.id, entityObject.hash, entityObject.username, entityObject.phone, entityObject.name)
+        stmt.run([entityObject.id, entityObject.hash, entityObject.username, entityObject.phone, entityObject.name])
       }
     }
   }
@@ -370,16 +370,16 @@ export class DbSession extends Session {
   }
 
   cacheGetHash(key: string): string {
-    const hash = this.prepareCache('select hash from cache where key = ?').pluck().get(key)
+    const hash = this.prepareCache('select hash from cache where key = ?').pluck().get(key) as string
     return hash
   }
 
   cacheGetValue<T>(key: string) {
-    const value = this.prepareCache('select value from cache where key = ?').pluck().get(key)
+    const value = this.prepareCache('select value from cache where key = ?').pluck().get(key) as Buffer
     if (value) return new BinaryReader(value).tgReadObject() as T
   }
 
   cacheSet<T>(key: string, hash: number | bigInt.BigInteger, value: T) {
-    this.prepareCache('insert or replace into cache values (?,?,?,?)').run(key, String(hash), value, Date.now())
+    this.prepareCache('insert or replace into cache values (?,?,?,?)').run([key, String(hash), value, Date.now()])
   }
 }
