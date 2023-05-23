@@ -1160,6 +1160,7 @@ export default class TelegramAPI implements PlatformAPI {
         if (await fileExists(filePath)) {
           const file = await fsp.stat(filePath)
           if (file.size > 0) return url.pathToFileURL(filePath).href
+          await fsp.rm(filePath)
           texts.error('[tg] 0 byte file', filePath)
           texts.Sentry.captureMessage('[Telegram] File was zero bytes')
         }
@@ -1169,11 +1170,14 @@ export default class TelegramAPI implements PlatformAPI {
           texts.Sentry.captureMessage('[tg] reusing dl promise')
           await this.downloadingAssets.get(key)
         } else {
-          texts.log(`[tg] dl attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
+          texts.log(`[tg] dl attempt ${MAX_DOWNLOAD_ATTEMPTS - attempt}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
           const dlPromise = this.downloadAsset(filePath, type, id, fileName)
           this.downloadingAssets.set(key, dlPromise)
-          await dlPromise
-          this.downloadingAssets.delete(key)
+          try {
+            await dlPromise
+          } finally {
+            this.downloadingAssets.delete(key)
+          }
         }
       } catch (err) {
         texts.error('[tg] err media download', err)
