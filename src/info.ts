@@ -82,6 +82,12 @@ const info: PlatformInfo = {
   },
   getUserProfileLink: ({ username }) =>
     (username ? `https://t.me/${username}` : null),
+  extra: {
+    macOSAppBundleIDs: [
+      'ru.keepcoder.Telegram', // native mac
+      'com.tdesktop.Telegram', // tg desktop
+    ],
+  },
 }
 
 export default info
