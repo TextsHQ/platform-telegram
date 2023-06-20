@@ -124,8 +124,9 @@ export default class TelegramAPI implements PlatformAPI {
     this.accountInfo = accountInfo
 
     const dbPath = path.join(accountInfo.dataDirPath, 'db.sqlite')
-    if (session && session !== 'db') { // legacy migration for existing accounts
-      await fsp.rename(path.join(accountInfo.dataDirPath, session + '.sqlite'), dbPath)
+    if (typeof session === 'string') { // legacy migration for existing accounts
+      if (session !== 'db') await fsp.rename(path.join(accountInfo.dataDirPath, session + '.sqlite'), dbPath)
+      await this.emptyAssetsDir()
     }
 
     this.db = new DbSession(dbPath)
@@ -584,16 +585,6 @@ export default class TelegramAPI implements PlatformAPI {
     this.onEvent([event])
   }
 
-  private emptyAssets = async () => {
-    // for perfomance testing
-    try {
-      await Promise.all(ASSET_TYPES.map(assetType =>
-        fsp.rm(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
-    } catch {
-      // ignore
-    }
-  }
-
   private async getReactions() {
     const cached = this.db.cacheGetHash('GetAvailableReactions')
     const networkReactions = await this.client.invoke(new Api.messages.GetAvailableReactions(cached ? { hash: +cached } : {}))
@@ -636,7 +627,6 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private afterLogin = async () => {
-    // await this.emptyAssets()
     await this.createAssetsDir()
     try {
       this.me ||= await this.client.getMe() as Api.User
@@ -735,14 +725,18 @@ export default class TelegramAPI implements PlatformAPI {
   //   return { adminIds: this.state.dialogToDialogAdminIds.get(dialogId), admins }
   // }
 
-  private createAssetsDir = async () => {
-    await Promise.all(ASSET_TYPES.map(assetType =>
+  private createAssetsDir = () =>
+    Promise.all(ASSET_TYPES.map(assetType =>
       fsp.mkdir(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
+
+  private emptyAssetsDir = () => {
+    texts.log('emptyAssetsDir')
+    return Promise.all(ASSET_TYPES.map(assetType =>
+      fsp.rm(path.join(this.accountInfo.dataDirPath, assetType), { recursive: true })))
   }
 
-  private deleteAssetsDir = async () => {
-    await fsp.rm(this.accountInfo.dataDirPath, { recursive: true })
-  }
+  private deleteDataDir = () =>
+    fsp.rm(this.accountInfo.dataDirPath, { recursive: true })
 
   private waitForClientConnected = async () => {
     const start = Date.now()
@@ -759,7 +753,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   logout = async () => {
     await Promise.all([
-      this.deleteAssetsDir(),
+      this.deleteDataDir(),
       this.client.invoke(new Api.auth.LogOut()),
     ])
   }
@@ -781,7 +775,9 @@ export default class TelegramAPI implements PlatformAPI {
     this.onServerEvent = onServerEvent
   }
 
-  serializeSession = () => 'db'
+  serializeSession = () => ({
+    version: 1,
+  })
 
   searchUsers = async (query: string) => {
     const res = await this.client.invoke(new Api.contacts.Search({ q: query }))
@@ -1110,11 +1106,11 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client.getMe()
   }
 
-  private getAssetPath = (assetType: AssetType, fileName: string) =>
-    path.join(this.accountInfo.dataDirPath, assetType, fileName)
+  private getAssetPath = (assetType: AssetType, id: string, fileName: string) =>
+    path.join(this.accountInfo.dataDirPath, assetType, id + '_' + fileName)
 
-  private async downloadAsset(filePath: string, type: AssetType, id: string, fileName: string) {
-    switch (type) {
+  private async downloadAsset(filePath: string, assetType: AssetType, id: string, name: string) {
+    switch (assetType) {
       case 'emoji': {
         const [document] = await this.client.invoke(new Api.messages.GetCustomEmojiDocuments({ documentId: [BigInteger(id)] }))
         if (document instanceof Api.DocumentEmpty) throw Error('custom emoji is doc empty')
@@ -1123,10 +1119,10 @@ export default class TelegramAPI implements PlatformAPI {
       }
       case 'media': {
         const [threadID, messageID] = id.split('_')
-        const [key] = fileName.split('.')
+        const [key] = name.split('.')
         const media = this.state.mediaStore.get(key) || (await this.getUnmappedMessage(threadID, messageID))?.media
         if (!media) {
-          console.log(`${type}/${id}/${fileName}`)
+          console.log(`${assetType}/${id}/${name}`)
           throw Error('message media not found')
         }
         await this.client.downloadMedia(media, { outputFile: filePath })
@@ -1134,7 +1130,7 @@ export default class TelegramAPI implements PlatformAPI {
         return
       }
       case 'photos': {
-        const [key] = fileName.split('.')
+        const [key] = name.split('.')
         await this.client.downloadProfilePhoto(key, { outputFile: filePath })
         return
       }
@@ -1142,7 +1138,7 @@ export default class TelegramAPI implements PlatformAPI {
         break
     }
 
-    throw Error(`telegram getAsset: No buffer or path for media ${type}/${id}/${fileName}`)
+    throw Error(`telegram getAsset: No buffer or path for media ${assetType}/${id}/${name}`)
   }
 
   private downloadingAssets = new Map<string, Promise<void>>()
@@ -1152,7 +1148,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (!ASSET_TYPES.includes(type)) {
       throw new Error(`Unknown media type ${type}`)
     }
-    const filePath = this.getAssetPath(type, fileName)
+    const filePath = this.getAssetPath(type, id, fileName)
 
     let attempt = MAX_DOWNLOAD_ATTEMPTS
     while (attempt--) {
