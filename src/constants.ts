@@ -11,4 +11,4 @@ export const MUTED_FOREVER_CONSTANT = 2147483647 // max int32
 
 export const UPDATES_WATCHDOG_INTERVAL = 15 * 60 * 1000 // 15 mins
 
-export const MAX_DOWNLOAD_ATTEMPTS = 4
+export const MAX_DOWNLOAD_ATTEMPTS = 10

@@ -1,7 +1,7 @@
 import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
-import { setTimeout as setTimeoutAsync } from 'timers/promises'
+import { setTimeout as sleep } from 'timers/promises'
 import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo } from '@textshq/platform-sdk'
 import { debounce, uniqBy } from 'lodash'
 import BigInteger from 'big-integer'
@@ -741,7 +741,7 @@ export default class TelegramAPI implements PlatformAPI {
   private waitForClientConnected = async () => {
     const start = Date.now()
     while (!this.client?.connected) {
-      await setTimeoutAsync(50)
+      await sleep(50)
       const elapsed = Date.now() - start
       if (elapsed > 2 * 60_000) {
         throw Error('timed out waiting for client connection')
@@ -1150,8 +1150,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
     const filePath = this.getAssetPath(type, id, fileName)
 
-    let attempt = MAX_DOWNLOAD_ATTEMPTS
-    while (attempt--) {
+    for (let attempt = 0; attempt < MAX_DOWNLOAD_ATTEMPTS; attempt++) {
       try {
         if (await fileExists(filePath)) {
           const file = await fsp.stat(filePath)
@@ -1166,7 +1165,7 @@ export default class TelegramAPI implements PlatformAPI {
           texts.Sentry.captureMessage('[tg] reusing dl promise')
           await this.downloadingAssets.get(key)
         } else {
-          texts.log(`[tg] dl attempt ${MAX_DOWNLOAD_ATTEMPTS - attempt}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
+          texts.log(`[tg] dl attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
           const dlPromise = this.downloadAsset(filePath, type, id, fileName)
           this.downloadingAssets.set(key, dlPromise)
           try {
@@ -1179,6 +1178,7 @@ export default class TelegramAPI implements PlatformAPI {
         texts.error('[tg] err media download', err)
         texts.Sentry.captureException(err)
       }
+      await sleep(attempt * 100)
     }
     const msg = '[tg] download attempts exhausted for ' + type
     texts.error(msg)
