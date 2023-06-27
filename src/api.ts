@@ -1152,19 +1152,19 @@ export default class TelegramAPI implements PlatformAPI {
 
     for (let attempt = 0; attempt < MAX_DOWNLOAD_ATTEMPTS; attempt++) {
       try {
-        if (await fileExists(filePath)) {
-          const file = await fsp.stat(filePath)
-          if (file.size > 0) return url.pathToFileURL(filePath).href
-          await fsp.rm(filePath)
-          texts.error('[tg] 0 byte file', filePath)
-          texts.Sentry.captureMessage('[Telegram] File was zero bytes')
-        }
         const key = [filePath, type, id, fileName].join('-')
         if (this.downloadingAssets.has(key)) {
           texts.log('[tg] reusing dl promise', key)
           texts.Sentry.captureMessage('[tg] reusing dl promise')
           await this.downloadingAssets.get(key)
         } else {
+          if (await fileExists(filePath)) {
+            const file = await fsp.stat(filePath)
+            if (file.size > 0) return url.pathToFileURL(filePath).href
+            await fsp.rm(filePath)
+            texts.error('[tg] 0 byte file', filePath)
+            texts.Sentry.captureMessage('[Telegram] File was zero bytes')
+          }
           texts.log(`[tg] dl attempt ${attempt + 1}/${MAX_DOWNLOAD_ATTEMPTS} for ${filePath}`)
           const dlPromise = this.downloadAsset(filePath, type, id, fileName)
           this.downloadingAssets.set(key, dlPromise)
