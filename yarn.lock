@@ -1662,13 +1662,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#5f2b77daa0449c65b57d4d6326ff890305a17dcf":
+"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#8a625558055baa77d6e5ce5f4f2c3d02312fac2a":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=5f2b77daa0449c65b57d4d6326ff890305a17dcf"
+  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=8a625558055baa77d6e5ce5f4f2c3d02312fac2a"
   dependencies:
     emoji-regex: ^10.1.0
     qrcode.react: ^3.1.0
-  checksum: b05c5ecd55f5a1e1584c42f74df4895135befb46feb8a15d2bcfd1af34739d622bfe64edd86e295467a14f4ed64bef7392e750fc8bc95a5de75a831daabf39d9
+  checksum: f93ba504bfbedfdb80034b0fc60addf53f6149e411ecb2905a2fce5e1963c7e57b10aa6ed6c058a215ae416b3b7eaa69df007520c9624a5bde898b2b0ddf7131
   languageName: node
   linkType: hard
 
@@ -1677,7 +1677,7 @@ __metadata:
   resolution: "@textshq/platform-telegram@workspace:."
   dependencies:
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#5f2b77daa0449c65b57d4d6326ff890305a17dcf"
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#8a625558055baa77d6e5ce5f4f2c3d02312fac2a"
     "@types/better-sqlite3": ^7.6.4
     "@types/eslint": ^8.37.0
     "@types/glob": ^8.1.0

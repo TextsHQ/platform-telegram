@@ -2,7 +2,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as sleep } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, AccountInfo, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, ClientContext, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo } from '@textshq/platform-sdk'
 import { debounce, uniqBy } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -32,14 +32,7 @@ function getFileFromMessageContent(msgContent: MessageContent): FileLike {
   return filePath
 }
 
-type LoginEventCallback = (authState: AuthState) => void
-
-interface LoginInfo {
-  authState?: AuthState
-  phoneNumber?: string
-  phoneCodeHash?: string
-  phoneCode?: string
-}
+type LoginEventCallback = ({ authState, qrLink }: { authState: AuthState, qrLink?: string }) => void
 
 interface LocalState {
   pts: number
@@ -94,16 +87,23 @@ const getMessageFromShort = (update: Api.UpdateShortMessage | Api.UpdateShortCha
 const ASSET_TYPES = ['emoji', 'media', 'photos'] as const
 type AssetType = typeof ASSET_TYPES[number]
 
+const QR_CODE_TIMEOUT = 30_000
+
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
 
   private client: TelegramClient
 
-  private accountInfo: AccountInfo
+  private accountInfo: ClientContext
 
   private loginEventCallback: LoginEventCallback
 
-  private loginInfo: LoginInfo = {}
+  private loginInfo: {
+    authState?: AuthState
+    phoneNumber?: string
+    phoneCodeHash?: string
+    phoneCode?: string
+  } = {}
 
   private me: Api.User
 
@@ -120,7 +120,7 @@ export default class TelegramAPI implements PlatformAPI {
     pollIdMessageId: new Map<string, number>(),
   }
 
-  init = async (session: string | undefined, accountInfo: AccountInfo) => {
+  init = async (session: string | undefined, accountInfo: ClientContext) => {
     this.accountInfo = accountInfo
 
     const dbPath = path.join(accountInfo.dataDirPath, 'db.sqlite')
@@ -151,9 +151,8 @@ export default class TelegramAPI implements PlatformAPI {
 
     await this.client.connect()
 
-    this.loginInfo.authState = AuthState.PHONE_INPUT
-
     if (session) await this.afterLogin()
+    else this.loginInfo.authState = AuthState.PHONE_INPUT
   }
 
   getPresence = async (): Promise<PresenceMap> => {
@@ -161,9 +160,52 @@ export default class TelegramAPI implements PlatformAPI {
     return Object.fromEntries(status.map(v => [v.userId.toString(), TelegramMapper.mapUserPresence(v.userId, v.status)]))
   }
 
+  private async signInWithQrCode() {
+    let isScanningComplete = false
+    const exportToken = () => this.client.invoke(new Api.auth.ExportLoginToken({ apiId: API_ID, apiHash: API_HASH, exceptIds: [] }))
+    const inputPromise = (async () => {
+      while (!isScanningComplete) {
+        const exportResult1 = await exportToken()
+        if (!(exportResult1 instanceof Api.auth.LoginToken)) throw new Error('Unexpected')
+        const { token, expires } = exportResult1
+        await Promise.race([
+          this.loginEventCallback({ authState: AuthState.QR_CODE, qrLink: `tg://login?token=${token.toString('base64url')}` }),
+          sleep(QR_CODE_TIMEOUT),
+        ])
+        await sleep(QR_CODE_TIMEOUT)
+      }
+    })()
+    const updatePromise = new Promise(resolve => {
+      const callback = (update: Api.TypeUpdate) => {
+        if (!(update instanceof Api.UpdateLoginToken)) return
+        this.loginEventCallback({ authState: this.loginInfo.authState })
+        this.client.removeEventHandler(callback, undefined)
+        resolve(undefined)
+      }
+      this.client.addEventHandler(callback)
+    })
+    try {
+      await Promise.race([updatePromise, inputPromise])
+    } finally {
+      isScanningComplete = true
+    }
+    const exportResult2 = await exportToken()
+    if (exportResult2 instanceof Api.auth.LoginTokenSuccess && exportResult2.authorization instanceof Api.auth.Authorization) {
+      return true
+    }
+    if (exportResult2 instanceof Api.auth.LoginTokenMigrateTo) {
+      await this.client._switchDC(exportResult2.dcId)
+      const migratedResult = await this.client.invoke(new Api.auth.ImportLoginToken({ token: exportResult2.token }))
+      if (migratedResult instanceof Api.auth.LoginTokenSuccess && migratedResult.authorization instanceof Api.auth.Authorization) {
+        return true
+      }
+    }
+    throw new Error(`Unexpected result while scanning QR ${exportResult2.className}`)
+  }
+
   onLoginEvent = (onEvent: LoginEventCallback) => {
     this.loginEventCallback = onEvent
-    this.loginEventCallback(this.loginInfo.authState)
+    this.loginEventCallback({ authState: this.loginInfo.authState })
   }
 
   getUser = async (ids: { userID?: string } | { username?: string } | { phoneNumber?: string } | { email?: string }) => {
@@ -176,8 +218,15 @@ export default class TelegramAPI implements PlatformAPI {
     if (user instanceof Api.User) return this.mapper.mapUser(user)
   }
 
-  login = async ({ custom }: LoginCreds = {}): Promise<LoginResult> => {
+  login = async (creds: LoginCreds = {}): Promise<LoginResult> => {
+    if (!('custom' in creds)) throw Error('unexpected')
+    const { custom } = creds
     try {
+      if (custom === 'qr') {
+        this.loginInfo.authState = AuthState.QR_CODE
+        await this.signInWithQrCode()
+        this.loginInfo.authState = AuthState.READY
+      }
       switch (this.loginInfo.authState) {
         case AuthState.PHONE_INPUT: {
           this.loginInfo.phoneNumber = custom.phoneNumber
@@ -212,7 +261,7 @@ export default class TelegramAPI implements PlatformAPI {
         }
         case AuthState.PASSWORD_INPUT: {
           const { password } = custom
-          if (!password) throw new Error('Password is empty')
+          if (!password) throw new Error('Empty password')
           const passwordSrpResult = await this.client.invoke(new Api.account.GetPassword())
           const passwordSrpCheck = await computePasswordSrpCheck(passwordSrpResult, password)
           await this.client.invoke(new Api.auth.CheckPassword({ password: passwordSrpCheck }))
@@ -225,20 +274,21 @@ export default class TelegramAPI implements PlatformAPI {
           return { type: 'success' }
         }
         default: {
-          texts.log(`telegram.login: auth state is ${this.loginInfo.authState}`)
-          return { type: 'error' }
+          throw Error(`telegram.login: unhandled auth state ${this.loginInfo.authState}`)
         }
       }
     } catch (err) {
-      if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') this.loginInfo.authState = AuthState.PASSWORD_INPUT
-      else {
+      if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') {
+        this.loginInfo.authState = AuthState.PASSWORD_INPUT
+      } else {
+        const expectedError = LOGIN_ERROR_MAP[err.errorMessage]
+        if (expectedError) return { type: 'error', errorMessage: expectedError }
         texts.log('telegram.login err', err, stringifyCircular(err, 2))
         texts.Sentry.captureException(err)
-        return { type: 'error', errorMessage: LOGIN_ERROR_MAP[err.errorMessage] || err.errorMessage || err.message }
+        throw err
       }
     }
-
-    this.loginEventCallback(this.loginInfo.authState)
+    this.loginEventCallback({ authState: this.loginInfo.authState })
     return { type: 'wait' }
   }
 

@@ -11,7 +11,7 @@
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#5f2b77daa0449c65b57d4d6326ff890305a17dcf",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#8a625558055baa77d6e5ce5f4f2c3d02312fac2a",
     "async-mutex": "^0.3.2",
     "big-integer": "^1.6.51",
     "date-fns": "^2.30.0",

@@ -1,28 +1,44 @@
-import React, { FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { isPossiblePhoneNumber } from 'react-phone-number-input'
 import PhoneInput from 'react-phone-number-input/input'
+import QRCode from '@textshq/platform-sdk/dist/QRCode'
 import type { AuthProps } from '@textshq/platform-sdk'
 
 import { AuthState } from './common-constants'
 
+const instructions = (
+  <div className="list">
+    <div><span>1</span>Open the Telegram app on your phone</div>
+    <div><span>2</span>Go to Settings → Devices</div>
+    <div><span>3</span>Tap "Link Desktop Device"</div>
+    <div><span>4</span>Scan the QR code with your phone</div>
+  </div>
+)
+
 const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
-  const [loading, setLoading] = React.useState(false)
-  const [authState, setAuthState] = React.useState(AuthState.PHONE_INPUT)
-  const [phoneNumber, setPhoneNumber] = React.useState(meContact?.phoneNumbers?.[0] || '+')
-  const [code, setCode] = React.useState('')
-  const [password, setPassword] = React.useState('')
+  const [loading, setLoading] = useState(false)
+  const [authState, setAuthState] = useState(AuthState.PHONE_INPUT)
+  const [phoneNumber, setPhoneNumber] = useState(meContact?.phoneNumbers?.[0] || '+')
+  const [qrLink, setQRLink] = useState<string>()
+  const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
   const onSubmit = async (ev?: FormEvent<HTMLFormElement>) => {
     ev?.preventDefault()
     setLoading(true)
     await login({ custom: { phoneNumber, code, password } })
     setLoading(false)
   }
-  React.useEffect(() => {
-    api.onLoginEvent((state: AuthState) => {
+  useEffect(() => {
+    api.onLoginEvent(({ authState: state, qrLink: qrLinkValue }: { authState: AuthState, qrLink?: string }) => {
       setAuthState(state)
+      setQRLink(qrLinkValue)
       if (state === AuthState.READY) onSubmit()
     })
   }, [api])
+  const onQRLoginClick = () => {
+    setAuthState(AuthState.QR_CODE)
+    login({ custom: 'qr' })
+  }
   return (
     <div className="auth telegram-auth">
       <form onSubmit={onSubmit}>
@@ -47,9 +63,21 @@ const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
             <input type="password" autoComplete="current-password" onChange={ev => setPassword(ev.target.value)} autoFocus />
           </label>
         )}
-        <label>
-          <button type="submit" disabled={!isPossiblePhoneNumber(phoneNumber || '') || loading}>{loading ? '...' : '→'}</button>
-        </label>
+        {authState === AuthState.QR_CODE
+          ? <>
+              {instructions}
+              {qrLink ? <QRCode value={qrLink} /> : 'Loading...'}
+            </>
+          : (
+            <label>
+              <button type="submit" disabled={!isPossiblePhoneNumber(phoneNumber || '') || loading}>{loading ? '...' : '→'}</button>
+            </label>
+          )}
+        {authState === AuthState.PHONE_INPUT && (
+          <label style={{ borderTop: '1px solid rgba(0,0,0,.1)', marginTop: '2em', paddingTop: '2em' }}>
+            <button type="button" onClick={onQRLoginClick}>Login with QR code instead</button>
+          </label>
+        )}
       </form>
     </div>
   )
