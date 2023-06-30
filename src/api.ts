@@ -763,13 +763,8 @@ export default class TelegramAPI implements PlatformAPI {
     await this.client?.destroy()
   }
 
-  getCurrentUser = (): CurrentUser => {
-    const user: CurrentUser = {
-      ...this.mapper.mapUser(this.me),
-      displayText: (this.me.username ? '@' + this.me.username : '') || ('+' + this.me.phone),
-    }
-    return user
-  }
+  getCurrentUser = (): CurrentUser =>
+    this.mapper.mapUser(this.me)
 
   subscribeToEvents = (onServerEvent: OnServerEventCallback) => {
     this.onServerEvent = onServerEvent
