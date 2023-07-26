@@ -825,6 +825,7 @@ export default class TelegramAPI implements PlatformAPI {
   })
 
   searchUsers = async (query: string) => {
+    if (!query) return []
     const res = await this.client.invoke(new Api.contacts.Search({ q: query }))
     const users = res.users
       .map(user => user instanceof Api.User && this.mapper.mapUser(user))
