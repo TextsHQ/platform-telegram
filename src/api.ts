@@ -1269,6 +1269,23 @@ export default class TelegramAPI implements PlatformAPI {
         if (res.message) showToast(res.message)
         break
       }
+      case 'join-channel': {
+        const resolved = await this.client.invoke(new Api.contacts.ResolveUsername({
+          username: data,
+        }))
+        const chat = resolved && resolved.chats.length && resolved.chats[0]
+        if (!chat) return
+        await this.updateHandler(await this.client.invoke(new Api.channels.JoinChannel({
+          channel: chat.id,
+        })))
+        break
+      }
+      case 'join-chat': {
+        await this.updateHandler(await this.client.invoke(new Api.messages.ImportChatInvite({
+          hash: data,
+        })))
+        break
+      }
       default:
     }
   }

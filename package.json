@@ -8,7 +8,9 @@
   "scripts": {
     "prepack": "tsc",
     "build": "yarn tsc",
-    "lint": "eslint src --ext ts,tsx,js,jsx --cache"
+    "watch": "yarn tsc --watch",
+    "lint": "eslint src --ext ts,tsx,js,jsx --cache",
+    "lint-fix": "eslint src --ext ts,tsx,js,jsx --cache --fix"
   },
   "dependencies": {
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#8a625558055baa77d6e5ce5f4f2c3d02312fac2a",

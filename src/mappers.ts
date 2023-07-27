@@ -14,6 +14,8 @@ import { MUTED_FOREVER_CONSTANT } from './constants'
 import { stringifyCircular } from './util'
 
 export const STICKER_PREFIX = 'sticker_'
+export const INVITE_PREFIX = 'telegram_'
+export const INVITE_LINK_REGEX = /(?:t|telegram)\.(?:me|dog)\/(joinchat\/|\+)?([\w-]+)/i
 
 type UnmarkedId = { userId: bigInt.BigInteger } | { chatId: bigInt.BigInteger } | { channelId: bigInt.BigInteger }
 
@@ -260,8 +262,7 @@ export default class TelegramMapper {
     texts.log('unsupported activity', update.action.className, update.action)
   }
 
-  private getMessageButtons(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number) {
-    if (!replyMarkup) return
+  private getMessageButtonsReplyMarkup(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number): MessageButton[] {
     switch (replyMarkup.className) {
       case 'ReplyInlineMarkup':
         return replyMarkup.rows.flatMap<MessageButton>(rows => rows.buttons.map(row => ({
@@ -286,7 +287,29 @@ export default class TelegramMapper {
           return { label: `Unsupported link button: ${row.className}`, linkURL: '' }
         })).filter(Boolean)
       default:
+        return []
     }
+  }
+
+  private getMessageButtons(msg: CustomMessage | Api.Message | Api.MessageService) {
+    const threadID = getMarkedId({ chatId: msg.chatId })
+    const { replyMarkup, id } = msg
+    const buttons: MessageButton[] = replyMarkup ? this.getMessageButtonsReplyMarkup(replyMarkup, threadID, id) : []
+
+    if (msg.media instanceof Api.MessageMediaWebPage
+        && msg.media.webpage instanceof Api.WebPage) {
+      const { webpage } = msg.media
+      if (webpage.type.startsWith(INVITE_PREFIX) && INVITE_LINK_REGEX.test(webpage.url)) {
+        const reArr = INVITE_LINK_REGEX.exec(webpage.url)
+        if (reArr.length < 3) return
+        const hashOrChannelName = reArr[2]
+        const channelType = webpage.type.substring(INVITE_PREFIX.length)
+        const label = 'Join Group'
+        const linkURL = `texts://platform-callback/${this.accountID}/join-${channelType}/${threadID}/${id}/${hashOrChannelName}`
+        buttons.push({ label, linkURL })
+      }
+    }
+    return buttons.length ? buttons : undefined
   }
 
   // asset://$accountID/$mediaType/$someID/$fileName
@@ -436,9 +459,10 @@ export default class TelegramMapper {
       senderID,
       isSender,
       linkedMessageID: msg.replyToMsgId?.toString(),
-      buttons: msg.replyMarkup && msg.chatId ? this.getMessageButtons(msg.replyMarkup, getMarkedId({ chatId: msg.chatId }), msg.id) : undefined,
+      buttons: this.getMessageButtons(msg),
       expiresInSeconds: msg.ttlPeriod,
     }
+
     if (readOutboxMaxId) mapped.seen = msg.id <= readOutboxMaxId
 
     const setFormattedText = (msgText: string, msgEntities: Api.TypeMessageEntity[]) => {
