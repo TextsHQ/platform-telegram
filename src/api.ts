@@ -1273,7 +1273,7 @@ export default class TelegramAPI implements PlatformAPI {
         const resolved = await this.client.invoke(new Api.contacts.ResolveUsername({
           username: data,
         }))
-        const chat = resolved && resolved.chats.length && resolved.chats[0]
+        const chat = resolved?.chats?.[0]
         if (!chat) return
         await this.updateHandler(await this.client.invoke(new Api.channels.JoinChannel({
           channel: chat.id,
