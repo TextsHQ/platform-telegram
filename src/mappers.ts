@@ -304,7 +304,7 @@ export default class TelegramMapper {
         if (reArr.length < 3) return
         const hashOrChannelName = reArr[2]
         const channelType = webpage.type.substring(INVITE_PREFIX.length)
-        const label = 'Join Group'
+        const label = channelType === 'channel' ? 'Join Channel' : 'Join Group'
         const linkURL = `texts://platform-callback/${this.accountID}/join-${channelType}/${threadID}/${id}/${hashOrChannelName}`
         buttons.push({ label, linkURL })
       }
