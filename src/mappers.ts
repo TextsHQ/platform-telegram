@@ -471,8 +471,9 @@ export default class TelegramMapper {
     }
 
     const mapMessageMedia = () => {
-      if (msg.media instanceof Api.MessageMediaPhoto) {
-        const { photo } = msg
+      const actionPhoto = (msg.action && 'photo' in msg.action) ? msg.action.photo : undefined
+      if (msg.media instanceof Api.MessageMediaPhoto || actionPhoto) {
+        const photo = msg.photo || actionPhoto
         if (!photo) return
         const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize : undefined
         mapped.attachments ||= []
@@ -567,7 +568,7 @@ export default class TelegramMapper {
           title: 'Google Maps',
           summary: `${msg.media.geo.lat}, ${msg.media.geo.long}`,
         })
-      } else {
+      } else if (msg.media) {
         mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
         texts.Sentry.captureMessage(`Telegram: unsupported media ${msg.media?.className}`)
       }
@@ -718,6 +719,10 @@ export default class TelegramMapper {
         mapped.text = `{{sender}} changed topic name to "${msg.action.title}"`
         mapped.isAction = true
         mapped.parseTemplate = true
+      } else if (msg.action instanceof Api.MessageActionSuggestProfilePhoto) {
+        mapped.text = '{{sender}} suggests this photo for your Telegram profile'
+        mapped.isAction = true
+        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
       } else if (msg.action) {
@@ -739,9 +744,7 @@ export default class TelegramMapper {
     if (msg.reactions) {
       mapped.reactions = this.mapReactions(msg.reactions)
     }
-    if (msg.media) {
-      mapMessageMedia()
-    }
+    mapMessageMedia()
 
     if (msg instanceof Api.MessageService) {
       if (!mapMessageService()) return undefined

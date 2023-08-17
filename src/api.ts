@@ -293,8 +293,9 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private storeMessage = (message: CustomMessage) => {
-    if (message.media) {
-      this.state.mediaStore.set(String(message.id), message.media)
+    const actionPhoto = (message.action && 'photo' in message.action) ? message.action.photo : undefined
+    if (message.media || actionPhoto) {
+      this.state.mediaStore.set(String(message.id), message.media || (actionPhoto ? new Api.MessageMediaPhoto({ photo: actionPhoto }) : undefined))
     }
     if (message.poll?.poll) {
       this.state.pollIdMessageId.set(String(message.poll.poll.id), message.id)
