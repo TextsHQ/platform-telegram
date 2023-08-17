@@ -819,6 +819,7 @@ export default class TelegramMapper {
         hasMore: true,
         items: dialog.message ? [this.mapMessage(dialog.message, dialog.dialog.readOutboxMaxId)].filter(Boolean) : [],
       },
+      messageExpirySeconds: dialog.dialog.ttlPeriod,
     }
     return t
   }
