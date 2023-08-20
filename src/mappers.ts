@@ -723,6 +723,10 @@ export default class TelegramMapper {
         mapped.text = '{{sender}} suggests this photo for your Telegram profile'
         mapped.isAction = true
         mapped.parseTemplate = true
+      } else if (msg.action instanceof Api.MessageActionGiftPremium) {
+        mapped.text = `{{sender}} gifted you Telegram Premium for ${msg.action.months} months (${msg.action.amount.toJSNumber() / 100} ${msg.action.currency})`
+        mapped.isAction = true
+        mapped.parseTemplate = true
       } else if (msg.action instanceof Api.MessageActionHistoryClear) {
         return undefined
       } else if (msg.action) {
