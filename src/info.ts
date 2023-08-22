@@ -59,6 +59,7 @@ const info: PlatformInfo = {
     Attribute.SUPPORTS_GROUP_PARTICIPANT_ROLE_CHANGE,
     Attribute.SUBSCRIBE_TO_THREAD_SELECTION,
     Attribute.CAN_FETCH_LINK_PREVIEW,
+    Attribute.CAN_REMOVE_LINK_PREVIEW,
   ]),
   attachments: {
     supportsCaption: true,

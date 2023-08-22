@@ -995,6 +995,7 @@ export default class TelegramAPI implements PlatformAPI {
       message: text,
       replyTo: quotedMessageID ? Number(quotedMessageID) : undefined,
       file,
+      linkPreview: msgContent.links?.length > 0 ? msgContent.links.every(l => l.includePreview) : undefined,
     }
     const res = await this.client.sendMessage(threadID, msgSendParams)
     // refetch to make sure msg.media is correctly present
