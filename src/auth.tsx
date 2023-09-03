@@ -22,11 +22,25 @@ const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
   const [qrLink, setQRLink] = useState<string>()
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
+  const _login = async (custom: any) => {
+    setLoading(true)
+    try {
+      await login({ custom })
+    } finally {
+      setLoading(false)
+    }
+  }
   const onSubmit = async (ev?: FormEvent<HTMLFormElement>) => {
     ev?.preventDefault()
-    setLoading(true)
-    await login({ custom: { phoneNumber, code, password } })
-    setLoading(false)
+    _login({ phoneNumber, code, password })
+  }
+  const onPaste = (ev: React.ClipboardEvent<HTMLInputElement>) => {
+    const codeTxt = ev.clipboardData.getData('text').trim()
+    if (/^\d+$/.test(codeTxt)) { // auto submit when pasted code is numeric
+      ev.preventDefault()
+      setCode(codeTxt)
+      _login({ phoneNumber, code: codeTxt, password })
+    }
   }
   useEffect(() => {
     api.onLoginEvent(({ authState: state, qrLink: qrLinkValue }: { authState: AuthState, qrLink?: string }) => {
@@ -53,7 +67,7 @@ const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
             <div>Authentication code has been sent to the Telegram app on your phone ({phoneNumber})</div>
             <label>
               <span>Code</span>
-              <input type="number" autoComplete="one-time-code" pattern="[0-9]*" onChange={ev => setCode(ev.target.value)} value={code} autoFocus />
+              <input type="number" autoComplete="one-time-code" pattern="[0-9]*" onPaste={onPaste} onChange={ev => setCode(ev.target.value)} value={code} autoFocus />
             </label>
           </>
         )}
