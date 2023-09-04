@@ -53,16 +53,17 @@ const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
     setAuthState(AuthState.QR_CODE)
     login({ custom: 'qr' })
   }
-  return (
-    <div className="auth telegram-auth">
-      <form onSubmit={onSubmit}>
-        {authState === AuthState.PHONE_INPUT && (
+  const formElement = (() => {
+    switch (authState) {
+      case AuthState.PHONE_INPUT:
+        return (
           <label>
             <span>Phone Number</span>
             <PhoneInput onChange={value => setPhoneNumber(value ? value.toString() : '')} value={phoneNumber} autoFocus />
           </label>
-        )}
-        {authState === AuthState.CODE_INPUT && (
+        )
+      case AuthState.CODE_INPUT:
+        return (
           <>
             <div>Authentication code has been sent to the Telegram app on your phone ({phoneNumber})</div>
             <label>
@@ -70,23 +71,34 @@ const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
               <input type="number" autoComplete="one-time-code" pattern="[0-9]*" onPaste={onPaste} onChange={ev => setCode(ev.target.value)} value={code} autoFocus />
             </label>
           </>
-        )}
-        {authState === AuthState.PASSWORD_INPUT && (
+        )
+      case AuthState.PASSWORD_INPUT:
+        return (
           <label>
             <span>Password</span>
             <input type="password" autoComplete="current-password" onChange={ev => setPassword(ev.target.value)} autoFocus />
           </label>
+        )
+      case AuthState.QR_CODE:
+        return (
+          <>
+            {instructions}
+            {qrLink ? <QRCode value={qrLink} /> : 'Loading...'}
+          </>
+        )
+      default:
+        break
+    }
+  })()
+  return (
+    <div className="auth telegram-auth">
+      <form onSubmit={onSubmit}>
+        {formElement}
+        {authState !== AuthState.QR_CODE && (
+          <label>
+            <button type="submit" disabled={loading || (!isPossiblePhoneNumber(phoneNumber || '') && authState === AuthState.PHONE_INPUT)}>{loading ? '...' : '→'}</button>
+          </label>
         )}
-        {authState === AuthState.QR_CODE
-          ? <>
-              {instructions}
-              {qrLink ? <QRCode value={qrLink} /> : 'Loading...'}
-            </>
-          : (
-            <label>
-              <button type="submit" disabled={!isPossiblePhoneNumber(phoneNumber || '') || loading}>{loading ? '...' : '→'}</button>
-            </label>
-          )}
         {authState === AuthState.PHONE_INPUT && (
           <label style={{ borderTop: '1px solid rgba(0,0,0,.1)', marginTop: '2em', paddingTop: '2em' }}>
             <button type="button" onClick={onQRLoginClick}>Login with QR code instead</button>
