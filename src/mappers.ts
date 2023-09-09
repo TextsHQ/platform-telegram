@@ -292,9 +292,11 @@ export default class TelegramMapper {
   }
 
   private getMessageButtons(msg: CustomMessage | Api.Message | Api.MessageService) {
-    const threadID = getMarkedId({ chatId: msg.chatId })
+    const threadID = msg.chatId ? getMarkedId({ chatId: msg.chatId }) : undefined
     const { replyMarkup, id } = msg
-    const buttons: MessageButton[] = replyMarkup ? this.getMessageButtonsReplyMarkup(replyMarkup, threadID, id) : []
+    const buttons: MessageButton[] = replyMarkup
+      ? this.getMessageButtonsReplyMarkup(replyMarkup, threadID, id)
+      : []
 
     if (msg.media instanceof Api.MessageMediaWebPage
         && msg.media.webpage instanceof Api.WebPage) {
