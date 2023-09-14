@@ -1694,7 +1694,7 @@ __metadata:
     mime-types: ^2.1.35
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: 3.1.53
-    telegram: ^2.17.4
+    telegram: ^2.18.26
     typescript: ^5.0.4
     vcard-creator: ^0.6.0
   languageName: unknown
@@ -5226,9 +5226,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.17.4":
-  version: 2.17.4
-  resolution: "telegram@npm:2.17.4"
+"telegram@npm:^2.18.26":
+  version: 2.18.26
+  resolution: "telegram@npm:2.18.26"
   dependencies:
     "@cryptography/aes": ^0.1.1
     async-mutex: ^0.3.0
@@ -5251,7 +5251,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 1cf7ae4a9cb659c68c95b645f18790ee789929321ba978dad5943d7198e9035d55ee96f07770f11472932535e3478e3db91d57087b1653ae67df770a236e5e8d
+  checksum: 8d9f7cb991fd412cbad530d9b49d870037d815766dbb0b7c2b52bf20501254e7edce286ab2f2af79990bfd3e06465e4eb8f8d01fc1035a8dc19612a75a2e339c
   languageName: node
   linkType: hard
 
