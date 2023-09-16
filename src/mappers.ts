@@ -442,10 +442,10 @@ export default class TelegramMapper {
     }
   }
 
-  mapMessage(msg: CustomMessage | Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
+  mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
-    const isThreadSender = msg.sender?.className.includes('Chat') || msg.sender?.className.includes('Channel')
+    const isThreadSender = msg.fromId === null && (msg.peerId?.className.includes('Chat') || msg.peerId?.className.includes('Channel'))
     const senderID = msg.senderId
       ? (isThreadSender
         ? '$thread' + (msg.senderId.equals(msg.chatId) ? '' : `_${msg.senderId}`)
