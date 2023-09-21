@@ -2,7 +2,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as sleep } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, ClientContext, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, ClientContext, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo, PaginatedWithCursors } from '@textshq/platform-sdk'
 import { debounce, uniqBy } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -907,7 +907,7 @@ export default class TelegramAPI implements PlatformAPI {
     return this.mapThread(dialogThread)
   }
 
-  getThreads = async (inboxName: ThreadFolderName, pagination: PaginationArg): Promise<Paginated<Thread>> => {
+  getThreads = async (inboxName: ThreadFolderName, pagination: PaginationArg): Promise<PaginatedWithCursors<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
     await this.waitForClientConnected()
 
@@ -1302,7 +1302,7 @@ export default class TelegramAPI implements PlatformAPI {
     }))
   }
 
-  getStickerPacks = async (): Promise<Paginated<StickerPack>> => {
+  getStickerPacks = async (): Promise<PaginatedWithCursors<StickerPack>> => {
     const cachedGetAllStickersHash = this.db.cacheGetHash('GetAllStickers')
     const networkAllStickers = await this.client.invoke(new Api.messages.GetAllStickers(cachedGetAllStickersHash ? { hash: BigInteger(cachedGetAllStickersHash) } : {}))
     const isCached = networkAllStickers instanceof Api.messages.AllStickersNotModified
@@ -1327,6 +1327,7 @@ export default class TelegramAPI implements PlatformAPI {
         return TelegramMapper.mapStickerPack(ss, stickers)
       })),
       hasMore: false,
+      oldestCursor: undefined,
     }
   }
 }
