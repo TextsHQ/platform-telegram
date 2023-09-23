@@ -465,6 +465,7 @@ export default class TelegramMapper {
       expiresInSeconds: msg.ttlPeriod,
     }
 
+    if (msg instanceof Api.MessageEmpty) mapped.isHidden = true
     if (readOutboxMaxId) mapped.seen = msg.id <= readOutboxMaxId
 
     const setFormattedText = (msgText: string, msgEntities: Api.TypeMessageEntity[]) => {
