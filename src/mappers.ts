@@ -250,6 +250,7 @@ export default class TelegramMapper {
     if (update.action instanceof Api.SendMessageEmojiInteraction) return customActivity(`watching ${update.action.emoticon} reaction`)
     // when the current user taps on emoji
     if (update.action instanceof Api.SendMessageEmojiInteractionSeen) return customActivity(`watching ${update.action.emoticon} reaction`)
+    if (update.action instanceof Api.SpeakingInGroupCallAction) return customActivity('speaking in call')
     if (update.action instanceof Api.SendMessageCancelAction) {
       return {
         type: ServerEventType.USER_ACTIVITY,
@@ -258,8 +259,8 @@ export default class TelegramMapper {
         activityType: ActivityType.NONE,
       }
     }
+    // @ts-expect-error
     texts.Sentry.captureMessage(`[Telegram] unsupported activity ${update.action.className}`)
-    texts.log('unsupported activity', update.action.className, update.action)
   }
 
   private getMessageButtonsReplyMarkup(replyMarkup: Api.TypeReplyMarkup, threadID: string, messageID: number): MessageButton[] {
