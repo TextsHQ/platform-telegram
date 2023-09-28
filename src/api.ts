@@ -1130,7 +1130,7 @@ export default class TelegramAPI implements PlatformAPI {
     const result = await this.client.invoke(new Api.account.RegisterDevice({
       token,
       // https://core.telegram.org/api/push-updates#subscribing-to-notifications
-      tokenType: type === 'apple' ? 1 : 10,
+      tokenType: type === 'apple' ? 9 : 10,
       appSandbox: IS_DEV,
       noMuted: true,
       secret,
@@ -1143,7 +1143,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (type === 'android') throw Error('invalid type')
     const result = await this.client.invoke(new Api.account.UnregisterDevice({
       token,
-      tokenType: type === 'apple' ? 1 : 10,
+      tokenType: type === 'apple' ? 9 : 10,
       otherUids: [],
     }))
     if (!result) throw new Error('Could not unregister for push notifications')
