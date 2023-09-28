@@ -99,7 +99,7 @@ const TelegramAuth: React.FC<AuthProps> = ({ api, login, meContact }) => {
             <button type="submit" disabled={loading || (!isPossiblePhoneNumber(phoneNumber || '') && authState === AuthState.PHONE_INPUT)}>{loading ? '...' : '→'}</button>
           </label>
         )}
-        {authState === AuthState.PHONE_INPUT && (
+        {authState === AuthState.PHONE_INPUT && globalThis.textsProps?.isPhone != true && (
           <label style={{ borderTop: '1px solid rgba(0,0,0,.1)', marginTop: '2em', paddingTop: '2em' }}>
             <button type="button" onClick={onQRLoginClick}>Login with QR code instead</button>
           </label>
