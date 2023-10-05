@@ -625,7 +625,7 @@ export default class TelegramMapper {
           actorParticipantID: '',
         }
       } else if (msg.action instanceof Api.MessageActionChatDeleteUser) {
-        mapped.text = `{{${msg.action.userId}}} left the group`
+        mapped.text = msg.out ? `You removed {{${msg.action.userId}}}` : `{{${msg.action.userId}}} left the group`
         mapped.isAction = true
         mapped.parseTemplate = true
         mapped.action = {
