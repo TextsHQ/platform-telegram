@@ -543,7 +543,7 @@ export default class TelegramMapper {
             attachment.size = undefined
           }
           if (videoAttr.roundMessage) {
-            mapped.extra = { ...mapped.extra, className: 'telegram-video-note' }
+            mapped.extra = { ...mapped.extra, className: 'circular-video' }
           }
         }
         if (animatedAttr) attachment.isGif = true
