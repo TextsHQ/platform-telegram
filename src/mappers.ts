@@ -614,7 +614,7 @@ export default class TelegramMapper {
           actorParticipantID: mapped.senderID,
         }
       } else if (msg.action instanceof Api.MessageActionChatAddUser) {
-        mapped.text = msg.fromId
+        mapped.text = msg.fromId && ('userId' in msg.fromId && msg.fromId.userId.notEquals(msg.action.users[0]))
           ? `{{sender}} invited ${msg.action.users.map(m => `{{${m}}}`).join(', ')}`
           : `${msg.action.users.map(m => `{{${m}}}`).join(', ')} joined the group`
         mapped.isAction = true
