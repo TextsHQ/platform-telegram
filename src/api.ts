@@ -968,10 +968,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   getLinkPreview = async (link: string): Promise<MessageLink> => {
     const res = await this.client.invoke(new Api.messages.GetWebPage({ url: link }))
-    if (!(res instanceof Api.WebPage)) return
-    const photoID = res.photo ? String(res.photo.id) : undefined
-    if (res.photo) this.state.mediaStore.set(photoID, new Api.MessageMediaPhoto({ photo: res.photo }))
-    return this.mapper.mapMessageLink(res, photoID)
+    if (!(res.webpage instanceof Api.WebPage)) return
+    const { photo } = res.webpage
+    const photoID = photo ? String(photo.id) : undefined
+    if (photo) this.state.mediaStore.set(photoID, new Api.MessageMediaPhoto({ photo }))
+    return this.mapper.mapMessageLink(res.webpage, photoID)
   }
 
   onThreadSelected = async (threadID: string): Promise<void> => {

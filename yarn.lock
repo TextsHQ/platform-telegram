@@ -1694,7 +1694,7 @@ __metadata:
     mime-types: ^2.1.35
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: 3.1.53
-    telegram: ^2.19.4
+    telegram: 2.19.10
     typescript: ^5.0.4
     vcard-creator: ^0.6.0
   languageName: unknown
@@ -3550,7 +3550,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graceful-fs@npm:^4.1.11, graceful-fs@npm:^4.2.6":
+"graceful-fs@npm:^4.1.11":
+  version: 4.2.11
+  resolution: "graceful-fs@npm:4.2.11"
+  checksum: ac85f94da92d8eb6b7f5a8b20ce65e43d66761c55ce85ac96df6865308390da45a8d3f0296dd3a663de65d30ba497bd46c696cc1e248c72b13d6d567138a4fc7
+  languageName: node
+  linkType: hard
+
+"graceful-fs@npm:^4.2.6":
   version: 4.2.10
   resolution: "graceful-fs@npm:4.2.10"
   checksum: 3f109d70ae123951905d85032ebeae3c2a5a7a997430df00ea30df0e3a6c60cf6689b109654d6fdacd28810a053348c4d14642da1d075049e6be1ba5216218da
@@ -5226,9 +5233,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:^2.19.4":
-  version: 2.19.4
-  resolution: "telegram@npm:2.19.4"
+"telegram@npm:2.19.10":
+  version: 2.19.10
+  resolution: "telegram@npm:2.19.10"
   dependencies:
     "@cryptography/aes": ^0.1.1
     async-mutex: ^0.3.0
@@ -5251,7 +5258,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 64d52f42562bae0181d5ff3355e0955f66fc6d6d2d83a2897ac7cf8466ef3c760facefe73af9855b585cc4ad78c5ee9d199981873d597f7d6f40417b31c45534
+  checksum: c2a160a3c1c998fa8cb4ec5c366fd1d072f727e0135e98f77e9def6ec432153c6a549a8c571e12da718267b58654b103920cf2915e84a41c9d04f635bd42218a
   languageName: node
   linkType: hard
 
