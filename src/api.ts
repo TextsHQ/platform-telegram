@@ -857,8 +857,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (!('chats' in result)) throw new Error('couldnt find chat')
     const thread = result.chats.find(chat => chat.className === 'Chat')
     if (!thread) throw new Error('could not find thread')
-    // always negative thread id for groups
-    return this.getThread(`-${thread.id}`)
+    return this.getThread(getMarkedId({ chatId: thread.id }))
   }
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
