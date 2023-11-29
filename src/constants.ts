@@ -1,7 +1,3 @@
-import { texts } from '@textshq/platform-sdk'
-
-export const BINARIES_DIR_PATH = texts.getBinariesDirPath('telegram')
-
 export const API_ID = 1216419
 
 export const API_HASH = '7353efc824823e14ad31cd2b05272466'
