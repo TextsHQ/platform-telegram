@@ -1,7 +1,6 @@
-import path from 'path'
 import { texts } from '@textshq/platform-sdk'
 
-export const BINARIES_DIR_PATH = path.join(texts.constants.BUILD_DIR_PATH, 'platform-telegram')
+export const BINARIES_DIR_PATH = texts.getBinariesDirPath('telegram')
 
 export const API_ID = 1216419
 
