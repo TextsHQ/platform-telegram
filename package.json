@@ -13,7 +13,7 @@
     "lint-fix": "eslint src --ext ts,tsx,js,jsx --cache --fix"
   },
   "dependencies": {
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#main",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#83062d83c32e95e81031137813bbe8d9dd4914c8",
     "async-mutex": "^0.3.2",
     "big-integer": "^1.6.51",
     "date-fns": "^2.30.0",
@@ -37,5 +37,5 @@
     "eslint": "^8.41.0",
     "typescript": "^5.0.4"
   },
-  "packageManager": "yarn@3.5.0"
+  "packageManager": "yarn@4.0.2"
 }
