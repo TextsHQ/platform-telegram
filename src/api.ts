@@ -855,9 +855,22 @@ export default class TelegramAPI implements PlatformAPI {
     const result = await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
     await this.updateHandler(result)
     if (!('chats' in result)) throw new Error('couldnt find chat')
+    if (!('users' in result)) throw new Error('couldnt find users')
+
     const thread = result.chats.find(chat => chat.className === 'Chat')
     if (!thread) throw new Error('could not find thread')
-    return this.getThread(getMarkedId({ chatId: thread.id }))
+
+    const users = result.users.map(user => user instanceof Api.User && this.mapper.mapUser(user)).filter(Boolean)
+
+    return {
+      id: getMarkedId({ chatId: thread.id }),
+      isUnread: false,
+      isReadOnly: false,
+      type: 'group',
+      messages: { hasMore: false, items: [] },
+      participants: { hasMore: false, items: users },
+      title,
+    } as Thread
   }
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
