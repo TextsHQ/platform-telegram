@@ -800,6 +800,30 @@ export default class TelegramMapper {
     return true
   }
 
+  mapGroupChatToThread = (chat: Api.Chat, users: Api.User[]): Thread => {
+    const isReadOnly = !TelegramMapper.hasWritePermissions(chat)
+    const photo = chat.photo
+    const imgURL = photo instanceof Api.ChatPhoto ? this.getProfilePhotoUrl(photo.photoId, chat.id) : undefined
+    const title = chat.title
+    const participants = users.map(u => this.mapParticipant(u))
+    return {
+      _original: stringifyCircular(chat),
+      id: getMarkedId({ chatId: chat.id }),
+      type: 'group',
+      isReadOnly,
+      imgURL,
+      title,
+      participants: {
+        hasMore: false,
+        items: participants,
+      },
+      messages: {
+        hasMore: false,
+        items: [],
+      },
+    } as Thread
+  }
+
   mapThread = (dialog: Dialog, participants: Participant[]): Thread => {
     if (!dialog.id) throw new Error(`Dialog had no id ${stringifyCircular(dialog.inputEntity, 2)}`)
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
