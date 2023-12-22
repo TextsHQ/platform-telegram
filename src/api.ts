@@ -863,7 +863,9 @@ export default class TelegramAPI implements PlatformAPI {
     if (!threadID) throw new Error('could not find threadID')
 
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
-      if (dialog?.id === threadID) return this.mapThread(dialog)
+      if (String(dialog.id) === getMarkedId({ chatId: threadID })) {
+        return this.mapThread(dialog)
+      }
     }
 
     return true
