@@ -339,8 +339,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel) => {
     let markedId: string
-    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else
-    if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
+    if ('chatId' in update) {
+      markedId = getMarkedId({ chatId: update.chatId })
+    } else if (update instanceof Api.UpdateChannel) {
+      markedId = getMarkedId({ channelId: update.channelId })
+    }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
@@ -855,27 +858,17 @@ export default class TelegramAPI implements PlatformAPI {
     const result = await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
     await this.updateHandler(result)
     if (!('chats' in result)) throw new Error('couldnt find chat')
+    // eslint-disable-next-line prefer-const
     const threadID = result.chats.find(chat => chat.className === 'Chat')?.id
     if (!threadID) throw new Error('could not find threadID')
 
-    return new Promise<Thread>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('thread not found'))
-      }, 5 * 1000)
-      // TODO: use EventBuilder and handle removeEventHandler
-      this.client.addEventHandler(async (update: Api.TypeUpdate) => {
-        if (!(update instanceof Api.UpdateChat || update instanceof Api.UpdateChannel)) return
-        if (!('chatId' in update)) return
-        for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
-          const threadId = String(dialog.id)
-          if (threadId === getMarkedId({ chatId: update.chatId })) {
-            clearTimeout(timeout)
-            const thread = await this.mapThread(dialog)
-            resolve(thread)
-          }
-        }
-      })
-    })
+    for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
+      if (dialog?.id === threadID) continue
+      const thread = await this.mapThread(dialog)
+      return thread
+    }
+
+    return true
   }
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
