@@ -339,8 +339,11 @@ export default class TelegramAPI implements PlatformAPI {
 
   private onUpdateChatChannel = async (update: Api.UpdateChat | Api.UpdateChannel) => {
     let markedId: string
-    if ('chatId' in update) { markedId = getMarkedId({ chatId: update.chatId }) } else
-    if (update instanceof Api.UpdateChannel) { markedId = getMarkedId({ channelId: update.channelId }) }
+    if ('chatId' in update) {
+      markedId = getMarkedId({ chatId: update.chatId })
+    } else if (update instanceof Api.UpdateChannel) {
+      markedId = getMarkedId({ channelId: update.channelId })
+    }
     for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
       const threadId = String(dialog.id)
       if (threadId === markedId) {
@@ -855,9 +858,17 @@ export default class TelegramAPI implements PlatformAPI {
     const result = await this.client.invoke(new Api.messages.CreateChat({ users: userIDs, title }))
     await this.updateHandler(result)
     if (!('chats' in result)) throw new Error('couldnt find chat')
-    const thread = result.chats.find(chat => chat.className === 'Chat')
-    if (!thread) throw new Error('could not find thread')
-    return this.getThread(getMarkedId({ chatId: thread.id }))
+    // eslint-disable-next-line prefer-const
+    const threadID = result.chats.find(chat => chat.className === 'Chat')?.id
+    if (!threadID) throw new Error('could not find threadID')
+
+    for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
+      if (dialog?.id === threadID) continue
+      const thread = await this.mapThread(dialog)
+      return thread
+    }
+
+    return true
   }
 
   updateThread = async (threadID: string, updates: Partial<Thread>) => {
