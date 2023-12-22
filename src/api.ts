@@ -859,19 +859,22 @@ export default class TelegramAPI implements PlatformAPI {
     if (!threadID) throw new Error('could not find threadID')
 
     return new Promise<Thread>((resolve, reject) => {
-      let timeout
-      const interval = setInterval(async () => {
-        const thread = await this.getThread(getMarkedId({ chatId: threadID }))
-        if (thread) {
-          clearInterval(interval)
-          clearTimeout(timeout)
-          resolve(thread)
-        }
-      }, 200)
-      timeout = setTimeout(() => {
-        clearInterval(interval)
+      const timeout = setTimeout(() => {
         reject(new Error('thread not found'))
-      }, 3 * 1000)
+      }, 5 * 1000)
+      // TODO: use EventBuilder and handle removeEventHandler
+      this.client.addEventHandler(async (update: Api.TypeUpdate) => {
+        if (!(update instanceof Api.UpdateChat || update instanceof Api.UpdateChannel)) return
+        if (!('chatId' in update)) return
+        for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
+          const threadId = String(dialog.id)
+          if (threadId === getMarkedId({ chatId: update.chatId })) {
+            clearTimeout(timeout)
+            const thread = await this.mapThread(dialog)
+            resolve(thread)
+          }
+        }
+      })
     })
   }
 
