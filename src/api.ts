@@ -1219,8 +1219,6 @@ export default class TelegramAPI implements PlatformAPI {
       try {
         const key = [filePath, type, id, fileName].join('-')
         if (this.downloadingAssets.has(key)) {
-          texts.log('[tg] reusing dl promise', key)
-          texts.Sentry.captureMessage('[tg] reusing dl promise')
           await this.downloadingAssets.get(key)
         } else {
           if (await fileExists(filePath)) {
