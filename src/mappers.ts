@@ -478,14 +478,16 @@ export default class TelegramMapper {
       const actionPhoto = (msg.action && 'photo' in msg.action) ? msg.action.photo : undefined
       if (msg.media instanceof Api.MessageMediaPhoto || actionPhoto) {
         const photo = msg.photo || actionPhoto
-        if (!photo) return
-        const photoSize = photo instanceof Api.Photo ? photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize : undefined
+        if (!photo || photo instanceof Api.PhotoEmpty) return
+        const photoSize = photo.sizes?.find(size => size instanceof Api.PhotoSize) as Api.PhotoSize
+        const videoSize = photo.videoSizes?.find(size => size instanceof Api.VideoSize) as Api.VideoSize
         mapped.attachments ||= []
         mapped.attachments.push({
           id: String(photo.id),
-          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, 'jpg'),
-          type: AttachmentType.IMG,
-          size: photoSize ? { width: photoSize.w, height: photoSize.h } : undefined,
+          srcURL: this.getMediaUrl(threadID, msg.id, msg.id, videoSize ? 'mp4' : 'jpg'),
+          type: videoSize ? AttachmentType.VIDEO : AttachmentType.IMG,
+          size: photoSize ? { width: photoSize.w, height: photoSize.h } : videoSize ? { width: videoSize.w, height: videoSize.h } : undefined,
+          isGif: Boolean(videoSize && actionPhoto),
         })
       } else if (msg.contact) {
         const { contact } = msg
