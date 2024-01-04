@@ -578,168 +578,6 @@ export default class TelegramMapper {
       }
     }
 
-    const mapMessageService = () => {
-      if (msg.action instanceof Api.MessageActionPhoneCall) {
-        const isShortDuration = Number(msg.action.duration) < 3600
-        const startIndexDuration = isShortDuration ? 11 + 4 : 11
-        const endIndexDuration = isShortDuration ? startIndexDuration + 4 : startIndexDuration + 8
-        mapped.textHeading = [
-          `${msg.action.video ? '🎥 Video ' : '📞 '}Call`,
-          msg.action.duration ? new Date(msg.action.duration * 1000)
-            .toISOString()
-            .substring(startIndexDuration, endIndexDuration) : '',
-          msg.action.reason ? TelegramMapper.mapCallReason(msg.action.reason) : '',
-        ].filter(Boolean).join('\n')
-      } else if (msg.action instanceof Api.MessageActionGroupCall) {
-        mapped.text = `{{${mapped.senderID ? 'sender' : '$thread'}}} ${msg.action.duration ? 'ended the' : 'started a'} video chat`
-          + (msg.action.duration ? ` (${formatDuration(intervalToDuration({ start: 0, end: msg.action.duration * 1000 }))})` : '')
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionPinMessage) {
-        mapped.text = '{{sender}} pinned a message'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionContactSignUp) {
-        mapped.text = '{{sender}} joined Telegram'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.behavior = MessageBehavior.SILENT
-      } else if (msg.action instanceof Api.MessageActionChatEditTitle) {
-        mapped.text = `{{sender}} changed the thread title to "${msg.action.title}"`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_TITLE_UPDATED,
-          title: msg.action.title,
-          actorParticipantID: mapped.senderID,
-        }
-      } else if (msg.action instanceof Api.MessageActionChatAddUser) {
-        mapped.text = msg.fromId && ('userId' in msg.fromId && msg.fromId.userId.notEquals(msg.action.users[0]))
-          ? `{{sender}} invited ${msg.action.users.map(m => `{{${m}}}`).join(', ')}`
-          : `${msg.action.users.map(m => `{{${m}}}`).join(', ')} joined the group`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: msg.action.users.map(num => String(num)),
-          actorParticipantID: '',
-        }
-      } else if (msg.action instanceof Api.MessageActionChatDeleteUser) {
-        mapped.text = msg.out ? `You removed {{${msg.action.userId}}}` : `{{${msg.action.userId}}} left the group`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
-          participantIDs: [String(msg.action.userId)],
-          actorParticipantID: '',
-        }
-      } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
-        mapped.text = '{{sender}} joined the group via invite link'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: [mapped.senderID],
-          actorParticipantID: '',
-        }
-      } else if (msg.action instanceof Api.MessageActionChatJoinedByRequest) {
-        mapped.text = '{{sender}} was accepted into the group'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
-          participantIDs: [mapped.senderID],
-          actorParticipantID: '',
-        }
-      } else if (msg.action instanceof Api.MessageActionChatEditPhoto) {
-        mapped.text = '{{sender}} updated the group photo'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_IMG_CHANGED,
-          actorParticipantID: '',
-        }
-      } else if (msg.action instanceof Api.MessageActionChatDeletePhoto) {
-        mapped.text = '{{sender}}} deleted the group photo'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.THREAD_IMG_CHANGED,
-          actorParticipantID: mapped.senderID,
-        }
-      } else if (msg.action instanceof Api.MessageActionChatCreate) {
-        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `{{sender}} created the group "${title}"`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-        mapped.action = {
-          type: MessageActionType.GROUP_THREAD_CREATED,
-          actorParticipantID: mapped.senderID,
-          title,
-        }
-      } else if (msg.action instanceof Api.MessageActionChannelCreate) {
-        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `Channel "${title}" was created`
-        mapped.isAction = true
-        mapped.action = {
-          type: MessageActionType.GROUP_THREAD_CREATED,
-          actorParticipantID: mapped.senderID,
-          title,
-        }
-      } else if (msg.action instanceof Api.MessageActionChannelMigrateFrom) {
-        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `Group "${title}" was created`
-        mapped.isAction = true
-      } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
-        const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
-        mapped.text = `Group "${title}" was migrated`
-        mapped.isAction = true
-      } else if (msg.action instanceof Api.MessageActionCustomAction) {
-        mapped.text = msg.action.message
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionPaymentSent) {
-        mapped.text = `You have successfully transfered ${msg.action.currency} ${msg.action.totalAmount}`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionSetChatTheme) {
-        mapped.text = msg.action.emoticon
-          ? `{{sender}} changed the chat theme to ${msg.action.emoticon}`
-          : '{{sender}} disabled the chat theme'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionSetMessagesTTL) {
-        const days = Math.floor(msg.action.period / (60 * 60 * 24))
-        mapped.text = msg.action.period
-          ? `{{sender}} set messages to automatically delete after ${days} day${days === 1 ? '' : 's'}`
-          : '{{sender}} disabled the auto-delete timer'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionTopicCreate) {
-        mapped.text = `{{sender}} created topic "${msg.action.title}"`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionTopicEdit) {
-        mapped.text = `{{sender}} changed topic name to "${msg.action.title}"`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionSuggestProfilePhoto) {
-        mapped.text = '{{sender}} suggests this photo for your Telegram profile'
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionGiftPremium) {
-        mapped.text = `{{sender}} gifted you Telegram Premium for ${msg.action.months} months (${msg.action.amount.toJSNumber() / 100} ${msg.action.currency})`
-        mapped.isAction = true
-        mapped.parseTemplate = true
-      } else if (msg.action instanceof Api.MessageActionHistoryClear) {
-        return undefined
-      } else if (msg.action) {
-        texts.Sentry.captureMessage(`[Telegram] unmapped action: ${msg.action.className || msg.action.constructor?.name}`)
-        texts.log('[Telegram] unmapped action', msg.action.className || msg.action.constructor?.name)
-      }
-      return true
-    }
-
     if (msg.text) {
       setFormattedText(msg.rawText, msg.entities ?? [])
       if (msg.webPreview) {
@@ -755,6 +593,167 @@ export default class TelegramMapper {
     mapMessageMedia()
 
     if (msg instanceof Api.MessageService) {
+      const mapMessageService = () => {
+        if (msg.action instanceof Api.MessageActionPhoneCall) {
+          const isShortDuration = Number(msg.action.duration) < 3600
+          const startIndexDuration = isShortDuration ? 11 + 4 : 11
+          const endIndexDuration = isShortDuration ? startIndexDuration + 4 : startIndexDuration + 8
+          mapped.textHeading = [
+            `${msg.action.video ? '🎥 Video ' : '📞 '}Call`,
+            msg.action.duration ? new Date(msg.action.duration * 1000)
+              .toISOString()
+              .substring(startIndexDuration, endIndexDuration) : '',
+            msg.action.reason ? TelegramMapper.mapCallReason(msg.action.reason) : '',
+          ].filter(Boolean).join('\n')
+        } else if (msg.action instanceof Api.MessageActionGroupCall) {
+          mapped.text = `{{${mapped.senderID ? 'sender' : '$thread'}}} ${msg.action.duration ? 'ended the' : 'started a'} video chat`
+            + (msg.action.duration ? ` (${formatDuration(intervalToDuration({ start: 0, end: msg.action.duration * 1000 }))})` : '')
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionPinMessage) {
+          mapped.text = '{{sender}} pinned a message'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionContactSignUp) {
+          mapped.text = '{{sender}} joined Telegram'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.behavior = MessageBehavior.SILENT
+        } else if (msg.action instanceof Api.MessageActionChatEditTitle) {
+          mapped.text = `{{sender}} changed the thread title to "${msg.action.title}"`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.THREAD_TITLE_UPDATED,
+            title: msg.action.title,
+            actorParticipantID: mapped.senderID,
+          }
+        } else if (msg.action instanceof Api.MessageActionChatAddUser) {
+          mapped.text = msg.fromId && ('userId' in msg.fromId && msg.fromId.userId.notEquals(msg.action.users[0]))
+            ? `{{sender}} invited ${msg.action.users.map(m => `{{${m}}}`).join(', ')}`
+            : `${msg.action.users.map(m => `{{${m}}}`).join(', ')} joined the group`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+            participantIDs: msg.action.users.map(num => String(num)),
+            actorParticipantID: '',
+          }
+        } else if (msg.action instanceof Api.MessageActionChatDeleteUser) {
+          mapped.text = msg.out ? `You removed {{${msg.action.userId}}}` : `{{${msg.action.userId}}} left the group`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.THREAD_PARTICIPANTS_REMOVED,
+            participantIDs: [String(msg.action.userId)],
+            actorParticipantID: '',
+          }
+        } else if (msg.action instanceof Api.MessageActionChatJoinedByLink) {
+          mapped.text = '{{sender}} joined the group via invite link'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+            participantIDs: [mapped.senderID],
+            actorParticipantID: '',
+          }
+        } else if (msg.action instanceof Api.MessageActionChatJoinedByRequest) {
+          mapped.text = '{{sender}} was accepted into the group'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.THREAD_PARTICIPANTS_ADDED,
+            participantIDs: [mapped.senderID],
+            actorParticipantID: '',
+          }
+        } else if (msg.action instanceof Api.MessageActionChatEditPhoto) {
+          mapped.text = '{{sender}} updated the group photo'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.THREAD_IMG_CHANGED,
+            actorParticipantID: '',
+          }
+        } else if (msg.action instanceof Api.MessageActionChatDeletePhoto) {
+          mapped.text = '{{sender}}} deleted the group photo'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.THREAD_IMG_CHANGED,
+            actorParticipantID: mapped.senderID,
+          }
+        } else if (msg.action instanceof Api.MessageActionChatCreate) {
+          const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+          mapped.text = `{{sender}} created the group "${title}"`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+          mapped.action = {
+            type: MessageActionType.GROUP_THREAD_CREATED,
+            actorParticipantID: mapped.senderID,
+            title,
+          }
+        } else if (msg.action instanceof Api.MessageActionChannelCreate) {
+          const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+          mapped.text = `Channel "${title}" was created`
+          mapped.isAction = true
+          mapped.action = {
+            type: MessageActionType.GROUP_THREAD_CREATED,
+            actorParticipantID: mapped.senderID,
+            title,
+          }
+        } else if (msg.action instanceof Api.MessageActionChannelMigrateFrom) {
+          const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+          mapped.text = `Group "${title}" was created`
+          mapped.isAction = true
+        } else if (msg.action instanceof Api.MessageActionChatMigrateTo) {
+          const title = msg.chat && 'title' in msg.chat ? msg.chat.title : ''
+          mapped.text = `Group "${title}" was migrated`
+          mapped.isAction = true
+        } else if (msg.action instanceof Api.MessageActionCustomAction) {
+          mapped.text = msg.action.message
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionPaymentSent) {
+          mapped.text = `You have successfully transfered ${msg.action.currency} ${msg.action.totalAmount}`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionSetChatTheme) {
+          mapped.text = msg.action.emoticon
+            ? `{{sender}} changed the chat theme to ${msg.action.emoticon}`
+            : '{{sender}} disabled the chat theme'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionSetMessagesTTL) {
+          const days = Math.floor(msg.action.period / (60 * 60 * 24))
+          mapped.text = msg.action.period
+            ? `{{sender}} set messages to automatically delete after ${days} day${days === 1 ? '' : 's'}`
+            : '{{sender}} disabled the auto-delete timer'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionTopicCreate) {
+          mapped.text = `{{sender}} created topic "${msg.action.title}"`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionTopicEdit) {
+          mapped.text = `{{sender}} changed topic name to "${msg.action.title}"`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionSuggestProfilePhoto) {
+          mapped.text = '{{sender}} suggests this photo for your Telegram profile'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionGiftPremium) {
+          mapped.text = `{{sender}} gifted you Telegram Premium for ${msg.action.months} months (${msg.action.amount.toJSNumber() / 100} ${msg.action.currency})`
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionHistoryClear) {
+          return undefined
+        } else if (msg.action) {
+          texts.Sentry.captureMessage(`[Telegram] unmapped action: ${msg.action.className || msg.action.constructor?.name}`)
+          texts.log('[Telegram] unmapped action', msg.action.className || msg.action.constructor?.name)
+        }
+        return true
+      }
       if (!mapMessageService()) return undefined
     }
 
