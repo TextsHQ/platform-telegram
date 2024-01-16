@@ -803,8 +803,8 @@ export default class TelegramMapper {
 
   mapThread = (dialog: Dialog, participants: Participant[]): Thread => {
     if (!dialog.id) throw new Error(`Dialog had no id ${stringifyCircular(dialog.inputEntity, 2)}`)
+    const { isChannel, isGroup } = dialog
     const isSingle = dialog.dialog.peer instanceof Api.PeerUser
-    const isChannel = dialog.dialog.peer instanceof Api.PeerChannel
     const photo = dialog.entity && 'photo' in dialog.entity ? dialog.entity.photo : undefined
     const imgURL = photo instanceof Api.ChatPhoto ? this.getProfilePhotoUrl(photo.photoId, dialog.id) : undefined
     const isReadOnly = !TelegramMapper.hasWritePermissions(dialog.entity)
@@ -812,7 +812,7 @@ export default class TelegramMapper {
     const t: Thread = {
       _original: stringifyCircular(dialog.dialog),
       id: getPeerId(dialog.id),
-      type: isSingle ? 'single' : isChannel ? 'channel' : 'group',
+      type: isSingle ? 'single' : isChannel && !isGroup ? 'channel' : 'group',
       // isPinned: dialog.pinned,
       isArchived: dialog.archived,
       // if last (and first) message is "X joined Telegram", set undefined timestamp which will hide the thread on client
