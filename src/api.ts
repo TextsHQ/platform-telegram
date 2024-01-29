@@ -663,9 +663,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private async _syncCommonState() {
     const serverState = await this.client.invoke(new Api.updates.GetState())
-    if (serverState.pts === this.state.localState.pts && serverState.date === this.state.localState.date) {
-      return
-    }
+    if (serverState.pts === this.state.localState.pts) return
 
     await this.getDifference(this.state.localState.pts, this.state.localState.date)
   }
