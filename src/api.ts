@@ -634,8 +634,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.registerUpdateListeners()
   }
 
-  private saveCommonState = () => {
-    this.db.saveState('common_state', {
+  private saveCommonState = (remove = false) => {
+    this.db.saveState('common_state', remove ? null : {
       pts: this.state.localState.pts,
       date: this.state.localState.date,
     })
@@ -649,7 +649,6 @@ export default class TelegramAPI implements PlatformAPI {
         this.state.localState.pts = localState.pts
         await this._syncCommonState()
       } else {
-        // initialize common state
         const serverState = await this.client.invoke(new Api.updates.GetState())
         this.state.localState.date = serverState.date
         this.state.localState.pts = serverState.pts
@@ -668,33 +667,41 @@ export default class TelegramAPI implements PlatformAPI {
       return
     }
 
-    const data = await this.client.invoke(new Api.updates.GetDifference({
-      pts: this.state.localState.pts,
-      date: this.state.localState.date,
-    }))
+    await this.getDifference(this.state.localState.pts, this.state.localState.date)
+  }
 
-    if (data.className === 'updates.DifferenceEmpty') return
-    // TODO: handle too long
-    if (data.className === 'updates.DifferenceTooLong') return
-    // TODO: from too long?
-    if (data.className === 'updates.DifferenceSlice') return
+  private async getDifference(pts?: number, date?: number) {
+    const difference = await this.client.invoke(new Api.updates.GetDifference({ pts, date }))
 
-    data.newMessages.forEach(message => {
+    if (difference.className === 'updates.DifferenceEmpty') return
+
+    if (difference.className === 'updates.DifferenceTooLong') {
+      // The difference is too long, and the specified state must be used to refetch updates.
+      return this.getDifference(difference.pts)
+    }
+
+    const mappedEvents: ServerEvent[] = []
+
+    difference.newMessages.forEach(message => {
+      // TODO: optimize
       if (!(message instanceof Api.MessageEmpty)) this.emitMessage(message)
     })
 
     // TODO: if (data.newEncryptedMessages.length) {}
 
-    const mappedEvents: ServerEvent[] = []
-    if (data.otherUpdates.length) {
-      mappedEvents.push(...data.otherUpdates.flatMap(this.mapper.mapUpdate))
+    if (difference.otherUpdates.length) {
+      mappedEvents.push(...difference.otherUpdates.flatMap(this.mapper.mapUpdate))
     }
 
-    this.state.localState.pts = data.state.pts
-    this.state.localState.date = data.state.date
-    this.saveCommonState()
-
     this.onEvent(mappedEvents)
+
+    if (difference.className === 'updates.DifferenceSlice') {
+      return this.getDifference(difference.intermediateState.pts, difference.intermediateState.date)
+    }
+
+    this.state.localState.pts = difference.state.pts
+    this.state.localState.date = difference.state.date
+    this.saveCommonState(true)
   }
 
   private pendingEvents: ServerEvent[] = []
