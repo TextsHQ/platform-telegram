@@ -38,7 +38,6 @@ interface LocalState {
   pts: number
   date: number
   updateMutex: Mutex
-  cancelDifference?: boolean
 }
 
 interface TelegramState {
@@ -456,69 +455,60 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
+  private static SHORT_UPDATES = ['UpdateShortMessage', 'UpdateShortChatMessage', 'UpdateShortSentMessage', 'UpdateShort']
+
+  private static NORMAL_UPDATES = [
+    'UpdateNewMessage',
+    'UpdateDeleteMessages',
+    'UpdateReadHistoryInbox',
+    'UpdateReadHistoryOutbox',
+    'UpdateWebPage',
+    'UpdateReadMessagesContents',
+    'UpdateNewChannelMessage',
+    'UpdateDeleteChannelMessages',
+    'UpdateEditChannelMessage',
+    'UpdateEditMessage',
+    'UpdateChannelWebPage',
+    'UpdateFolderPeers',
+    'UpdatePinnedMessages',
+    'UpdatePinnedChannelMessages',
+  ]
+
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
     const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
-    // this.state.localState.cancelDifference = true
     const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
-      let ignore = false
-      await this.state.localState.updateMutex.runExclusive(async () => {
-        // this.state.localState.cancelDifference = false
-        // common sequence
-        // fgrep 'pts_count:' node_modules/telegram/tl/apiTl.js | fgrep '= Update' | fgrep -v 'updateShort'
-        switch (update.className) {
-          case 'UpdateNewMessage':
-          case 'UpdateDeleteMessages':
-          case 'UpdateReadHistoryInbox':
-          case 'UpdateReadHistoryOutbox':
-          case 'UpdateWebPage':
-          case 'UpdateReadMessagesContents':
-          case 'UpdateNewChannelMessage':
-          case 'UpdateDeleteChannelMessages':
-          case 'UpdateEditChannelMessage':
-          case 'UpdateEditMessage':
-          case 'UpdateChannelWebPage':
-          case 'UpdateFolderPeers':
-          case 'UpdatePinnedMessages':
-          case 'UpdatePinnedChannelMessages': {
-            const { pts } = update
-            const sum = this.state.localState.pts + update.ptsCount
-            if (sum === pts) {
-              // update can be applied
-              this.state.localState.pts = sum
-            } else if (sum > pts) {
-              // update already applied. ignore
-              ignore = true
-            } else if (sum < pts) {
-              // update missing. need to fetch difference
-              await this.syncCommonState()
-              ignore = true
-            }
-            break
-          }
-          case 'UpdatesTooLong': {
-            texts.log('[Telegram] Need to sync from server state')
-            await this.syncCommonState()
-            ignore = true
-            break
-          }
-          case 'UpdateShortMessage':
-          case 'UpdateShortChatMessage':
-          case 'UpdateShortSentMessage':
-          case 'UpdateShort': {
-            texts.log('[Telegram] Received short update')
-            const regularUpdate = this.convertShortUpdate(update)
-            this.updateHandler(regularUpdate)
-            ignore = true
-            break
-          }
-          default:
-            break
+      const ignore = await this.state.localState.updateMutex.runExclusive(async () => {
+        if (update.className === 'UpdatesTooLong') {
+          await this.syncCommonState()
+          return true
         }
 
-        this.db.cacheSet('local_state', 0, {
-          pts: this.state.localState.pts,
-          date: this.state.localState.date,
-        })
+        if (TelegramAPI.SHORT_UPDATES.includes(update.className)) {
+          // @ts-expect-error - if check already does it. ts just complains
+          const regularUpdate = this.convertShortUpdate(update)
+          this.updateHandler(regularUpdate)
+          return true
+        }
+
+        if (!TelegramAPI.NORMAL_UPDATES.includes(update.className)) return false
+
+        const { pts, ptsCount } = update as { pts: number, ptsCount: number }
+        const sum = this.state.localState.pts + ptsCount
+        if (sum === pts) {
+          // update can be applied
+          this.state.localState.pts = sum
+        } else if (sum > pts) {
+          // update already applied. ignore
+          return true
+        } else if (sum < pts) {
+          // update missing. need to fetch difference
+          await this.syncCommonState()
+          return true
+        }
+
+        this.saveCommonState()
+
+        return false
       })
 
       if (ignore) return
@@ -644,12 +634,27 @@ export default class TelegramAPI implements PlatformAPI {
     this.registerUpdateListeners()
   }
 
+  private saveCommonState = () => {
+    this.db.saveState('common_state', {
+      pts: this.state.localState.pts,
+      date: this.state.localState.date,
+    })
+  }
+
   private async initializeLocalState() {
     await this.state.localState.updateMutex.runExclusive(async () => {
-      const localState = await this.db.cacheGetValue<LocalState>('local_state')
-      this.state.localState.date = localState?.date ?? 0
-      this.state.localState.pts = localState?.pts ?? 0
-      await this._syncCommonState()
+      const localState = this.db.getState<LocalState>('common_state')
+      if (localState) {
+        this.state.localState.date = localState.date
+        this.state.localState.pts = localState.pts
+        await this._syncCommonState()
+      } else {
+        // initialize common state
+        const serverState = await this.client.invoke(new Api.updates.GetState())
+        this.state.localState.date = serverState.date
+        this.state.localState.pts = serverState.pts
+        this.saveCommonState()
+      }
     })
   }
 
@@ -687,10 +692,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.state.localState.pts = data.state.pts
     this.state.localState.date = data.state.date
-    await this.db.cacheSet('local_state', 0, {
-      pts: this.state.localState.pts,
-      date: this.state.localState.date,
-    })
+    this.saveCommonState()
 
     this.onEvent(mappedEvents)
   }

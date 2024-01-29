@@ -65,6 +65,11 @@ const SCHEMA_MIGRATIONS: [string, ((db: Database.Database) => void)?][] = [
     key TEXT NOT NULL PRIMARY KEY,
     value JSON NOT NULL
   );`, migrateSessionTable],
+
+  [`CREATE TABLE IF NOT EXISTS state (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+  )`],
 ]
 
 export class DbSession extends Session {
@@ -381,5 +386,16 @@ export class DbSession extends Session {
 
   cacheSet<T>(key: string, hash: number | bigInt.BigInteger, value: T) {
     this.prepareCache('insert or replace into cache values (?,?,?,?)').run([key, String(hash), value, Date.now()])
+  }
+
+  saveState(key: string, value: Record<string, number>) {
+    const json = JSON.stringify(value)
+    this.prepareCache('INSERT INTO state (key, value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value = ?')
+      .run([key, json, json])
+  }
+
+  getState<T>(key: string): T | void {
+    const value = this.prepareCache('select value from state where key = ?').pluck().get(key) as string
+    if (value) return JSON.parse(value) as T
   }
 }
