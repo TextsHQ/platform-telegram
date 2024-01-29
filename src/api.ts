@@ -634,8 +634,8 @@ export default class TelegramAPI implements PlatformAPI {
     this.registerUpdateListeners()
   }
 
-  private saveCommonState = (remove = false) => {
-    this.db.saveState('common_state', remove ? null : {
+  private saveCommonState = () => {
+    this.db.saveState('common_state', {
       pts: this.state.localState.pts,
       date: this.state.localState.date,
     })
@@ -699,7 +699,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.state.localState.pts = difference.state.pts
     this.state.localState.date = difference.state.date
-    this.saveCommonState(true)
+    this.saveCommonState()
   }
 
   private pendingEvents: ServerEvent[] = []
