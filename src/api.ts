@@ -426,40 +426,6 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  // private async differenceUpdates(): Promise<void> {
-  //   if (this.state.localState.pts >= (2 ** 31)) {
-  //     texts.Sentry.captureMessage('[Telegram] pts > 2^31')
-  //     return
-  //   }
-  //   if (this.state.localState.date >= (2 ** 31)) {
-  //     texts.Sentry.captureMessage('[Telegram] date > 2^31')
-  //     return
-  //   }
-  //   const differenceRes = await this.client.invoke(new Api.updates.GetDifference({ pts: this.state.localState.pts, date: this.state.localState.date }))
-  //   const processDiff = (state: Api.updates.TypeState, diff: Api.updates.Difference | Api.updates.DifferenceSlice) => {
-  //     this.state.localState = {
-  //       ...this.state.localState,
-  //       ...state,
-  //     }
-  //     diff.newMessages?.forEach(message => {
-  //       if (!(message instanceof Api.MessageEmpty)) this.emitMessage(message)
-  //     })
-  //     return Promise.all(diff.otherUpdates.flatMap(otherUpdate => this.updateHandler(otherUpdate)))
-  //   }
-  //   texts.log('[Telegram] Received', differenceRes.className)
-  //   if (differenceRes instanceof Api.updates.Difference) {
-  //     await processDiff(differenceRes.state, differenceRes)
-  //   } else if (differenceRes instanceof Api.updates.DifferenceSlice) {
-  //     await processDiff(differenceRes.intermediateState, differenceRes)
-  //     await this.differenceUpdates()
-  //   } else if (differenceRes instanceof Api.updates.DifferenceTooLong) {
-  //     this.state.localState.pts = differenceRes.pts
-  //     await this.differenceUpdates()
-  //   } else if (differenceRes instanceof Api.updates.DifferenceEmpty) {
-  //     // nothing to do here
-  //   }
-  // }
-
   private convertShortUpdate = (updateShort: Api.UpdateShortMessage | Api.UpdateShortChatMessage | Api.UpdateShort | Api.UpdateShortSentMessage): Api.TypeUpdate => {
     // this.state.localState.date = updateShort.date
     // https://github.com/gram-js/gramjs/blob/master/gramjs/events/NewMessage.ts
@@ -488,15 +454,7 @@ export default class TelegramAPI implements PlatformAPI {
     if (updateShort instanceof Api.UpdateShort) {
       return updateShort.update
     }
-    // this.state.localState.pts += updateShort.ptsCount
   }
-
-  // private syncServerState = async () => {
-  //   const state = await this.client.invoke(new Api.updates.GetState())
-  //   this.state.localState.date = state.date
-  //   this.state.localState.pts = state.pts
-  //   await this.differenceUpdates()
-  // }
 
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
     const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
@@ -522,38 +480,25 @@ export default class TelegramAPI implements PlatformAPI {
           case 'UpdateFolderPeers':
           case 'UpdatePinnedMessages':
           case 'UpdatePinnedChannelMessages': {
-            // texts.log(`[Telegram] localPts = ${this.state.localState.pts} remotePts = ${update.pts} ptsCount = ${update.ptsCount}`)
-            // const sum = this.state.localState.pts + update.ptsCount
-            // if (Math.abs(this.state.localState.pts - update.pts) > (2 ** 24)) {
-            //   texts.Sentry.captureMessage('[Telegram] local and remote pts differ by too large a value')
-            //   texts.log('[Telegram] local and remote pts differ by too large a value')
-            //   await this.syncServerState()
-            //   ignore = true
-            //   break
-            // }
-
-            // if (sum > update.pts) {
-            //   texts.log('[Telegram] Update already applied')
-            //   this.state.localState.pts += sum
-            //   ignore = true
-            // } else if (sum < update.pts) {
-            //   texts.log('[Telegram] Missing updates')
-            //   // we need to interrupt update handling while we resync
-            //   setTimeout(async () => {
-            //     if (!this.state.localState.cancelDifference) await this.differenceUpdates()
-            //     this.state.localState.cancelDifference = false
-            //   }, 500)
-            //   ignore = true
-            // } else {
-            //   this.state.localState.pts += update.ptsCount
-            //   texts.log('[Telegram] Updates in sync')
-            // }
+            const { pts } = update
+            const sum = this.state.localState.pts + update.ptsCount
+            if (sum === pts) {
+              // update can be applied
+              this.state.localState.pts = sum
+            } else if (sum > pts) {
+              // update already applied. ignore
+              ignore = true
+            } else if (sum < pts) {
+              // update missing. need to fetch difference
+              await this.syncCommonState()
+              ignore = true
+            }
             break
           }
           case 'UpdatesTooLong': {
-            // texts.log('[Telegram] Need to sync from server state')
-            // await this.syncServerState()
-            // ignore = true
+            texts.log('[Telegram] Need to sync from server state')
+            await this.syncCommonState()
+            ignore = true
             break
           }
           case 'UpdateShortMessage':
@@ -569,9 +514,14 @@ export default class TelegramAPI implements PlatformAPI {
           default:
             break
         }
+
+        this.db.cacheSet('local_state', 0, {
+          pts: this.state.localState.pts,
+          date: this.state.localState.date,
+        })
       })
 
-      // if (ignore) return
+      if (ignore) return
       if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) return this.onUpdateNewMessage(update)
       if (update instanceof Api.UpdateChat || update instanceof Api.UpdateChannel) return this.onUpdateChatChannel(update)
       if (update instanceof Api.UpdateChatParticipant || update instanceof Api.UpdateChannelParticipant) return this.onUpdateChatChannelParticipant(update)
@@ -624,7 +574,6 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async registerUpdateListeners() {
-    // await this.syncServerState()
     this.client.addEventHandler(this.updateHandler)
   }
 
@@ -691,7 +640,59 @@ export default class TelegramAPI implements PlatformAPI {
       else throw err
     }
     this.mapper = new TelegramMapper(this.accountInfo.accountID, this.me)
+    await this.initializeLocalState()
     this.registerUpdateListeners()
+  }
+
+  private async initializeLocalState() {
+    await this.state.localState.updateMutex.runExclusive(async () => {
+      const localState = await this.db.cacheGetValue<LocalState>('local_state')
+      this.state.localState.date = localState?.date ?? 0
+      this.state.localState.pts = localState?.pts ?? 0
+      await this._syncCommonState()
+    })
+  }
+
+  private async syncCommonState() {
+    await this.state.localState.updateMutex.runExclusive(this._syncCommonState)
+  }
+
+  private async _syncCommonState() {
+    const serverState = await this.client.invoke(new Api.updates.GetState())
+    if (serverState.pts === this.state.localState.pts && serverState.date === this.state.localState.date) {
+      return
+    }
+
+    const data = await this.client.invoke(new Api.updates.GetDifference({
+      pts: this.state.localState.pts,
+      date: this.state.localState.date,
+    }))
+
+    if (data.className === 'updates.DifferenceEmpty') return
+    // TODO: handle too long
+    if (data.className === 'updates.DifferenceTooLong') return
+    // TODO: from too long?
+    if (data.className === 'updates.DifferenceSlice') return
+
+    data.newMessages.forEach(message => {
+      if (!(message instanceof Api.MessageEmpty)) this.emitMessage(message)
+    })
+
+    // TODO: if (data.newEncryptedMessages.length) {}
+
+    const mappedEvents: ServerEvent[] = []
+    if (data.otherUpdates.length) {
+      mappedEvents.push(...data.otherUpdates.flatMap(this.mapper.mapUpdate))
+    }
+
+    this.state.localState.pts = data.state.pts
+    this.state.localState.date = data.state.date
+    await this.db.cacheSet('local_state', 0, {
+      pts: this.state.localState.pts,
+      date: this.state.localState.date,
+    })
+
+    this.onEvent(mappedEvents)
   }
 
   private pendingEvents: ServerEvent[] = []
@@ -823,6 +824,8 @@ export default class TelegramAPI implements PlatformAPI {
 
   subscribeToEvents = (onServerEvent: OnServerEventCallback) => {
     this.onServerEvent = onServerEvent
+    // call debouncedPushEvents to flush any pending events before subscribeToEvents was called
+    this.debouncedPushEvents()
   }
 
   serializeSession = () => ({
@@ -1169,6 +1172,7 @@ export default class TelegramAPI implements PlatformAPI {
   reconnectRealtime = async () => {
     // start receiving updates again
     await this.client.getMe()
+    await this.syncCommonState()
   }
 
   private getAssetPath = (assetType: AssetType, id: string, fileName: string) =>

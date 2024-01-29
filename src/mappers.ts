@@ -443,7 +443,7 @@ export default class TelegramMapper {
     }
   }
 
-  mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
+  mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId?: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
     const isThreadSender = msg.fromId === null && (msg.peerId?.className.includes('Chat') || msg.peerId?.className.includes('Channel'))
@@ -836,7 +836,7 @@ export default class TelegramMapper {
     return t
   }
 
-  mapMessages = (messages: Api.Message[], readOutboxMaxId: number) =>
+  mapMessages = (messages: Api.Message[], readOutboxMaxId?: number) =>
     messages
       .sort((a, b) => a.date - b.date)
       .map(m => this.mapMessage(m, readOutboxMaxId))
