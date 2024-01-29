@@ -680,10 +680,30 @@ export default class TelegramAPI implements PlatformAPI {
 
     const mappedEvents: ServerEvent[] = []
 
-    difference.newMessages.forEach(message => {
-      // TODO: optimize
-      if (!(message instanceof Api.MessageEmpty)) this.emitMessage(message)
-    })
+    const collectedMessages = difference.newMessages.reduce((acc, message) => {
+      if (message instanceof Api.MessageEmpty) return acc
+      const threadID = getPeerId(message.peerId)
+      if (!acc[threadID]) acc[threadID] = []
+
+      const mappedMessage = this.mapper.mapMessage(message)
+      if (!mappedMessage) return acc
+
+      acc[threadID].push(mappedMessage)
+      this.storeMessage(message)
+      return acc
+    }, {} as Record<string, Message[]>)
+
+    for (const [threadID, messages] of Object.entries(collectedMessages)) {
+      if (!messages.length) continue
+      const event: ServerEvent = {
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'upsert',
+        objectName: 'message',
+        objectIDs: { threadID },
+        entries: messages,
+      }
+      mappedEvents.push(event)
+    }
 
     // TODO: if (data.newEncryptedMessages.length) {}
 
