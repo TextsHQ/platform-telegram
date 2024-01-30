@@ -663,16 +663,16 @@ export default class TelegramAPI implements PlatformAPI {
 
   private async _syncCommonState() {
     const serverState = await this.client.invoke(new Api.updates.GetState())
+    console.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
     if (serverState.pts === this.state.localState.pts) return
 
     await this.getDifference(this.state.localState.pts, this.state.localState.date)
   }
 
-  private async getDifference(pts?: number, date?: number) {
+  private async getDifference(pts: number, date?: number) {
     const difference = await this.client.invoke(new Api.updates.GetDifference({ pts, date }))
 
     if (difference.className === 'updates.DifferenceEmpty') return
-
     if (difference.className === 'updates.DifferenceTooLong') {
       // The difference is too long, and the specified state must be used to refetch updates.
       return this.getDifference(difference.pts)
@@ -1198,7 +1198,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   reconnectRealtime = async () => {
     // start receiving updates again
-    await this.client.getMe()
+    // await this.client.getMe()
     await this.syncCommonState()
   }
 
