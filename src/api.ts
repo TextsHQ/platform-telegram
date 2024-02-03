@@ -42,6 +42,7 @@ interface LocalState {
 
 interface TelegramState {
   localState: LocalState
+  hasSynced: boolean
   dialogs: Map<string, Dialog>
   mediaStore: Map<string, Api.TypeMessageMedia>
   messageChatIdMap: Map<number, string>
@@ -110,6 +111,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private state: TelegramState = {
     localState: { updateMutex: new Mutex(), date: 0, pts: 0 },
+    hasSynced: false,
     dialogs: new Map<string, Dialog>(),
     mediaStore: new Map<string, Api.TypeMessageMedia>(),
     messageChatIdMap: new Map<number, string>(),
@@ -662,11 +664,18 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async _syncCommonState() {
+    if (this.state.localState.pts === 0) {
+      return
+    }
+
     const serverState = await this.client.invoke(new Api.updates.GetState())
     console.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
-    if (serverState.pts === this.state.localState.pts) return
-
-    await this.getDifference(this.state.localState.pts, this.state.localState.date)
+    if (serverState.pts === this.state.localState.pts) {
+      this.state.hasSynced = true
+    } else {
+      await this.getDifference(this.state.localState.pts, this.state.localState.date)
+      this.state.hasSynced = true
+    }
   }
 
   private async getDifference(pts: number, date?: number) {
@@ -953,8 +962,14 @@ export default class TelegramAPI implements PlatformAPI {
     return this.mapThread(dialogThread)
   }
 
-  getThreads = async (inboxName: ThreadFolderName, pagination: PaginationArg): Promise<PaginatedWithCursors<Thread>> => {
+  getThreads = async (inboxName: ThreadFolderName, pagination?: PaginationArg): Promise<PaginatedWithCursors<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
+
+    // skip if we already synced using getDifference
+    // pagination === null means we're trying to get all threads
+    // we'd like to avoid this as much as possible to not get Flood Wait errors
+    if (this.state.hasSynced && !pagination) return
+
     await this.waitForClientConnected()
 
     const { cursor } = pagination || { cursor: null, direction: null }
