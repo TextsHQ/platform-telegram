@@ -446,8 +446,6 @@ export default class TelegramMapper {
   mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
-    // This includes messages in channels but also messages in chats coming from connected channels
-    const isInOrFromChannel = msg.peerId?.className.includes('Channel') || msg.fromId?.className.includes('Channel')
     // Messages *in* channels
     const isInChannel = msg.peerId?.className.includes('Channel')
     // Messages *from* channels (i.e. Channels posts sent in connected groups)
