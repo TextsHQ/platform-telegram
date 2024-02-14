@@ -447,7 +447,7 @@ export default class TelegramMapper {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
     // This includes messages in channels but also messages in chats coming from connected channels
-    const isInOrFromChannel = msg.peerId?.className.includes('Channel') || !!msg.fwdFrom?.savedFromPeer
+    const isInOrFromChannel = msg.peerId?.className.includes('Channel') || msg.fromId?.className.includes('Channel')
     // The first condition is for message sent by anonymous members in a group
     const isThreadSender = msg.fromId === null && (msg.peerId?.className.includes('Chat') || msg.peerId?.className.includes('Channel'))
     const senderID = msg.senderId
