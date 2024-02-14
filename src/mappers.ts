@@ -446,6 +446,7 @@ export default class TelegramMapper {
   mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
+    // The first condition is for message sent by anonymous members in a group
     const isThreadSender = msg.fromId === null && (msg.peerId?.className.includes('Chat') || msg.peerId?.className.includes('Channel'))
     const senderID = msg.senderId
       ? (isThreadSender
