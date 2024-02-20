@@ -50,6 +50,7 @@ interface TelegramState {
   dialogToDialogAdminIds: Map<string, Set<string>>
   hasFetchedParticipantsForDialog: Map<string, boolean>
   pollIdMessageId: Map<string, number>
+  getDifferenceMutex: Mutex
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -119,6 +120,7 @@ export default class TelegramAPI implements PlatformAPI {
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
     hasFetchedParticipantsForDialog: new Map<string, boolean>(),
     pollIdMessageId: new Map<string, number>(),
+    getDifferenceMutex: new Mutex(),
   }
 
   init = async (session: string | undefined, accountInfo: ClientContext) => {
@@ -478,22 +480,17 @@ export default class TelegramAPI implements PlatformAPI {
 
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
     const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
+
     const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
-      const ignore = await this.state.localState.updateMutex.runExclusive(async () => {
-        if (update.className === 'UpdatesTooLong') {
-          await this.syncCommonState()
-          return true
-        }
-
-        if (TelegramAPI.SHORT_UPDATES.includes(update.className)) {
-          // @ts-expect-error - if check already does it. ts just complains
-          const regularUpdate = this.convertShortUpdate(update)
-          this.updateHandler(regularUpdate)
-          return true
-        }
-
-        if (!TelegramAPI.NORMAL_UPDATES.includes(update.className)) return false
-
+      let ignore = false
+      if (update.className === 'UpdatesTooLong') {
+        await this.syncCommonState()
+        ignore = true
+      } else if (TelegramAPI.SHORT_UPDATES.includes(update.className)) {
+        const regularUpdate = this.convertShortUpdate(update)
+        this.updateHandler(regularUpdate)
+        ignore = true
+      } else if (TelegramAPI.NORMAL_UPDATES.includes(update.className)) {
         const { pts, ptsCount } = update as { pts: number, ptsCount: number }
         const sum = this.state.localState.pts + ptsCount
         if (sum === pts) {
@@ -501,17 +498,15 @@ export default class TelegramAPI implements PlatformAPI {
           this.state.localState.pts = sum
         } else if (sum > pts) {
           // update already applied. ignore
-          return true
+          ignore = true
         } else if (sum < pts) {
           // update missing. need to fetch difference
           await this.syncCommonState()
-          return true
+          ignore = true
         }
 
         this.saveCommonState()
-
-        return false
-      })
+      }
 
       if (ignore) return
       if (update instanceof Api.UpdateNewMessage || update instanceof Api.UpdateNewChannelMessage) return this.onUpdateNewMessage(update)
@@ -562,7 +557,9 @@ export default class TelegramAPI implements PlatformAPI {
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
     }
-    for (const update of updates) await handleUpdate(update)
+    await this.state.localState.updateMutex.runExclusive(async () => {
+      for (const update of updates) await handleUpdate(update)
+    })
   }
 
   private async registerUpdateListeners() {
@@ -649,7 +646,7 @@ export default class TelegramAPI implements PlatformAPI {
       if (localState) {
         this.state.localState.date = localState.date
         this.state.localState.pts = localState.pts
-        await this._syncCommonState()
+        await this.syncCommonState()
       } else {
         const serverState = await this.client.invoke(new Api.updates.GetState())
         this.state.localState.date = serverState.date
@@ -660,7 +657,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async syncCommonState() {
-    await this.state.localState.updateMutex.runExclusive(this._syncCommonState)
+    await this.state.getDifferenceMutex.runExclusive(this._syncCommonState)
   }
 
   private async _syncCommonState() {
