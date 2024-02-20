@@ -36,6 +36,7 @@ type LoginEventCallback = ({ authState, qrLink }: { authState: AuthState, qrLink
 
 interface LocalState {
   pts: number
+  seq: number
   date: number
   updateMutex: Mutex
 }
@@ -111,7 +112,7 @@ export default class TelegramAPI implements PlatformAPI {
   private db: DbSession
 
   private state: TelegramState = {
-    localState: { updateMutex: new Mutex(), date: 0, pts: 0 },
+    localState: { updateMutex: new Mutex(), date: 0, pts: 0, seq: 0 },
     hasSynced: false,
     dialogs: new Map<string, Dialog>(),
     mediaStore: new Map<string, Api.TypeMessageMedia>(),
@@ -479,16 +480,10 @@ export default class TelegramAPI implements PlatformAPI {
   ]
 
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
-    const updates = 'updates' in _update ? _update.updates : _update instanceof Api.UpdateShort ? [_update.update] : [_update]
-
     const handleUpdate = async (update: Api.TypeUpdate | Api.TypeUpdates) => {
       let ignore = false
       if (update.className === 'UpdatesTooLong') {
         await this.syncCommonState()
-        ignore = true
-      } else if (TelegramAPI.SHORT_UPDATES.includes(update.className)) {
-        const regularUpdate = this.convertShortUpdate(update)
-        this.updateHandler(regularUpdate)
         ignore = true
       } else if (TelegramAPI.NORMAL_UPDATES.includes(update.className)) {
         const { pts, ptsCount } = update as { pts: number, ptsCount: number }
@@ -506,6 +501,10 @@ export default class TelegramAPI implements PlatformAPI {
         }
 
         this.saveCommonState()
+      } else if (TelegramAPI.SHORT_UPDATES.includes(update.className)) {
+        const regularUpdate = this.convertShortUpdate(update as Api.UpdateShort)
+        handleUpdate(regularUpdate)
+        return
       }
 
       if (ignore) return
@@ -558,7 +557,25 @@ export default class TelegramAPI implements PlatformAPI {
       if (events.length) this.onEvent(events)
     }
     await this.state.localState.updateMutex.runExclusive(async () => {
-      for (const update of updates) await handleUpdate(update)
+      if (_update.className === 'UpdatesCombined' || _update.className === 'Updates') {
+        const { updates } = _update
+        const seqStart = _update.className === 'Updates' ? _update.seq : _update.seqStart
+        const newSeq = this.state.localState.seq + 1
+        if (seqStart === 0) {
+          for (const update of updates) await handleUpdate(update)
+        } else if (newSeq === seqStart) {
+          for (const update of updates) await handleUpdate(update)
+          this.state.localState.seq = seqStart
+        } else if (newSeq < seqStart) {
+          await this.syncCommonState()
+        } else if (newSeq > seqStart) {
+          // updates applied. ignore
+        }
+      } else if (_update instanceof Api.UpdateShort) {
+        await handleUpdate(_update.update)
+      } else {
+        await handleUpdate(_update)
+      }
     })
   }
 
@@ -636,6 +653,7 @@ export default class TelegramAPI implements PlatformAPI {
   private saveCommonState = () => {
     this.db.saveState('common_state', {
       pts: this.state.localState.pts,
+      seq: this.state.localState.seq,
       date: this.state.localState.date,
     })
   }
@@ -646,11 +664,13 @@ export default class TelegramAPI implements PlatformAPI {
       if (localState) {
         this.state.localState.date = localState.date
         this.state.localState.pts = localState.pts
+        this.state.localState.seq = localState.seq
         await this.syncCommonState()
       } else {
         const serverState = await this.client.invoke(new Api.updates.GetState())
         this.state.localState.date = serverState.date
         this.state.localState.pts = serverState.pts
+        this.state.localState.seq = serverState.seq
         this.saveCommonState()
       }
     })
@@ -725,6 +745,7 @@ export default class TelegramAPI implements PlatformAPI {
 
     this.state.localState.pts = difference.state.pts
     this.state.localState.date = difference.state.date
+    this.state.localState.seq = difference.state.seq
     this.saveCommonState()
   }
 
