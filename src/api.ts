@@ -43,6 +43,7 @@ interface LocalState {
 
 interface TelegramState {
   localState: LocalState
+  getDifferenceMutex: Mutex
   hasSynced: boolean
   dialogs: Map<string, Dialog>
   mediaStore: Map<string, Api.TypeMessageMedia>
@@ -51,7 +52,6 @@ interface TelegramState {
   dialogToDialogAdminIds: Map<string, Set<string>>
   hasFetchedParticipantsForDialog: Map<string, boolean>
   pollIdMessageId: Map<string, number>
-  getDifferenceMutex: Mutex
 }
 
 // https://core.telegram.org/method/auth.sendcode
@@ -113,6 +113,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private state: TelegramState = {
     localState: { mutex: new Mutex(), date: 0, pts: 0, seq: 0 },
+    getDifferenceMutex: new Mutex(),
     hasSynced: false,
     dialogs: new Map<string, Dialog>(),
     mediaStore: new Map<string, Api.TypeMessageMedia>(),
@@ -121,7 +122,6 @@ export default class TelegramAPI implements PlatformAPI {
     dialogToDialogAdminIds: new Map<string, Set<string>>(),
     hasFetchedParticipantsForDialog: new Map<string, boolean>(),
     pollIdMessageId: new Map<string, number>(),
-    getDifferenceMutex: new Mutex(),
   }
 
   init = async (session: string | undefined, accountInfo: ClientContext) => {
@@ -678,22 +678,21 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async syncCommonState() {
-    await this.state.getDifferenceMutex.runExclusive(this._syncCommonState)
+    await this.state.getDifferenceMutex.runExclusive(() => this._syncCommonState())
   }
 
   private async _syncCommonState() {
+    console.log('[Telegram] Syncing common state', this.state.localState)
     if (this.state.localState.pts === 0) {
       return
     }
 
     const serverState = await this.client.invoke(new Api.updates.GetState())
     console.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
-    if (serverState.pts === this.state.localState.pts) {
-      this.state.hasSynced = true
-    } else {
+    if (serverState.pts !== this.state.localState.pts) {
       await this.getDifference(this.state.localState.pts, this.state.localState.date)
-      this.state.hasSynced = true
     }
+    this.state.hasSynced = true
   }
 
   private async getDifference(pts: number, date?: number) {
@@ -987,7 +986,13 @@ export default class TelegramAPI implements PlatformAPI {
     // skip if we already synced using getDifference
     // pagination === null means we're trying to get all threads
     // we'd like to avoid this as much as possible to not get Flood Wait errors
-    if (this.state.hasSynced && !pagination) return
+    if (this.state.hasSynced && !pagination) {
+      return {
+        items: [],
+        oldestCursor: '*',
+        hasMore: true,
+      }
+    }
 
     await this.waitForClientConnected()
 
@@ -1231,10 +1236,9 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   reconnectRealtime = async () => {
-    await sleep(1)
-    await this.state.localState.mutex.runExclusive(this.syncCommonState)
     // start receiving updates again
-    await this.client.getMe()
+    // await this.client.getMe()
+    await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
   }
 
   private getAssetPath = (assetType: AssetType, id: string, fileName: string) =>
