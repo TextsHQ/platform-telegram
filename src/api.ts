@@ -565,7 +565,8 @@ export default class TelegramAPI implements PlatformAPI {
           for (const update of updates) await handleUpdate(update)
         } else if (newSeq === seqStart) {
           for (const update of updates) await handleUpdate(update)
-          this.state.localState.seq = seqStart
+          this.state.localState.seq = _update.seq
+          this.state.localState.date = _update.date
         } else if (newSeq < seqStart) {
           await this.syncCommonState()
         } else if (newSeq > seqStart) {
