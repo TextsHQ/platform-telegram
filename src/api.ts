@@ -661,7 +661,13 @@ export default class TelegramAPI implements PlatformAPI {
 
   private async initializeLocalState() {
     // @ts-expect-error
-    if (process.platform !== 'ios') return
+    if (process.platform !== 'ios') {
+      const serverState = await this.client.invoke(new Api.updates.GetState())
+      this.state.localState.date = serverState.date
+      this.state.localState.pts = serverState.pts
+      this.state.localState.seq = serverState.seq
+      return
+    }
     await this.state.localState.mutex.runExclusive(async () => {
       const localState = this.db.getState<LocalState>('common_state')
       if (localState) {
