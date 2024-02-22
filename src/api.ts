@@ -692,7 +692,6 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async _syncCommonState() {
-    console.log('[Telegram] Syncing common state', this.state.localState)
     if (this.state.localState.pts === 0) {
       return
     }
