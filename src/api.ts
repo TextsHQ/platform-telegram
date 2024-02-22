@@ -38,7 +38,7 @@ interface LocalState {
   pts: number
   seq: number
   date: number
-  updateMutex: Mutex
+  mutex: Mutex
 }
 
 interface TelegramState {
@@ -112,7 +112,7 @@ export default class TelegramAPI implements PlatformAPI {
   private db: DbSession
 
   private state: TelegramState = {
-    localState: { updateMutex: new Mutex(), date: 0, pts: 0, seq: 0 },
+    localState: { mutex: new Mutex(), date: 0, pts: 0, seq: 0 },
     hasSynced: false,
     dialogs: new Map<string, Dialog>(),
     mediaStore: new Map<string, Api.TypeMessageMedia>(),
@@ -556,7 +556,7 @@ export default class TelegramAPI implements PlatformAPI {
       const events = this.mapper.mapUpdate(update)
       if (events.length) this.onEvent(events)
     }
-    await this.state.localState.updateMutex.runExclusive(async () => {
+    await this.state.localState.mutex.runExclusive(async () => {
       if (_update.className === 'UpdatesCombined' || _update.className === 'Updates') {
         const { updates } = _update
         const seqStart = _update.className === 'Updates' ? _update.seq : _update.seqStart
@@ -659,7 +659,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async initializeLocalState() {
-    await this.state.localState.updateMutex.runExclusive(async () => {
+    await this.state.localState.mutex.runExclusive(async () => {
       const localState = this.db.getState<LocalState>('common_state')
       if (localState) {
         this.state.localState.date = localState.date
@@ -673,6 +673,7 @@ export default class TelegramAPI implements PlatformAPI {
         this.state.localState.seq = serverState.seq
         this.saveCommonState()
       }
+      texts.log('telegram.initializeLocalState', this.state.localState)
     })
   }
 
@@ -1230,9 +1231,10 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   reconnectRealtime = async () => {
+    await sleep(1)
+    await this.state.localState.mutex.runExclusive(this.syncCommonState)
     // start receiving updates again
-    // await this.client.getMe()
-    await this.syncCommonState()
+    await this.client.getMe()
   }
 
   private getAssetPath = (assetType: AssetType, id: string, fileName: string) =>
