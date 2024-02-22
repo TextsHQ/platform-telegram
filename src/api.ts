@@ -660,6 +660,8 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async initializeLocalState() {
+    // @ts-expect-error
+    if (process.platform !== 'ios') return
     await this.state.localState.mutex.runExclusive(async () => {
       const localState = this.db.getState<LocalState>('common_state')
       if (localState) {
@@ -987,7 +989,8 @@ export default class TelegramAPI implements PlatformAPI {
     // skip if we already synced using getDifference
     // pagination === null means we're trying to get all threads
     // we'd like to avoid this as much as possible to not get Flood Wait errors
-    if (this.state.hasSynced && !pagination) {
+    // @ts-expect-error
+    if (process.platform !== 'ios' && this.state.hasSynced && !pagination) {
       return {
         items: [],
         oldestCursor: '*',
