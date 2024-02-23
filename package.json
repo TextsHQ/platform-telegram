@@ -14,14 +14,14 @@
   },
   "dependencies": {
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#450f733b0d496b793ae6cab273759a1246ee6053",
-    "async-mutex": "^0.3.2",
-    "big-integer": "^1.6.51",
-    "date-fns": "^2.30.0",
+    "async-mutex": "^0.4.1",
+    "big-integer": "^1.6.52",
+    "date-fns": "^3.3.1",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
     "react": "https://github.com/TextsHQ/react-global-shim",
-    "react-phone-number-input": "3.1.53",
-    "telegram": "2.19.10",
+    "react-phone-number-input": "3.3.9",
+    "telegram": "2.19.20",
     "vcard-creator": "^0.6.0"
   },
   "devDependencies": {
@@ -34,8 +34,8 @@
     "@types/node": "^20.2.1",
     "@types/react": "18.2.6",
     "@types/react-phone-number-input": "^3.0.14",
-    "eslint": "^8.41.0",
-    "typescript": "^5.0.4"
+    "eslint": "^8.57.0",
+    "typescript": "^5.3.3"
   },
   "packageManager": "yarn@4.0.2"
 }
