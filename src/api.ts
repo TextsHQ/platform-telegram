@@ -1247,7 +1247,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   reconnectRealtime = async () => {
     // start receiving updates again
-    // await this.client.getMe()
+    await this.client.getMe()
     await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
   }
 
