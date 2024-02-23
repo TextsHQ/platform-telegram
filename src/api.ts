@@ -699,18 +699,20 @@ export default class TelegramAPI implements PlatformAPI {
     const serverState = await this.client.invoke(new Api.updates.GetState())
     console.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
     if (serverState.pts !== this.state.localState.pts) {
-      await this.getDifference(this.state.localState.pts, this.state.localState.date)
+      this.state.hasSynced = await this.getDifference(this.state.localState.pts, this.state.localState.date)
+    } else {
+      this.state.hasSynced = true
     }
-    this.state.hasSynced = true
   }
 
-  private async getDifference(pts: number, date?: number) {
+  private async getDifference(pts: number, date?: number): Promise<boolean> {
     const difference = await this.client.invoke(new Api.updates.GetDifference({ pts, date }))
 
-    if (difference.className === 'updates.DifferenceEmpty') return
+    if (difference.className === 'updates.DifferenceEmpty') return true
     if (difference.className === 'updates.DifferenceTooLong') {
-      // The difference is too long, and the specified state must be used to refetch updates.
-      return this.getDifference(difference.pts)
+      // ~~The difference is too long, and the specified state must be used to refetch updates.~~
+      // We should just refetch from scratch instead. Although we should have a way to nuke the cache on iOS sidew
+      return false
     }
 
     const mappedEvents: ServerEvent[] = []
@@ -756,6 +758,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.state.localState.date = difference.state.date
     this.state.localState.seq = difference.state.seq
     this.saveCommonState()
+    return true
   }
 
   private pendingEvents: ServerEvent[] = []
