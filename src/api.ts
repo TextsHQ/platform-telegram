@@ -999,10 +999,10 @@ export default class TelegramAPI implements PlatformAPI {
     // pagination === null means we're trying to get all threads
     // we'd like to avoid this as much as possible to not get Flood Wait errors
     // @ts-expect-error
-    if (process.platform !== 'ios' && this.state.hasSynced && !pagination) {
+    if (process.platform === 'ios' && (this.state.hasSynced || pagination?.cursor === 'synced')) {
       return {
         items: [],
-        oldestCursor: '*',
+        oldestCursor: 'synced',
         hasMore: true,
       }
     }
@@ -1249,6 +1249,9 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   reconnectRealtime = async () => {
+    // hacky way to hold off for reconnection
+    await sleep(10)
+    await this.waitForClientConnected()
     // start receiving updates again
     await this.client.getMe()
     await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
