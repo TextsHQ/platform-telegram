@@ -1248,13 +1248,19 @@ export default class TelegramAPI implements PlatformAPI {
     if (!result) throw new Error('Could not unregister for push notifications')
   }
 
+  onSuspend = async () => {
+    await this.client.disconnect()
+  }
+
+  onResume = async () => {
+    await this.client.connect()
+    await sleep(500) // wait for updates to come in first before syncing as recommended per docs
+    await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
+  }
+
   reconnectRealtime = async () => {
-    // hacky way to hold off for reconnection
-    await sleep(10)
-    await this.waitForClientConnected()
     // start receiving updates again
     await this.client.getMe()
-    await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
   }
 
   private getAssetPath = (assetType: AssetType, id: string, fileName: string) =>
