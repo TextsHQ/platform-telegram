@@ -995,18 +995,6 @@ export default class TelegramAPI implements PlatformAPI {
   getThreads = async (inboxName: ThreadFolderName, pagination?: PaginationArg): Promise<PaginatedWithCursors<Thread>> => {
     if (inboxName !== InboxName.NORMAL) return
 
-    // skip if we already synced using getDifference
-    // pagination === null means we're trying to get all threads
-    // we'd like to avoid this as much as possible to not get Flood Wait errors
-    // @ts-expect-error
-    if (process.platform === 'ios' && (this.state.hasSynced || pagination?.cursor === 'synced')) {
-      return {
-        items: [],
-        oldestCursor: 'synced',
-        hasMore: true,
-      }
-    }
-
     await this.waitForClientConnected()
 
     const { cursor } = pagination || { cursor: null, direction: null }
