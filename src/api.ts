@@ -26,6 +26,9 @@ import { CustomClient } from './CustomClient'
 
 const { IS_DEV } = texts
 
+// @ts-expect-error
+const IS_iOS = process.platform === 'ios'
+
 function getFileFromMessageContent(msgContent: MessageContent): FileLike {
   const { fileBuffer, fileName, filePath } = msgContent
   if (fileBuffer) return new CustomFile(fileName, fileBuffer.byteLength, filePath, fileBuffer)
@@ -661,8 +664,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private async initializeLocalState() {
     await this.state.localState.mutex.runExclusive(async () => {
-      // @ts-expect-error
-      if (process.platform !== 'ios') {
+      if (!IS_iOS) {
         const serverState = await this.client.invoke(new Api.updates.GetState())
         this.state.localState.date = serverState.date
         this.state.localState.pts = serverState.pts
@@ -1252,8 +1254,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   reconnectRealtime = async () => {
-    // @ts-expect-error
-    if (process.platform === 'ios') return
+    if (IS_iOS) return
     // start receiving updates again
     await this.client.getMe()
   }
