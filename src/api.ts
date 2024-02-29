@@ -1245,7 +1245,9 @@ export default class TelegramAPI implements PlatformAPI {
         break
       case AppState.RESUMING:
         await this.client.connect()
-        await sleep(500) // wait for updates to come in first before syncing as recommended per docs
+        // allow a short period of time for the reconnect to handle missing updates
+        // syncCommonState will still be called after to make sure we don't miss anything
+        await sleep(500)
         await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
         break
       default:
