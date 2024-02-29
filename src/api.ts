@@ -2,7 +2,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import url from 'url'
 import { setTimeout as sleep } from 'timers/promises'
-import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, ClientContext, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo, PaginatedWithCursors } from '@textshq/platform-sdk'
+import { PlatformAPI, OnServerEventCallback, LoginResult, Paginated, Thread, Message, CurrentUser, InboxName, MessageContent, PaginationArg, texts, LoginCreds, ServerEvent, ServerEventType, MessageSendOptions, ActivityType, ReAuthError, Participant, ClientContext, PresenceMap, GetAssetOptions, MessageLink, StickerPack, SupportedReaction, OverridablePlatformInfo, ThreadFolderName, NotificationsInfo, PaginatedWithCursors, AppState } from '@textshq/platform-sdk'
 import { debounce, uniqBy } from 'lodash'
 import BigInteger from 'big-integer'
 import { Mutex } from 'async-mutex'
@@ -1248,17 +1248,24 @@ export default class TelegramAPI implements PlatformAPI {
     if (!result) throw new Error('Could not unregister for push notifications')
   }
 
-  onSuspend = async () => {
-    await this.client.disconnect()
-  }
-
-  onResume = async () => {
-    await this.client.connect()
-    await sleep(500) // wait for updates to come in first before syncing as recommended per docs
-    await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
+  onAppStateChange = async (state: AppState) => {
+    switch (state) {
+      case AppState.SUSPENDING:
+        await this.client.disconnect()
+        break
+      case AppState.RESUMING:
+        await this.client.connect()
+        await sleep(500) // wait for updates to come in first before syncing as recommended per docs
+        await this.state.localState.mutex.runExclusive(() => this.syncCommonState())
+        break
+      default:
+        break
+    }
   }
 
   reconnectRealtime = async () => {
+    // @ts-expect-error
+    if (process.platform === 'ios') return
     // start receiving updates again
     await this.client.getMe()
   }
