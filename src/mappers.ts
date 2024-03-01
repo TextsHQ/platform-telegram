@@ -39,13 +39,6 @@ function getUnmarkedId(unmarked: UnmarkedId) {
 export default class TelegramMapper {
   constructor(private readonly accountID: string, private readonly me: Api.User) { }
 
-  private static* getTextFooter(interactionInfo: Api.MessageInteractionCounters) {
-    if (interactionInfo?.views) yield `${interactionInfo!.views.toLocaleString()} ${interactionInfo!.views === 1 ? 'view' : 'views'}`
-    if (interactionInfo?.forwards) yield `${interactionInfo!.forwards.toLocaleString()} ${interactionInfo!.forwards === 1 ? 'forward' : 'forwards'}`
-  }
-
-  private static mapTextFooter = (interactionInfo: Api.MessageInteractionCounters) => [...TelegramMapper.getTextFooter(interactionInfo)].join(' · ')
-
   private static transformOffset(text: string, entities: TextEntity[]) {
     const arr = Array.from(text)
     let strCursor = 0
@@ -443,7 +436,7 @@ export default class TelegramMapper {
     }
   }
 
-  mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
+  mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId?: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
     const isThreadSender = msg.fromId === null && (msg.peerId?.className.includes('Chat') || msg.peerId?.className.includes('Channel'))
@@ -836,7 +829,7 @@ export default class TelegramMapper {
     return t
   }
 
-  mapMessages = (messages: Api.Message[], readOutboxMaxId: number) =>
+  mapMessages = (messages: Api.Message[], readOutboxMaxId?: number) =>
     messages
       .sort((a, b) => a.date - b.date)
       .map(m => this.mapMessage(m, readOutboxMaxId))
