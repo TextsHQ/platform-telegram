@@ -472,14 +472,9 @@ export default class TelegramAPI implements PlatformAPI {
     'UpdateReadHistoryOutbox',
     'UpdateWebPage',
     'UpdateReadMessagesContents',
-    'UpdateNewChannelMessage',
-    'UpdateDeleteChannelMessages',
-    'UpdateEditChannelMessage',
     'UpdateEditMessage',
-    'UpdateChannelWebPage',
     'UpdateFolderPeers',
     'UpdatePinnedMessages',
-    'UpdatePinnedChannelMessages',
   ]
 
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
@@ -488,7 +483,11 @@ export default class TelegramAPI implements PlatformAPI {
       if (update.className === 'UpdatesTooLong') {
         await this.syncCommonState()
         ignore = true
-      } else if (TelegramAPI.NORMAL_UPDATES.includes(update.className)) {
+      } else if (TelegramAPI.SHORT_UPDATES.includes(update.className)) {
+        const regularUpdate = this.convertShortUpdate(update as Api.UpdateShort)
+        handleUpdate(regularUpdate)
+        return
+      } else if (TelegramAPI.NORMAL_UPDATES.includes(update.className) && !('channelId' in update)) {
         const { pts, ptsCount } = update as { pts: number, ptsCount: number }
         const sum = this.state.localState.pts + ptsCount
         if (sum === pts) {
@@ -504,10 +503,6 @@ export default class TelegramAPI implements PlatformAPI {
         }
 
         this.saveCommonState()
-      } else if (TelegramAPI.SHORT_UPDATES.includes(update.className)) {
-        const regularUpdate = this.convertShortUpdate(update as Api.UpdateShort)
-        handleUpdate(regularUpdate)
-        return
       }
 
       if (ignore) return
