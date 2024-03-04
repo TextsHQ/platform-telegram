@@ -472,14 +472,9 @@ export default class TelegramAPI implements PlatformAPI {
     'UpdateReadHistoryOutbox',
     'UpdateWebPage',
     'UpdateReadMessagesContents',
-    'UpdateNewChannelMessage',
-    'UpdateDeleteChannelMessages',
-    'UpdateEditChannelMessage',
     'UpdateEditMessage',
-    'UpdateChannelWebPage',
     'UpdateFolderPeers',
     'UpdatePinnedMessages',
-    'UpdatePinnedChannelMessages',
   ]
 
   private updateHandler = async (_update: Api.TypeUpdate | Api.TypeUpdates): Promise<void> => {
