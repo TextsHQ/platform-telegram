@@ -1698,7 +1698,7 @@ __metadata:
     lodash: "npm:^4.17.21"
     mime-types: "npm:^2.1.35"
     react: "https://github.com/TextsHQ/react-global-shim"
-    react-phone-number-input: "npm:3.3.9"
+    react-phone-number-input: "npm:3.1.53"
     telegram: "npm:2.19.20"
     typescript: "npm:^5.3.3"
     vcard-creator: "npm:^0.6.0"
@@ -2448,7 +2448,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"classnames@npm:^2.3.1":
+"classnames@npm:^2.2.5":
   version: 2.5.1
   resolution: "classnames@npm:2.5.1"
   checksum: 58eb394e8817021b153bb6e7d782cfb667e4ab390cb2e9dac2fc7c6b979d1cc2b2a733093955fc5c94aa79ef5c8c89f11ab77780894509be6afbb91dddd79d15
@@ -2563,7 +2563,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"country-flag-icons@npm:^1.5.4":
+"country-flag-icons@npm:^1.0.2":
   version: 1.5.9
   resolution: "country-flag-icons@npm:1.5.9"
   checksum: fb14e2e77ed13317e502cbdc83304c975c5dc715997ebaaf4cb6d584457e7b162e2f91b2e56cf4f76d269495339ba9d0a4a5f635a690c1025d7fe51480ec884b
@@ -3785,7 +3785,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"input-format@npm:^0.3.9":
+"input-format@npm:^0.3.7":
   version: 0.3.9
   resolution: "input-format@npm:0.3.9"
   dependencies:
@@ -4096,7 +4096,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"libphonenumber-js@npm:^1.10.53":
+"libphonenumber-js@npm:^1.10.3":
   version: 1.10.57
   resolution: "libphonenumber-js@npm:1.10.57"
   checksum: 7344dd7e8f35b0bd19c5a4fecfd5f252ba3e1f2fa938e552662a34fbc0bc3bf02d3c0a7ce5adf369280a741c7c7d54940232092e997890b71cb3cb1114e9184b
@@ -4725,7 +4725,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prop-types@npm:^15.8.1":
+"prop-types@npm:^15.7.2, prop-types@npm:^15.8.1":
   version: 15.8.1
   resolution: "prop-types@npm:15.8.1"
   dependencies:
@@ -4766,19 +4766,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-phone-number-input@npm:3.3.9":
-  version: 3.3.9
-  resolution: "react-phone-number-input@npm:3.3.9"
+"react-phone-number-input@npm:3.1.53":
+  version: 3.1.53
+  resolution: "react-phone-number-input@npm:3.1.53"
   dependencies:
-    classnames: "npm:^2.3.1"
-    country-flag-icons: "npm:^1.5.4"
-    input-format: "npm:^0.3.9"
-    libphonenumber-js: "npm:^1.10.53"
-    prop-types: "npm:^15.8.1"
+    classnames: "npm:^2.2.5"
+    country-flag-icons: "npm:^1.0.2"
+    input-format: "npm:^0.3.7"
+    libphonenumber-js: "npm:^1.10.3"
+    prop-types: "npm:^15.7.2"
   peerDependencies:
     react: ">=16.8"
     react-dom: ">=16.8"
-  checksum: f3719ab73d0d946e5e24bf7271ac5657e19b0d76c0c07ab11a288755f49f1209ee89ab13e5eb9bcbb670796cd020794cda16caa672938df8611bee4329a12c96
+  checksum: 3af1d75881e2a6e266fc2c05d14fed9e7df7dbc63d5e951cc6ce6f36401f3a7d76954bfa32af29ec7261c8de93520c859a28c2690eb348c158eeee16e0e00d2e
   languageName: node
   linkType: hard
 
