@@ -388,7 +388,7 @@ export class DbSession extends Session {
     this.prepareCache('insert or replace into cache values (?,?,?,?)').run([key, String(hash), value, Date.now()])
   }
 
-  saveState(key: string, value?: Record<string, number>) {
+  saveState<T = Record<string, number>>(key: string, value?: T) {
     if (value) {
       const json = JSON.stringify(value)
       this.prepareCache('INSERT INTO state (key, value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value = ?')
