@@ -1683,14 +1683,14 @@ __metadata:
   dependencies:
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
     "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk"
-    "@types/better-sqlite3": "npm:^7.6.4"
-    "@types/eslint": "npm:^8.37.0"
+    "@types/better-sqlite3": "npm:^7.6.9"
+    "@types/eslint": "npm:^8.56.5"
     "@types/glob": "npm:^8.1.0"
-    "@types/lodash": "npm:^4.14.194"
-    "@types/mime-types": "npm:^2.1.1"
-    "@types/node": "npm:^20.2.1"
-    "@types/react": "npm:18.2.6"
-    "@types/react-phone-number-input": "npm:^3.0.14"
+    "@types/lodash": "npm:^4.17.0"
+    "@types/mime-types": "npm:^2.1.4"
+    "@types/node": "npm:^20.11.26"
+    "@types/react": "npm:18.2.65"
+    "@types/react-phone-number-input": "npm:^3.0.17"
     async-mutex: "npm:^0.4.1"
     big-integer: "npm:^1.6.52"
     date-fns: "npm:^3.3.1"
@@ -1699,8 +1699,8 @@ __metadata:
     mime-types: "npm:^2.1.35"
     react: "https://github.com/TextsHQ/react-global-shim"
     react-phone-number-input: "npm:3.1.53"
-    telegram: "npm:2.19.20"
-    typescript: "npm:^5.3.3"
+    telegram: "npm:2.20.2"
+    typescript: "npm:^5.4.2"
     vcard-creator: "npm:^0.6.0"
   languageName: unknown
   linkType: soft
@@ -1712,22 +1712,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/better-sqlite3@npm:^7.6.4":
-  version: 7.6.4
-  resolution: "@types/better-sqlite3@npm:7.6.4"
+"@types/better-sqlite3@npm:^7.6.9":
+  version: 7.6.9
+  resolution: "@types/better-sqlite3@npm:7.6.9"
   dependencies:
     "@types/node": "npm:*"
-  checksum: 4d4a465859a602c6dcb811140107d640aa7891ca7b76b8184c8dd14634325eeaab1269b6b808f76d7c5b8563bf13e1be7d671554e7a21b0e86d7980cc6b8a8fd
+  checksum: 4aab425e51314028f969e543d0c87b5cb93b21c9f584f679817d62f9cbb4afd524f5e026df27315d68f5952e2c2f88f86a1434a1fc377283925a90450be28531
   languageName: node
   linkType: hard
 
-"@types/eslint@npm:^8.37.0":
-  version: 8.37.0
-  resolution: "@types/eslint@npm:8.37.0"
+"@types/eslint@npm:^8.56.5":
+  version: 8.56.5
+  resolution: "@types/eslint@npm:8.56.5"
   dependencies:
     "@types/estree": "npm:*"
     "@types/json-schema": "npm:*"
-  checksum: 40f795149ed1013c70fa828713a97c46daae4294427779a01f8c60ccf0ebd24a4851dada280441ae01375a85e7f8265129260394becfda197f103b4a3c1b8f6d
+  checksum: 548aab6ea34ca14452bf6e9212c76bb22cdf3b725d47e25591c20651af3f47fb62c59c4e80ed8ea3f7d1d7374d907cbba980af910e4c0f0cb29f73b9a6a9226f
   languageName: node
   linkType: hard
 
@@ -1762,17 +1762,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/lodash@npm:^4.14.194":
-  version: 4.14.194
-  resolution: "@types/lodash@npm:4.14.194"
-  checksum: c075c0d52ddad80013586033f3ef9d04fa385ddd37eee0e7e0d9d0146e89f23d8834fb084f8f0807ca25aaee818f4da7cae94fdce07931c8cae58fcd94c469dd
+"@types/lodash@npm:^4.17.0":
+  version: 4.17.0
+  resolution: "@types/lodash@npm:4.17.0"
+  checksum: 2053203292b5af99352d108656ceb15d39da5922fc3fb8186e1552d65c82d6e545372cc97f36c95873aa7186404d59d9305e9d49254d4ae55e77df1e27ab7b5d
   languageName: node
   linkType: hard
 
-"@types/mime-types@npm:^2.1.1":
-  version: 2.1.1
-  resolution: "@types/mime-types@npm:2.1.1"
-  checksum: 1b9cfea94517790dfe3f3f4b5cfde96d4acde303f1112643a6fa6a6a5901f358be3613cafcec232ee91c3601684cb806ef3254018da3d0e1075e00684f6029ee
+"@types/mime-types@npm:^2.1.4":
+  version: 2.1.4
+  resolution: "@types/mime-types@npm:2.1.4"
+  checksum: f8c521c54ee0c0b9f90a65356a80b1413ed27ccdc94f5c7ebb3de5d63cedb559cd2610ea55b4100805c7349606a920d96e54f2d16b2f0afa6b7cd5253967ccc9
   languageName: node
   linkType: hard
 
@@ -1790,10 +1790,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^20.2.1":
-  version: 20.2.1
-  resolution: "@types/node@npm:20.2.1"
-  checksum: 9fb16fd354ed4b0bfab30526582b4af318c364faf2a62b5a20ce516829618c7c6c43f75503790f225bee9c99040144d5bfe19d07e1a262cd14a5666a1038b643
+"@types/node@npm:^20.11.26":
+  version: 20.11.26
+  resolution: "@types/node@npm:20.11.26"
+  dependencies:
+    undici-types: "npm:~5.26.4"
+  checksum: 37a69017fc0e70bd52e106a7a0de21f78b29a869b2ab7b0539438ee6ce91cb9b49b80d6b68108e88fcc20e24cdc4dc00f6e8e1c28215d93412cb19a303572130
   languageName: node
   linkType: hard
 
@@ -1811,12 +1813,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-phone-number-input@npm:^3.0.14":
-  version: 3.0.14
-  resolution: "@types/react-phone-number-input@npm:3.0.14"
+"@types/react-phone-number-input@npm:^3.0.17":
+  version: 3.0.17
+  resolution: "@types/react-phone-number-input@npm:3.0.17"
   dependencies:
     "@types/react": "npm:*"
-  checksum: d75bc631f990eeae052e3f8d6f0913c8dd2a2e879f3bb9fd7d41e35cb570439826bebab9ea76c76a00a31fee486263ac1ea323bfea0120a8858c61e1a86af07d
+  checksum: 7bf2797e278df01c74424931f3c854e1c69a3102d2a969db24dbbbe042b68bb8e415126a49d58e27b105bc1b7bc1ad82bdb44ff2b23703eddc2e3d1407eb0c94
   languageName: node
   linkType: hard
 
@@ -1831,14 +1833,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:18.2.6":
-  version: 18.2.6
-  resolution: "@types/react@npm:18.2.6"
+"@types/react@npm:18.2.65":
+  version: 18.2.65
+  resolution: "@types/react@npm:18.2.65"
   dependencies:
     "@types/prop-types": "npm:*"
     "@types/scheduler": "npm:*"
     csstype: "npm:^3.0.2"
-  checksum: c98c5359168d015da310dd62102fc159be3563d5a0d09bb3db4e2af8e6f4630fe6ace41cc9bec8bb5c914ee4ffccc2a10230cf23f3ebae29d97bc23b11a3f21f
+  checksum: 8022689f6c68e76b5e7b3c95af794fb3d128d5b2ccac408adaa80b117724c48b04dd4a2750e5c2ca29cd70ac7719b4ed5c5b1c12cb739d6f1d52188c09fb3060
   languageName: node
   linkType: hard
 
@@ -5258,9 +5260,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"telegram@npm:2.19.20":
-  version: 2.19.20
-  resolution: "telegram@npm:2.19.20"
+"telegram@npm:2.20.2":
+  version: 2.20.2
+  resolution: "telegram@npm:2.20.2"
   dependencies:
     "@cryptography/aes": "npm:^0.1.1"
     async-mutex: "npm:^0.3.0"
@@ -5283,7 +5285,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 164f6b8c5d0fb644ff6ced8912e20f201aee32ded2434f0b173bba761b898bf7c0334a22fae2c7d204c220fb7874d1f0263337a0cc962baab9de9e28f136f7a4
+  checksum: 6baebaee59738c784f7aad09ac8e41b6ca0e28abd16ef0988d4173a34ecf264c0d443b059624f1bf61299e06009143f3cdd0b1ad0512cb05a9f696108d1c2e2a
   languageName: node
   linkType: hard
 
@@ -5400,23 +5402,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^5.3.3":
-  version: 5.3.3
-  resolution: "typescript@npm:5.3.3"
+"typescript@npm:^5.4.2":
+  version: 5.4.2
+  resolution: "typescript@npm:5.4.2"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 6e4e6a14a50c222b3d14d4ea2f729e79f972fa536ac1522b91202a9a65af3605c2928c4a790a4a50aa13694d461c479ba92cedaeb1e7b190aadaa4e4b96b8e18
+  checksum: f8cfdc630ab1672f004e9561eb2916935b2d267792d07ce93e97fc601c7a65191af32033d5e9c0169b7dc37da7db9bf320f7432bc84527cb7697effaa4e4559d
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^5.3.3#optional!builtin<compat/typescript>":
-  version: 5.3.3
-  resolution: "typescript@patch:typescript@npm%3A5.3.3#optional!builtin<compat/typescript>::version=5.3.3&hash=e012d7"
+"typescript@patch:typescript@npm%3A^5.4.2#optional!builtin<compat/typescript>":
+  version: 5.4.2
+  resolution: "typescript@patch:typescript@npm%3A5.4.2#optional!builtin<compat/typescript>::version=5.4.2&hash=e012d7"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: c93786fcc9a70718ba1e3819bab56064ead5817004d1b8186f8ca66165f3a2d0100fee91fa64c840dcd45f994ca5d615d8e1f566d39a7470fc1e014dbb4cf15d
+  checksum: ef4fc2994cc0219dc9ada94c92106ba8d44cbfd7a0328ed6f8d730311caf66e114cdfa07fbc6f369bfc0fc182d9493851b3bf1644c06fc5818690b19ee960d72
   languageName: node
   linkType: hard
 
@@ -5429,6 +5431,13 @@ __metadata:
     has-symbols: "npm:^1.0.3"
     which-boxed-primitive: "npm:^1.0.2"
   checksum: 06e1ee41c1095e37281cb71a975cb3350f7cb470a0665d2576f02cc9564f623bd90cfc0183693b8a7fdf2d242963dcc3010b509fa3ac683f540c765c0f3e7e43
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~5.26.4":
+  version: 5.26.5
+  resolution: "undici-types@npm:5.26.5"
+  checksum: 0097779d94bc0fd26f0418b3a05472410408877279141ded2bd449167be1aed7ea5b76f756562cb3586a07f251b90799bab22d9019ceba49c037c76445f7cddd
   languageName: node
   linkType: hard
 
