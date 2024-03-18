@@ -439,9 +439,15 @@ export default class TelegramMapper {
   mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId?: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
+    // Messages *in* channels
+    const isInChannel = msg.peerId?.className.includes('Channel')
+    // Messages *from* channels (i.e. Channels posts sent in connected groups)
+    const isFromChannel = msg.fromId?.className.includes('Channel')
+    const isInOrFromChannel = isInChannel || isFromChannel
+    // The first condition is for message sent by anonymous members in a group
     const isThreadSender = msg.fromId === null && (msg.peerId?.className.includes('Chat') || msg.peerId?.className.includes('Channel'))
     const senderID = msg.senderId
-      ? (isThreadSender
+      ? (isThreadSender || (isFromChannel)
         ? '$thread' + (msg.senderId.equals(msg.chatId) ? '' : `_${msg.senderId}`)
         : String(msg.senderId))
       : '$thread' // default to $thread since senderID can't be null
@@ -450,7 +456,7 @@ export default class TelegramMapper {
       id: String(msg.id),
       timestamp: new Date(msg.date * 1000),
       editedTimestamp: msg.editDate && !msg.editHide ? new Date(msg.editDate * 1000) : undefined,
-      forwardedCount: msg.forwards || (msg.forward ? 1 : 0),
+      forwardedCount: !isInOrFromChannel && (msg.forwards || (msg.forward ? 1 : 0)),
       forwardedFrom: msg.fwdFrom?.fromId ? { userID: getPeerId(msg.fwdFrom.fromId), text: msg.fwdFrom.fromName } : undefined,
       senderID,
       isSender,
