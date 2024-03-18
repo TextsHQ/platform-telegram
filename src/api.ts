@@ -10,7 +10,6 @@ import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
-import type { TelegramClient } from 'telegram'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
@@ -23,6 +22,7 @@ import TelegramMapper, { getMarkedId, STICKER_PREFIX } from './mappers'
 import { fileExists, stringifyCircular, toJSON } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
+import { WithEntities } from './type'
 
 const { IS_DEV } = texts
 
@@ -97,7 +97,7 @@ const QR_CODE_TIMEOUT = 30_000
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
 
-  private client: TelegramClient
+  private client: CustomClient
 
   private accountInfo: ClientContext
 
@@ -351,20 +351,51 @@ export default class TelegramAPI implements PlatformAPI {
     } else if (update instanceof Api.UpdateChannel) {
       markedId = getMarkedId({ channelId: update.channelId })
     }
-    for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
-      const threadId = String(dialog.id)
-      if (threadId === markedId) {
-        const thread = await this.mapThread(dialog)
-        const event: ServerEvent = {
-          type: ServerEventType.STATE_SYNC,
-          mutationType: 'upsert',
-          objectName: 'thread',
-          objectIDs: {},
-          entries: [thread],
-        }
-        this.onEvent([event])
-      }
+
+    let entities = []
+    if ('_entities' in update && Array.isArray(update._entities)) {
+      const upt = update as WithEntities<typeof update>
+      entities = upt._entities
     }
+
+    const filteredEntities = entities.filter(e => !e.className.includes('User')) as Api.TypeChat[]
+    const channelOrChat: Api.TypeChat = filteredEntities
+      .find(e => String(e.id) === markedId)
+    
+    let hasLeft = false
+    if (channelOrChat instanceof (Api.Channel || Api.Chat) ) {
+      hasLeft = channelOrChat.left ?? false
+    } else if (channelOrChat instanceof (Api.ChatForbidden || Api.ChannelForbidden)) {
+      hasLeft = true
+    }
+
+    if (hasLeft) {
+      const event: ServerEvent = {
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'delete',
+        objectName: 'thread',
+        objectIDs: {},
+        entries: [markedId],
+      }
+      this.onEvent([event])
+    }
+
+    const accessHash = channelOrChat instanceof Api.Channel ? channelOrChat.accessHash.toString() : undefined
+    debugger
+    const dialog = await this.client.getPeerDialog(markedId, accessHash)
+    if (!dialog || !(dialog instanceof Api.Dialog)) {
+      console.log('dialog not found', markedId)
+      return
+    }
+    const thread = await this.mapThread(dialog)
+    const event: ServerEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'upsert',
+      objectName: 'thread',
+      objectIDs: {},
+      entries: [thread],
+    }
+    this.onEvent([event])
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
