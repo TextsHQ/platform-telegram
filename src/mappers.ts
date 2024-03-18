@@ -446,12 +446,15 @@ export default class TelegramMapper {
   mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
-    // This includes messages in channels but also messages in chats coming from connected channels
-    const isInOrFromChannel = msg.peerId?.className.includes('Channel') || msg.fromId?.className.includes('Channel')
+    // Messages *in* channels
+    const isInChannel = msg.peerId?.className.includes('Channel')
+    // Messages *from* channels (i.e. Channels posts sent in connected groups)
+    const isFromChannel = msg.fromId?.className.includes('Channel')
+    const isInOrFromChannel = isInChannel || isFromChannel
     // The first condition is for message sent by anonymous members in a group
     const isThreadSender = msg.fromId === null && (msg.peerId?.className.includes('Chat') || msg.peerId?.className.includes('Channel'))
     const senderID = msg.senderId
-      ? (isThreadSender
+      ? (isThreadSender || (isFromChannel)
         ? '$thread' + (msg.senderId.equals(msg.chatId) ? '' : `_${msg.senderId}`)
         : String(msg.senderId))
       : '$thread' // default to $thread since senderID can't be null
