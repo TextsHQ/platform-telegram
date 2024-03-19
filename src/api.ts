@@ -174,7 +174,7 @@ export default class TelegramAPI implements PlatformAPI {
       while (!isScanningComplete) {
         const exportResult1 = await exportToken()
         if (!(exportResult1 instanceof Api.auth.LoginToken)) throw new Error('Unexpected')
-        const { token, expires } = exportResult1
+        const { token } = exportResult1
         await Promise.race([
           this.loginEventCallback({ authState: AuthState.QR_CODE, qrLink: `tg://login?token=${token.toString('base64url')}` }),
           sleep(QR_CODE_TIMEOUT),
@@ -891,6 +891,7 @@ export default class TelegramAPI implements PlatformAPI {
     this.debouncedPushEvents()
   }
 
+  // eslint-disable-next-line class-methods-use-this
   serializeSession = () => ({
     version: 1,
   })
