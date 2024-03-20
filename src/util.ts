@@ -34,6 +34,10 @@ export function toJSON(json: Api.TypeJSONValue): any {
   return ret
 }
 
+/**
+ * Based on `buildInputPeer` from the official Telegram Web A client:
+ * https://github.com/Ajaxy/telegram-tt/blob/21c4484d7a7bc24b06526ed55b11bc1aefbef5cc/src/api/gramjs/gramjsBuilders/index.ts#L76
+ */
 export function createInputPeer(id: string, accessHash?: string) {
   const [peerId, type] = resolveId(parseID(id))
 

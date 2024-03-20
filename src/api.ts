@@ -97,6 +97,10 @@ const QR_CODE_TIMEOUT = 30_000
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
 
+  /**
+   * The function `getPeerDialog` is part of our CustomClient,
+   * but not from TelegramClient. We use `getPeerDialog` here.
+   */
   private client: CustomClient
 
   private accountInfo: ClientContext

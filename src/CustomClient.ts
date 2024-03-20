@@ -28,6 +28,11 @@ export class CustomClient extends TelegramClient {
     }
   }
 
+  /**
+   * This function uses the same logic as `iterDialogs` from GramJS. Unfortunately,
+   * they don't provide a utility to easily create a GramJS Dialog (different from MTProto dialog), so the logic was copied
+   * from GramJS and modified here.
+   */
   public async getPeerDialog(id: string, accessHash?: string) {
     const inputPeer = createInputPeer(id, accessHash)
     const result = await this.invoke(new Api.messages.GetPeerDialogs({
@@ -72,6 +77,8 @@ export class CustomClient extends TelegramClient {
   }
 
   /**
+   * From GramJS' `iterDialogs` implementation:
+   *
    * Get the key to get messages from a dialog.
    *
    * We cannot just use the message ID because channels share message IDs,
