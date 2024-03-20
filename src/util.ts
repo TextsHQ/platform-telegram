@@ -35,20 +35,25 @@ export function toJSON(json: Api.TypeJSONValue): any {
 }
 
 export function createInputPeer(id: string, accessHash?: string) {
-  const [peerId, kind] = resolveId(parseID(id))
-  if (kind instanceof Api.PeerUser) {
+  const [peerId, type] = resolveId(parseID(id))
+
+  // We're not using instanceof here because the type of `type` is:
+  // typeof Api.PeerUser | typeof Api.PeerChannel | typeof Api.PeerChat
+  if (type === Api.PeerUser) {
     return new Api.InputPeerUser({
       userId: peerId,
       accessHash: BigInteger(accessHash!),
-    });
-  } else if (kind instanceof Api.PeerChannel) {
+    })
+  }
+
+  if (type === Api.PeerChannel) {
     return new Api.InputPeerChannel({
       channelId: peerId,
       accessHash: BigInteger(accessHash!),
-    });
-  } else {
-    return new Api.InputPeerChat({
-      chatId: peerId,
-    });
+    })
   }
+
+  return new Api.InputPeerChat({
+    chatId: peerId,
+  })
 }

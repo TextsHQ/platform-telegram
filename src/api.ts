@@ -352,20 +352,16 @@ export default class TelegramAPI implements PlatformAPI {
       markedId = getMarkedId({ channelId: update.channelId })
     }
 
-    let entities = []
-    if ('_entities' in update && Array.isArray(update._entities)) {
+    let entities = new Map()
+    if ('_entities' in update && update._entities instanceof Map) {
       const upt = update as WithEntities<typeof update>
       entities = upt._entities
     }
-
-    const filteredEntities = entities.filter(e => !e.className.includes('User')) as Api.TypeChat[]
-    const channelOrChat: Api.TypeChat = filteredEntities
-      .find(e => String(e.id) === markedId)
-    
+    const channelOrChat = entities.get(markedId) as Api.TypeChat
     let hasLeft = false
-    if (channelOrChat instanceof (Api.Channel || Api.Chat) ) {
+    if (channelOrChat instanceof Api.Channel || channelOrChat instanceof Api.Chat) {
       hasLeft = channelOrChat.left ?? false
-    } else if (channelOrChat instanceof (Api.ChatForbidden || Api.ChannelForbidden)) {
+    } else if (channelOrChat instanceof Api.ChatForbidden || channelOrChat instanceof Api.ChannelForbidden) {
       hasLeft = true
     }
 
@@ -378,13 +374,13 @@ export default class TelegramAPI implements PlatformAPI {
         entries: [markedId],
       }
       this.onEvent([event])
+      return
     }
 
     const accessHash = channelOrChat instanceof Api.Channel ? channelOrChat.accessHash.toString() : undefined
-    debugger
     const dialog = await this.client.getPeerDialog(markedId, accessHash)
-    if (!dialog || !(dialog instanceof Api.Dialog)) {
-      console.log('dialog not found', markedId)
+    if (!dialog) {
+      console.log('Dialog not found with ID:', markedId)
       return
     }
     const thread = await this.mapThread(dialog)

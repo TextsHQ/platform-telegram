@@ -1,5 +1,5 @@
-import { Api } from "telegram/tl";
+import { Api } from 'telegram/tl'
 
 export type WithEntities<T> = T & {
-  _entities: (Api.TypeUser | Api.TypeChat)[];
+  _entities: Map<string, Api.TypeUser | Api.TypeChat>
 }
