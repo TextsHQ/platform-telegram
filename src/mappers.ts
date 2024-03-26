@@ -436,6 +436,82 @@ export default class TelegramMapper {
     }
   }
 
+  // eslint-disable-next-line class-methods-use-this
+  mapMediaGiveaway(media: Api.MessageMediaGiveaway | Api.MessageMediaGiveawayResults): Partial<Message> {
+    const {
+      months,
+      untilDate,
+      prizeDescription,
+    } = media
+
+    const isResult = media instanceof Api.MessageMediaGiveawayResults
+
+    const hasEnded = new Date().getTime() > untilDate * 1000
+    const quantity = isResult ? media.winnersCount : media.quantity
+
+    const subQuantityText = quantity === 1 ? 'subscription' : 'subscriptions'
+    const monthText = months === 1 ? 'month' : 'months'
+
+    const selectionDate = new Date(untilDate * 1000).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+    })
+
+    let textParts = []
+    if (isResult) {
+      const winnerMessage = quantity === 1
+        ? 'winner of the giveway was randomly selected by Telegram'
+        : 'winners of the giveway were randomly selected by Telegram'
+
+      // TODO: Figure out a way to display other user names
+      // or format the text differently
+      const displayWinners = false
+      const winners = media.winners.map(winner => `{{${winner}}}`).join(', ')
+
+      textParts = [
+        'Winners Selected!\n',
+        `${quantity} ${winnerMessage}\n\n`,
+        displayWinners && 'Winners:\n',
+        displayWinners && `${winners}\n\n`,
+        'Winners Selection Date:\n',
+        selectionDate,
+      ]
+    } else {
+      const channelIds = media.channels
+
+      // TODO: Figure out a way to display other channel names
+      // or format the text differently
+      const displayChannels = channelIds.length === 1
+      const channels = displayChannels ? '{{$thread}}' : undefined
+      const participantChannelText = channelIds.length === 1 ? 'this channel' : 'these channels'
+
+      const countries = media.countriesIso2
+      const formattedName = new Intl.DisplayNames(['en'], { type: 'region' })
+      const countryList = countries?.map(countryCode => formattedName.of(countryCode)).join(', ')
+
+      textParts = [
+        prizeDescription && `${quantity} ${prizeDescription}\nwith`,
+        `${quantity} Telegram Premium ${subQuantityText}\n`,
+        `for ${months} ${monthText}!\n`,
+        displayChannels && '\nParticipants:\n',
+        displayChannels && `All members of ${participantChannelText}:\n${channels}\n`,
+        countryList && `from ${countryList}\n`,
+        '\nWinners Selection Date:\n',
+        selectionDate,
+      ]
+    }
+
+    const headingSuffix = hasEnded ? '(Ended)' : '(On-going)'
+    return {
+      textHeading: `Giveaway from {{sender}} ${headingSuffix}`,
+      text: textParts.filter(Boolean).join(''),
+      parseTemplate: true,
+    }
+  }
+
   mapMessage(msg: Api.Message | Api.MessageService, readOutboxMaxId?: number): Message {
     const threadID = getPeerId(msg.peerId)
     const isSender = msg.senderId?.equals(this.me.id) ?? false
@@ -451,7 +527,7 @@ export default class TelegramMapper {
         ? '$thread' + (msg.senderId.equals(msg.chatId) ? '' : `_${msg.senderId}`)
         : String(msg.senderId))
       : '$thread' // default to $thread since senderID can't be null
-    const mapped: Message = {
+    let mapped: Message = {
       _original: stringifyCircular([msg, msg.media?.className, msg.action?.className]),
       id: String(msg.id),
       timestamp: new Date(msg.date * 1000),
@@ -573,6 +649,8 @@ export default class TelegramMapper {
           title: 'Google Maps',
           summary: `${msg.media.geo.lat}, ${msg.media.geo.long}`,
         })
+      } else if (msg.media instanceof Api.MessageMediaGiveaway || msg.media instanceof Api.MessageMediaGiveawayResults) {
+        mapped = { ...mapped, ...this.mapMediaGiveaway(msg.media) }
       } else if (msg.media) {
         mapped.textHeading = `Unsupported Telegram media ${msg.media?.className}`
         texts.Sentry.captureMessage(`Telegram: unsupported media ${msg.media?.className}`)
