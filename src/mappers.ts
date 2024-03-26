@@ -293,7 +293,7 @@ export default class TelegramMapper {
       : []
 
     if (msg.media instanceof Api.MessageMediaWebPage
-        && msg.media.webpage instanceof Api.WebPage) {
+      && msg.media.webpage instanceof Api.WebPage) {
       const { webpage } = msg.media
       if (webpage.type.startsWith(INVITE_PREFIX) && INVITE_LINK_REGEX.test(webpage.url)) {
         const reArr = INVITE_LINK_REGEX.exec(webpage.url)
@@ -747,6 +747,22 @@ export default class TelegramMapper {
           mapped.text = `{{sender}} gifted you Telegram Premium for ${msg.action.months} months (${msg.action.amount.toJSNumber() / 100} ${msg.action.currency})`
           mapped.isAction = true
           mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionGiveawayLaunch) {
+          mapped.text = '{{sender}} just started a giveway of Telegram Premium for its followers'
+          mapped.isAction = true
+          mapped.parseTemplate = true
+        } else if (msg.action instanceof Api.MessageActionGiveawayResults) {
+          const { winnersCount, unclaimedCount } = msg.action
+          if (!winnersCount) {
+            mapped.text = 'No winners could be selected'
+          } else if (unclaimedCount) {
+            mapped.text = 'Some winners of the giveaway were randomly selected by Telegram and received private messages with giftcodes.'
+          } else if (winnersCount === 1) {
+            mapped.text = 'The winner of the giveaway was randomly selected by Telegram and received a private message with a giftcode.'
+          } else {
+            mapped.text = 'Winners of the giveaway were randomly selected by Telegram and received private messages with giftcodes.'
+          }
+          mapped.isAction = true
         } else if (msg.action instanceof Api.MessageActionHistoryClear) {
           return undefined
         } else if (msg.action) {
