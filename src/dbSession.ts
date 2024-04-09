@@ -173,6 +173,7 @@ export class DbSession extends Session {
     }
   }
 
+  // eslint-disable-next-line class-methods-use-this
   delete(): void {
     // do nothing since only called on logout() and the entire directory is deleted
   }
