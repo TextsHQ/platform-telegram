@@ -384,7 +384,7 @@ export default class TelegramAPI implements PlatformAPI {
     const accessHash = channelOrChat instanceof Api.Channel ? channelOrChat.accessHash.toString() : undefined
     const dialog = await this.client.getPeerDialog(markedId, accessHash)
     if (!dialog) {
-      console.log('Dialog not found with ID:', markedId)
+      texts.log(`Dialog with ID '${markedId}' not found`)
       return
     }
     const thread = await this.mapThread(dialog)
@@ -725,7 +725,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
 
     const serverState = await this.client.invoke(new Api.updates.GetState())
-    console.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
+    texts.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
     if (serverState.pts !== this.state.localState.pts) {
       this.state.hasSynced = await this.getDifference(this.state.localState.pts, this.state.localState.date)
     } else {
@@ -1303,7 +1303,7 @@ export default class TelegramAPI implements PlatformAPI {
         const [key] = name.split('.')
         const media = this.state.mediaStore.get(key) || (await this.getUnmappedMessage(threadID, messageID))?.media
         if (!media) {
-          console.log(`${assetType}/${id}/${name}`)
+          texts.log(`${assetType}/${id}/${name}`)
           throw Error('message media not found')
         }
         await this.client.downloadMedia(media, { outputFile: filePath })
