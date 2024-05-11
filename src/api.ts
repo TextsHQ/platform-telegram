@@ -1070,15 +1070,16 @@ export default class TelegramAPI implements PlatformAPI {
     }
   }
 
-  sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageID }: MessageSendOptions) => {
+  sendMessage = async (threadID: string, msgContent: MessageContent, { quotedMessageThreadID, quotedMessageID }: MessageSendOptions) => {
     const { text, stickerID } = msgContent
     const file = stickerID
       ? this.state.mediaStore.get(STICKER_PREFIX + stickerID) as Api.MessageMediaDocument
       : getFileFromMessageContent(msgContent)
+    const replyTo = quotedMessageID ? await this.getUnmappedMessage(quotedMessageThreadID, quotedMessageID) : undefined
     const msgSendParams: SendMessageParams = {
       parseMode: 'md',
       message: text,
-      replyTo: quotedMessageID ? Number(quotedMessageID) : undefined,
+      replyTo,
       file,
       linkPreview: msgContent.links?.length > 0 ? msgContent.links.every(l => l.includePreview) : undefined,
     }
