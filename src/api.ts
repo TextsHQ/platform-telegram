@@ -10,7 +10,6 @@ import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import { getPeerId, resolveId } from 'telegram/Utils'
 import { computeCheck as computePasswordSrpCheck } from 'telegram/Password'
-import type { TelegramClient } from 'telegram'
 import type { Dialog } from 'telegram/tl/custom/dialog'
 import type { CustomMessage } from 'telegram/tl/custom/message'
 import type { SendMessageParams } from 'telegram/client/messages'
@@ -23,6 +22,7 @@ import TelegramMapper, { getMarkedId, STICKER_PREFIX } from './mappers'
 import { fileExists, stringifyCircular, toJSON } from './util'
 import { DbSession } from './dbSession'
 import { CustomClient } from './CustomClient'
+import { WithEntities } from './type'
 
 const { IS_DEV } = texts
 
@@ -97,7 +97,11 @@ const QR_CODE_TIMEOUT = 30_000
 export default class TelegramAPI implements PlatformAPI {
   private mapper: TelegramMapper
 
-  private client: TelegramClient
+  /**
+   * The function `getPeerDialog` is part of our CustomClient,
+   * but not from TelegramClient. We use `getPeerDialog` here.
+   */
+  private client: CustomClient
 
   private accountInfo: ClientContext
 
@@ -351,20 +355,47 @@ export default class TelegramAPI implements PlatformAPI {
     } else if (update instanceof Api.UpdateChannel) {
       markedId = getMarkedId({ channelId: update.channelId })
     }
-    for await (const dialog of this.client.iterDialogs({ limit: 5 })) {
-      const threadId = String(dialog.id)
-      if (threadId === markedId) {
-        const thread = await this.mapThread(dialog)
-        const event: ServerEvent = {
-          type: ServerEventType.STATE_SYNC,
-          mutationType: 'upsert',
-          objectName: 'thread',
-          objectIDs: {},
-          entries: [thread],
-        }
-        this.onEvent([event])
-      }
+
+    let entities = new Map()
+    if ('_entities' in update && update._entities instanceof Map) {
+      const upt = update as WithEntities<typeof update>
+      entities = upt._entities
     }
+    const channelOrChat = entities.get(markedId) as Api.TypeChat
+    let hasLeft = false
+    if (channelOrChat instanceof Api.Channel || channelOrChat instanceof Api.Chat) {
+      hasLeft = channelOrChat.left ?? false
+    } else if (channelOrChat instanceof Api.ChatForbidden || channelOrChat instanceof Api.ChannelForbidden) {
+      hasLeft = true
+    }
+
+    if (hasLeft) {
+      const event: ServerEvent = {
+        type: ServerEventType.STATE_SYNC,
+        mutationType: 'delete',
+        objectName: 'thread',
+        objectIDs: {},
+        entries: [markedId],
+      }
+      this.onEvent([event])
+      return
+    }
+
+    const accessHash = channelOrChat instanceof Api.Channel ? channelOrChat.accessHash.toString() : undefined
+    const dialog = await this.client.getPeerDialog(markedId, accessHash)
+    if (!dialog) {
+      texts.log(`Dialog with ID '${markedId}' not found`)
+      return
+    }
+    const thread = await this.mapThread(dialog)
+    const event: ServerEvent = {
+      type: ServerEventType.STATE_SYNC,
+      mutationType: 'upsert',
+      objectName: 'thread',
+      objectIDs: {},
+      entries: [thread],
+    }
+    this.onEvent([event])
   }
 
   private onUpdateChatChannelParticipant(update: Api.UpdateChatParticipant | Api.UpdateChannelParticipant) {
@@ -694,7 +725,7 @@ export default class TelegramAPI implements PlatformAPI {
     }
 
     const serverState = await this.client.invoke(new Api.updates.GetState())
-    console.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
+    texts.log(`[Telegram] Syncing common state. Local: ${this.state.localState.pts}, Server: ${serverState.pts}`)
     if (serverState.pts !== this.state.localState.pts) {
       this.state.hasSynced = await this.getDifference(this.state.localState.pts, this.state.localState.date)
     } else {
@@ -1273,7 +1304,7 @@ export default class TelegramAPI implements PlatformAPI {
         const [key] = name.split('.')
         const media = this.state.mediaStore.get(key) || (await this.getUnmappedMessage(threadID, messageID))?.media
         if (!media) {
-          console.log(`${assetType}/${id}/${name}`)
+          texts.log(`${assetType}/${id}/${name}`)
           throw Error('message media not found')
         }
         await this.client.downloadMedia(media, { outputFile: filePath })
