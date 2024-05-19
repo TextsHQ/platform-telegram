@@ -44,9 +44,15 @@ interface LocalState {
   mutex: Mutex
 }
 
+interface LocalChannelState extends LocalState {
+  id: string
+  differenceMutex: Mutex
+}
+
 interface TelegramState {
   localState: LocalState
   getDifferenceMutex: Mutex
+  localChannelState: Record<string, LocalChannelState>
   hasSynced: boolean
   dialogs: Map<string, Dialog>
   mediaStore: Map<string, Api.TypeMessageMedia>
@@ -116,6 +122,7 @@ export default class TelegramAPI implements PlatformAPI {
 
   private state: TelegramState = {
     localState: { mutex: new Mutex(), date: 0, pts: 0, seq: 0 },
+    localChannelState: {},
     getDifferenceMutex: new Mutex(),
     hasSynced: false,
     dialogs: new Map<string, Dialog>(),
@@ -658,7 +665,7 @@ export default class TelegramAPI implements PlatformAPI {
   }
 
   private async initializeLocalState() {
-    await this.state.localState.mutex.runExclusive(async () => {
+    const localState = this.state.localState.mutex.runExclusive(async () => {
       if (!IS_iOS) {
         const serverState = await this.client.invoke(new Api.updates.GetState())
         this.state.localState.date = serverState.date
@@ -682,6 +689,54 @@ export default class TelegramAPI implements PlatformAPI {
       }
       texts.log('telegram.initializeLocalState', this.state.localState)
     })
+
+    const channelIds = this.db.getState<string[]>('channel_ids')
+    const channelStates = []
+    if (channelIds) {
+      for (const channelId of channelIds) {
+        const state = this.db.getState<LocalChannelState>(`${channelId}_state`)
+        if (!state) continue
+        this.state.localChannelState[channelId] = {
+          id: channelId,
+          pts: state.pts,
+          seq: state.seq,
+          date: state.date,
+          differenceMutex: new Mutex(),
+          mutex: new Mutex(),
+        }
+      }
+    }
+
+    await Promise.all([localState, ...channelStates])
+  }
+
+  private async _syncChannelDifference(channelId: string) {
+    const differences = await this.client.invoke(new Api.updates.GetChannelDifference({
+      channel: channelId,
+      pts: this.state.localChannelState[channelId].pts,
+    }))
+
+    if (differences.className === 'updates.ChannelDifferenceEmpty') return
+    if (differences.className === 'updates.ChannelDifferenceTooLong') {
+      // TODO: handle. there's some data here
+      return
+    }
+
+    if (differences.newMessages.length) {
+      this.mapper.mapMessages(differences.newMessages as Api.Message[])
+    }
+
+    if (differences.otherUpdates.length) {
+      for (const difference of differences.otherUpdates) {
+        this.updateHandler(difference)
+      }
+    }
+
+    // disable since we want to do value type checking.
+    // we only need to check this if it's actually set to false
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-boolean-literal-compare
+    // if (differences.final === false) {
+    // }
   }
 
   private async syncCommonState() {
